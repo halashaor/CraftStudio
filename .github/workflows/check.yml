@@ -1,7 +1,10 @@
-name: Check
-on: [push, pull_request]
+name: Check and sync designer
+on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+concurrency:
+  group: craftstudio-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,6 +20,29 @@ jobs:
         working-directory: lite
       - run: npm test
         working-directory: lite
-      - run: npm run build
+      - run: npm run build && npm run check:sync
         working-directory: lite
       - run: python -m unittest discover -s tests -p "test_*.py"
+  sync:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install && npm run build && npm run check:sync
+        working-directory: lite
+      - name: Keep local and Lite outputs in sync
+        run: |
+          git add lite/dist/CraftStudio-Lite.html lite/dist/worker.bundle.js web/lite.html web/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync shared local and Lite designer builds"
+          git push origin HEAD:main
