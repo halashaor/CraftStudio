@@ -131,3 +131,12 @@ prepare 返回预览 ID、方块数量、保护冲突和辅助线，不修改场
 `design.inspect` 接收 `objectIds` 或 `selection`，返回精确尺寸、材料、分层计数、unsupportedCount、collisionsCount 与最多 200 个位置样本。`view.isolate` 接收同样选择；`{clear:true}` 恢复显示。隔离不改变工程方块和修订号，打开另一工程自动清除。
 
 几何 prepare 的 `type="geometry"` 还支持 `snap:0/0.5/1`、`planeLock`、`constraint:free/horizontal/vertical/parallel/perpendicular/symmetric` 和 `referencePoints`。这些是局部绘图约束，不是全局 CAD 求解器。
+
+
+### 本地增强层
+
+`/api/desktop/info` 返回 `craftstudio-desktop/1`、会话令牌和实例元信息。共用页面仅在 loopback HTTP 下探测它。`/api/desktop/library` 是带令牌的便携工程库适配器，保留 gzip 工程字节和压缩草稿；不调用旧 Python 生成器重建建筑。`/api/desktop/files` 和 `/api/desktop/file` 只读取所选实例下的允许文件；`/api/desktop/world` 读取用户指定世界区域。游戏施工继续使用 `/api/lite/bridge`，视觉与建模接口仍为页面 / Worker 的 `CraftStudio.request`。
+
+旧 `/api/project` 等接口为旧会话的兼容接口，不等同于页面 Worker 当前场景；新设计工具和同源 UI 均以 Worker API 为准。
+
+新版本地服务默认 18767；仅为迁移旧浏览器工作区，允许同一本机的 18765 前端连接。`ServerLibrary` 使用检测返回的 baseUrl，Origin 与会话令牌仍检查。独立 Lite 或远端静态页面不执行该迁移探测。
