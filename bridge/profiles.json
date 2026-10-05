@@ -32,5 +32,6 @@
       "java": 21,
       "directory": "profiles/fabric-1.21.1"
     }
-  }
+  },
+  "bridgeVersion": "0.2.0"
 }

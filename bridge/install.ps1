@@ -2,7 +2,9 @@ param([Parameter(Mandatory=$true)][string]$ModsDirectory,[ValidateSet('neoforge-
 $ErrorActionPreference='Stop'
 $taskProfiles=Get-Content (Join-Path $PSScriptRoot 'profiles.json') -Raw | ConvertFrom-Json
 $taskLibs=Join-Path (Join-Path $PSScriptRoot $taskProfiles.profiles.$Profile.directory) 'build/libs'
-$taskSources=@(Get-ChildItem -LiteralPath $taskLibs -Filter '*.jar' | Where-Object {$_.Name -notmatch 'sources|dev|javadoc'})
+$taskArchive=if($Profile -eq 'neoforge-1.21.1'){'craftstudio-bridge'}else{'craftstudio-bridge-'+$Profile}
+$taskJarName=$taskArchive+'-'+$taskProfiles.bridgeVersion+'.jar'
+$taskSources=@(Get-ChildItem -LiteralPath $taskLibs -Filter $taskJarName)
 if($taskSources.Count -ne 1 -or !(Test-Path -LiteralPath $ModsDirectory -PathType Container)){throw 'Build the selected profile and check the mods directory.'}
 $taskResolvedMods=(Resolve-Path -LiteralPath $ModsDirectory).Path
 $taskParent=Split-Path -Parent $taskResolvedMods
