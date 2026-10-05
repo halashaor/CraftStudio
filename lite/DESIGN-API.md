@@ -140,3 +140,35 @@ prepare 返回预览 ID、方块数量、保护冲突和辅助线，不修改场
 旧 `/api/project` 等接口为旧会话的兼容接口，不等同于页面 Worker 当前场景；新设计工具和同源 UI 均以 Worker API 为准。
 
 新版本地服务默认 18767；仅为迁移旧浏览器工作区，允许同一本机的 18765 前端连接。`ServerLibrary` 使用检测返回的 baseUrl，Origin 与会话令牌仍检查。独立 Lite 或远端静态页面不执行该迁移探测。
+
+## 可选画笔与条件接口：edit.brush
+
+`edit.apply` 继续允许自由提交任意方块操作，不要求使用画笔、蒙版、材质库或预设模板。需要与人类工具一致的涂改行为时，使用 `edit.brush`。它通过同一事务/版本/回执机制执行，支持 `transactionId`，确认事务前不改变可见场景。
+
+```js
+const {revision} = await CraftStudio.request({method: 'workspace.describe'});
+await CraftStudio.request({
+  id: 'roof-material-1',
+  method: 'edit.brush',
+  params: {
+    expectedRevision: revision,
+    mode: 'paint',
+    points: [[10, 4, 8], [11, 4, 8]],
+    state: {Name: 'minecraft:stone_bricks'},
+    retainShape: true,
+    preserveProperties: true,
+    mask: {
+      surface: true,
+      matchName: 'minecraft:oak_stairs',
+      selection: {members: [[10, 4, 8], [11, 4, 8]]},
+      minY: 4,
+      maxY: 4
+    },
+    policy: {allowExisting: true, allowTerrain: false}
+  }
+});
+```
+
+`mode` 为 `draw`、`paint`、`erase` 或 `place`；`points` 是已经生成的整数落点，接口不代替 UI 的路径插值。条件按 AND 组合，`surface` 检查方块邻接的空气/已识别流体，`emptyOnly` 只允许空位，`matchName` 是固定取样名称。选择可以是 `min/max` 包围盒或 `members` 精确 XYZ 集合。`space:'world'` 时点、选区 XYZ 和 Y 范围都按已确认的场地原点换算；世界坐标成员必须为 XYZ 数组。
+
+涂改不填空气或已识别流体。形态保留通过已知的材质变体完成，缺少对应变体会跳过，不虚构方块 ID。目标方块的已支持属性可以从原方块保留。带方块实体数据的位置若要改换方块类型会跳过；同类型操作显式保留原 NBT。场地、对象和保留区保护仍执行。结果包含 `filtered` 与 `warnings`。此机制不是完整 Minecraft 物理模拟，也不是任意 Mod 属性之间的自动转换器。

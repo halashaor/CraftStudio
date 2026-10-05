@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-05",
+  "scenario": "paint a selected roof object while matching the sampled starting material",
+  "checks": [
+    "stairs material changed while facing/half/shape retained",
+    "slab with different material and stairs outside exact selection unchanged",
+    "block count stayed at 3",
+    "one undo restored original material",
+    "named preset restored after browser reload",
+    "erase UI excludes draw-only empty-cell condition",
+    "public API world coordinates, revision conflict, request replay and staged transaction verified"
+  ],
+  "coverage": "isolated UI scenario and focused unit tests; not a large-scene benchmark or universal Mod geometry support"
+}

@@ -1,3 +1,4 @@
+import {brushPlan} from './tool-mask.js';
 import {resourceArchive} from './resource-library.js';
 import {designerPlan,designInspection,selectedObjects} from './designer.js';
 import {featurePlan} from './features.js';
@@ -16,6 +17,7 @@ import { ChunkMesher } from './chunk-mesh.js';
 import { CreateScene,capturedContraptions } from './create.js';
 import { readReferenceHTML,referenceAssets,referenceOperations,inferOrigin } from './reference.js';
 let libraryResources=[];function defaultResources(){const r=new Resources();for(const f of libraryResources)r.addZip(new Uint8Array(f.bytes),f.name);return r;}
+let brushDescriptors=null;
 let site=new Site(emptyProject()),resources=new Resources(),preview=null,previewOperations=null;
 let isolatedKeys=null,isolatedIds=null,isolationVersion=0;let constructionDraft=null;let baseBytes=null,baseKey=crypto.randomUUID();
 let cachedAssets=null,assetsSite=null,assetsResources=null,assetsVersion=-1,assetsPaletteLength=-1,assetsPartialVersion=-1,assetBytes=null,assetKey=null;
@@ -77,7 +79,8 @@ async function execute(action,data){
  if(action==='inspect')return(preview||site).inspect(data.pos);
  if(action==='search'){const candidates=resources.catalogue(data.query||''),existing=(preview||site).palette.filter(s=>(s.Name+' '+Object.values(s.Properties||{}).join(' ')).toLowerCase().includes((data.query||'').toLowerCase())).map(s=>({id:s.Name,label:s.Name.split(':')[1],state:s}));const map=new Map();for(const item of [...existing,...candidates])if(!map.has(item.id))map.set(item.id,item);return[...map.values()].slice(data.offset||0,(data.offset||0)+80);}
  if(action==='edit'){if(preview)throw Error('请先采用或取消预览');site.operations(data.operations,data.policy);mesher.changed(site);createScene.changedCells(site);return summary();}
- if(action==='beginStroke'){if(preview)throw Error('请先采用或取消预览');site.beginStroke();return true;}
+ if(action==='brush'){if(preview)throw Error('请先采用或取消预览');if(data.mode==='paint'&&!brushDescriptors)brushDescriptors=new Map(catalogue(site,resources).map(i=>[i.id,i]));const plan=brushPlan(site,data,brushDescriptors||new Map());site.operations(plan.operations,data.policy);mesher.changed(site);createScene.changedCells(site);api.changed();return{...summary(),filtered:plan.filtered,toolWarnings:plan.warnings};}
+ if(action==='beginStroke'){if(preview)throw Error('请先采用或取消预览');site.beginStroke();brushDescriptors=null;const cell=data.anchor?site.at(data.anchor):null;return{from:cell?site.palette[cell.state].Name:null};}
  if(action==='endStroke'){site.endStroke();return true;}
  if(action==='undo'||action==='redo'){preview=null;site.restore(action);mesher.changed(site);createScene.changedCells(site);return summary();}
  if(action==='origin'){if(data.origin?.length!==3||data.origin.some(n=>!Number.isInteger(n)))throw Error('需要三个整数世界原点坐标');site.origin=data.origin;site.originConfirmed=!!data.confirmed;return summary();}
