@@ -9,3 +9,7 @@ After each authorized update:
 5. If uploading fails, report the exact blocker and retain a reviewable local commit. Never describe a local-only update as published.
 
 Keep private worlds, blueprints, resource packs, screenshots, databases, and credentials out of the public repository. README.md is the default English documentation; keep README.zh-CN.md in sync.
+
+Compare the complete publish tree with the remote branch, including local commits, rather than checking only uncommitted files. Keep the launcher and backend build fingerprint changes together.
+
+On Windows, use the normal signed-in user's permissions for Git credential access if sandboxed HTTPS helpers crash or cannot access credentials. For a Codex-created checkout, a per-command safe.directory entry for that exact checkout is sufficient; do not change global trust settings. Reuse an existing reachable proxy when required and keep TLS certificate verification enabled.
