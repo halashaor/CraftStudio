@@ -1,4 +1,4 @@
-import {workplane,toPlane} from './workplane.js';
+import {workplane,profileFrame,toPlane} from './workplane.js';
 import {closedProfiles} from './sketch-profiles.js';
 import {sampleFigure,geometryPlan} from './construction.js';
 import {resampleProfile,featurePlan} from './features.js';
@@ -14,7 +14,7 @@ export function interactivePreview(THREE,scene,requestRender){
    if(blocks&&!config.guidesOnly&&config.terrain==='none'&&span<160&&(!config.fill||volume<6000))ops=geometryPlan(emptySite,{...config,sampleDensity:2},available).operations;
   }else if(type==='feature'){
    const selected=closedProfiles(guides).filter(g=>config.profileIds?.includes(g.id));emptySite.design.guides=guides;
-   if(selected.length){const points=resampleProfile(selected[0].points,32),frame=workplane(selected[0].points,config.plane||'auto'),local=points.map(p=>toPlane(p,frame));samples=[...points,points[0]];const range=a=>local.reduce((out,p)=>[Math.min(out[0],p[a]),Math.max(out[1],p[a])],[Infinity,-Infinity]);const a=range(0),b=range(1),depth=Number(config.depth||0),volume=(a[1]-a[0])*(b[1]-b[0])*Math.abs(depth);
+   if(selected.length){const points=resampleProfile(selected[0].points,32),frame=profileFrame(selected[0].points,config.plane||'auto',selected[0].recipe.workplane),local=points.map(p=>toPlane(p,frame));samples=[...points,points[0]];const range=a=>local.reduce((out,p)=>[Math.min(out[0],p[a]),Math.max(out[1],p[a])],[Infinity,-Infinity]);const a=range(0),b=range(1),depth=Number(config.depth||0),volume=(a[1]-a[0])*(b[1]-b[0])*Math.abs(depth);
     if(config.operation==='extrude'&&blocks&&volume<6000&&!config.cut&&frame.plane!=='auto'){ops=featurePlan(emptySite,config).operations;exact=true;}
     else if(config.operation==='extrude'&&blocks){const profile=new THREE.Shape(local.map(q=>new THREE.Vector2(q[0],q[1]))),geometry=new THREE.ExtrudeGeometry(profile,{depth:Math.abs(depth),bevelEnabled:false,steps:1}),matrix=new THREE.Matrix4().makeBasis(...[frame.u,frame.v,frame.normal].map(a=>new THREE.Vector3(...a)));matrix.setPosition(new THREE.Vector3(...frame.origin).addScaledVector(new THREE.Vector3(...frame.normal),(config.symmetric?-depth/2:0)+Math.min(0,depth)));geometry.applyMatrix4(matrix);if(config.hollow||config.cut){surface=new THREE.LineSegments(new THREE.EdgesGeometry(geometry),lineMaterial);geometry.dispose();}else surface=new THREE.Mesh(geometry,material);root.add(surface);}
    }

@@ -22,7 +22,7 @@ export function closedProfiles(guides=[]){
   while(!used.has(index)){used.add(index);const e=edges[index],segment=e.a===at?e.points:[...e.points].reverse();points.push(...(points.length?segment.slice(1):segment));at=e.a===at?e.b:e.a;index=vertices[at].edges.find(i=>i!==index);}
   const plane=planeOf(points);if(!plane||distance(points[0],points.at(-1))>tolerance)continue;
   const sourceIds=component.map(i=>edges[i].g.id).sort();
-  result.push({id:'loop:'+JSON.stringify(sourceIds),name:'闭合线框（'+sourceIds.length+' 段）',points,sourceIds,recipe:{kind:'polygon',plane}});
+  result.push({id:'loop:'+JSON.stringify(sourceIds),name:'闭合线框（'+sourceIds.length+' 段）',points,sourceIds,recipe:{kind:'polygon',plane,...(edges[start].g.recipe.workplane?{workplane:edges[start].g.recipe.workplane}:{})}});
  }
  return result;
 }

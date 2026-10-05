@@ -77,12 +77,12 @@
     },
     {
       "name": "Rhino",
-      "status": "CPlane / Gumball 官方正文已阅读；Rhino 上机与适配原型待完成",
+      "status": "CPlane / Gumball 官方正文已阅读；面/三点工作平面与平面轴原型已验证；Rhino 上机待完成",
       "url": "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "审查现有任意平面数学能力与人类绘制入口之间的缺口，做三点/面选取原型",
+      "next": "研究可复用平面、曲线上的截面平面与参照关联；通用约束系统仍待完成",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm"
@@ -414,6 +414,43 @@
       "Direct endpoint XYZ handles and mesh-surface precise half-block datum sampling are not part of this milestone",
       "Rhino three-point/face/curve workplane UI research implementation is next",
       "Full architecture and real Java game validation remain pending"
+    ]
+  },
+  "customWorkplaneMilestone": {
+    "date": "2026-10-05",
+    "reference": [
+      "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
+      "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm"
+    ],
+    "status": "official documentation studied; CraftStudio adaptation implemented and isolated browser tested; Rhino hands-on not performed",
+    "implementation": [
+      "Actual mesh face sampling or three-point construction plane; noncollinear retry without voxel mutation",
+      "Shared right-handed orthonormal frame for sampling, local grid snapping, constraints, drawing and locked-axis gizmos",
+      "Plane menu shows custom state, face-on view and contextual grid toggle; previous world grid restored on exit",
+      "Rectangles, circles, ellipses, arcs, Bezier, filled shapes, width and oriented boxes use the same frame",
+      "Automatic extrusion preserves saved face normal including negative world-axis faces",
+      "Unlocking plane keeps free 3D control-point editing available; frame serialized in guide recipes"
+    ],
+    "verified": {
+      "unitPass": 110,
+      "unitSkipped": 5,
+      "browser": [
+        "cancel plane picking without scene mutation",
+        "three-point oblique plane; retry duplicate/collinear third point",
+        "local-axis mouse drag updates before release and stays in plane",
+        "closed sketch to signed normal extrusion",
+        "single undo/redo",
+        "portable save/reopen keeps frame and source editor",
+        "sample real negative-X mesh face",
+        "custom-grid toggle and source-sketch and terrain/slope regressions"
+      ],
+      "pageErrors": 0,
+      "renderer": "isolated Edge software renderer; no hardware performance claim"
+    },
+    "remaining": [
+      "Named reusable construction-plane library and linked moving-object references remain pending",
+      "Full constraint solver and general dependency graph remain pending",
+      "Other research tools and backend streaming, actual Java gameplay validation remain pending"
     ]
   }
 }

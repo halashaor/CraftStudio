@@ -18,3 +18,10 @@ export function workplane(points,choice='auto'){
 }
 export const toPlane=(p,f)=>[f.u,f.v,f.normal].map(axis=>dot(sub(p,f.origin),axis));
 export const fromPlane=(p,f)=>f.origin.map((n,a)=>n+p[0]*f.u[a]+p[1]*f.v[a]+p[2]*f.normal[a]);
+
+export function validateFrame(frame){if(!frame||['origin','u','v','normal'].some(k=>!Array.isArray(frame[k])||frame[k].length!==3||frame[k].some(n=>!Number.isFinite(n))))throw Error('工作平面坐标无效');const axes=[frame.u,frame.v,frame.normal];if(axes.some(a=>Math.abs(Math.hypot(...a)-1)>1e-6)||Math.abs(dot(axes[0],axes[1]))>1e-6||Math.abs(dot(axes[0],axes[2]))>1e-6||Math.abs(dot(axes[1],axes[2]))>1e-6)throw Error('工作平面轴必须正交且归一');if(Math.abs(dot(cross(frame.u,frame.v),frame.normal)-1)>1e-6)throw Error('工作平面必须使用右手坐标系');return structuredClone(frame);}
+export function threePointFrame(points){if(points?.length!==3||points.some(p=>p.length!==3||p.some(n=>!Number.isFinite(n))))throw Error('请选择三个有效点');const a=sub(points[1],points[0]),b=sub(points[2],points[0]),c=cross(a,b);if(Math.hypot(...a)<1e-6||Math.hypot(...c)<1e-6)throw Error('三点不能重复或共线，请重新选择第三点');const u=unit(a),normal=unit(c);return{origin:[...points[0]],u,v:cross(normal,u),normal,plane:'custom'};}
+export function faceFrame(origin,normal){if(origin?.length!==3||normal?.length!==3||[...origin,...normal].some(n=>!Number.isFinite(n))||Math.hypot(...normal)<1e-6)throw Error('请选择有效的面');normal=unit(normal);const reference=Math.abs(normal[0])<.9?[1,0,0]:[0,0,1],u=unit(sub(reference,normal.map(n=>n*dot(reference,normal))));return{origin:[...origin],u,v:cross(normal,u),normal,plane:'custom'};}
+export function profileFrame(points,choice='auto',reference=null){const checked=workplane(points,choice);if(choice!=='auto'||!reference)return checked;const f=validateFrame(reference);if(points.some(p=>Math.abs(toPlane(p,f)[2])>1e-4))throw Error('截面偏离保存的工作平面');return{...f,origin:[...points[0]],plane:'auto'};}
+export const sketchLocal=(p,f)=>{const q=toPlane(p,f);return[q[0],q[2],q[1]];};
+export const sketchWorld=(p,f)=>fromPlane([p[0],p[2],p[1]],f);
