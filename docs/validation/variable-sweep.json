@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-05",
+  "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
+  "status": "multi-profile rail adaptation implemented and own browser verified; not Rhino hands-on",
+  "implementation": [
+    "Profiles ordered by saved curve-station provenance, explicit normalized stations or nearest spatial rail position",
+    "Common perimeter sampling with cyclic start-point and winding alignment; linear or smooth interpolation between adjacent sections",
+    "Path split at section stations and short intervals, preserving intermediate bulges inside long straight rails",
+    "End caps use arc-length thickness across subdivisions",
+    "Multiple selected profiles available in the existing fixed feature panel; saved recipes retain all profile IDs"
+  ],
+  "validation": {
+    "unitPass": 122,
+    "unitSkipped": 5,
+    "unitCases": [
+      "taper counts 4/16/36 including reversed order and winding",
+      "small-large-small bulge expands intermediate bounds",
+      "hollow caps span subdivided segments",
+      "coincident station ambiguity and explicit station override",
+      "varying profiles follow a spatial bend"
+    ],
+    "browser": [
+      "two selected sections to variable sweep",
+      "preview without mutation",
+      "single undo/redo",
+      "portable reopen preserves voxels",
+      "source section update retains manually painted gold block",
+      "source update has one undo"
+    ],
+    "pageErrors": 0,
+    "renderer": "isolated Edge software rendering; no performance/FPS guarantee"
+  },
+  "remaining": [
+    "Closed nonplanar seam correction, explicit seam controls and self-intersection repair remain pending",
+    "Adaptive slab/stair sweep boundary fitting remains pending",
+    "Dense-scene backend streaming and real Java game roundtrip remain pending"
+  ]
+}

@@ -77,12 +77,12 @@
     },
     {
       "name": "Rhino",
-      "status": "CPlane / Gumball / NamedCPlane / Sweep1 官方正文已阅读；工作平面、命名平面、曲线截面与单截面扫掠原型已验证；Rhino 上机待完成",
+      "status": "官方正文已阅读；任意/命名平面、曲线截面和多截面扫掠原型已验证；Rhino 上机待完成",
       "url": "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "研究多截面沿轨道变化、接缝控制、边界落格与动态参照关联",
+      "next": "研究显式接缝控制、闭合轨道修正、边界落格与动态参照关联",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm",
@@ -529,6 +529,44 @@
       "Closed nonplanar rails need seam review; general self-intersection repair is not implemented",
       "Multiple varying sections along a rail, seam editing and adaptive half-block/stair sweep boundaries remain pending",
       "Dense-scene backend streaming and actual Java game construction verification remain pending"
+    ]
+  },
+  "variableSweepMilestone": {
+    "date": "2026-10-05",
+    "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
+    "status": "multi-profile rail adaptation implemented and own browser verified; not Rhino hands-on",
+    "implementation": [
+      "Profiles ordered by saved curve-station provenance, explicit normalized stations or nearest spatial rail position",
+      "Common perimeter sampling with cyclic start-point and winding alignment; linear or smooth interpolation between adjacent sections",
+      "Path split at section stations and short intervals, preserving intermediate bulges inside long straight rails",
+      "End caps use arc-length thickness across subdivisions",
+      "Multiple selected profiles available in the existing fixed feature panel; saved recipes retain all profile IDs"
+    ],
+    "validation": {
+      "unitPass": 122,
+      "unitSkipped": 5,
+      "unitCases": [
+        "taper counts 4/16/36 including reversed order and winding",
+        "small-large-small bulge expands intermediate bounds",
+        "hollow caps span subdivided segments",
+        "coincident station ambiguity and explicit station override",
+        "varying profiles follow a spatial bend"
+      ],
+      "browser": [
+        "two selected sections to variable sweep",
+        "preview without mutation",
+        "single undo/redo",
+        "portable reopen preserves voxels",
+        "source section update retains manually painted gold block",
+        "source update has one undo"
+      ],
+      "pageErrors": 0,
+      "renderer": "isolated Edge software rendering; no performance/FPS guarantee"
+    },
+    "remaining": [
+      "Closed nonplanar seam correction, explicit seam controls and self-intersection repair remain pending",
+      "Adaptive slab/stair sweep boundary fitting remains pending",
+      "Dense-scene backend streaming and real Java game roundtrip remain pending"
     ]
   }
 }
