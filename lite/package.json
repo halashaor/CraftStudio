@@ -1,0 +1,1 @@
+{"name":"craftstudio-lite","version":"0.2.0","private":true,"type":"module","scripts":{"build":"node build.mjs","test":"node --test tests/*.test.js"},"dependencies":{"fflate":"0.8.2"},"devDependencies":{"esbuild":"0.24.2","fake-indexeddb":"6.0.0"}}
