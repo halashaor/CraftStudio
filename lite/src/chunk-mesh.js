@@ -1,0 +1,12 @@
+import { chunkKey } from './site.js';
+import { buildMesh } from './mesh.js';
+export class ChunkMesher{
+ constructor(){this.site=null;this.resources=null;this.resourceVersion=-1;this.signature='';this.meta=new Map();this.dirty=new Set();this.sentTextures=new Set();this.visibility=[];this.visibilitySignature="";}
+ changed(site){for(const p of site.changedPositions){this.dirty.add(chunkKey(p));for(let a=0;a<3;a++)for(const d of[-1,1]){const n=[...p];n[a]+=d;if(n[a]>=0&&n[a]<4096)this.dirty.add(chunkKey(n));}}}
+ render(site,resources,options={}){const started=performance.now(),opts={...options,cut:options.cut>=site.size[1]-1?4095:options.cut},signature=JSON.stringify({...opts,hidden:undefined,animated:undefined})+'|'+resources.version,resetTextures=this.resources!==resources||this.resourceVersion!==resources.version,reset=this.site!==site||resetTextures||this.signature!==signature;
+  const visibility=[...(opts.hidden||[]),...(opts.animated||[])],visibilitySignature=JSON.stringify(visibility);if(visibilitySignature!==this.visibilitySignature&&!reset)for(const r of [...this.visibility,...visibility])for(let x=Math.floor(Math.max(0,r.min[0]-1)/16);x<=Math.floor((r.max[0]+1)/16);x++)for(let y=Math.floor(Math.max(0,r.min[1]-1)/16);y<=Math.floor((r.max[1]+1)/16);y++)for(let z=Math.floor(Math.max(0,r.min[2]-1)/16);z<=Math.floor((r.max[2]+1)/16);z++)this.dirty.add([x,y,z].join(','));this.visibility=visibility;this.visibilitySignature=visibilitySignature;
+  const keys=reset?new Set([...site.baseChunks.keys(),...site.overlayChunks.keys()]):new Set(this.dirty);if(reset){this.meta.clear();this.sentTextures.clear();}const chunks=[],textures={};let visited=0;
+  for(const key of keys){visited+=(site.baseChunks.get(key)?.size||0)+(site.overlayChunks.get(key)?.size||0);const result=buildMesh(site,resources,{...opts,chunk:key});chunks.push({key,buckets:result.buckets,triangles:result.triangles});this.meta.set(key,{triangles:result.triangles,issues:result.issues});for(const b of result.buckets)if(b.texture&&!this.sentTextures.has(b.texture)){textures[b.texture]=resources.texture(b.texture);this.sentTextures.add(b.texture);}}
+  this.site=site;this.resources=resources;this.resourceVersion=resources.version;this.signature=signature;this.dirty.clear();return{reset,resetTextures,chunks,textures,triangles:[...this.meta.values()].reduce((n,m)=>n+m.triangles,0),issues:[...new Set([...this.meta.values()].flatMap(m=>m.issues))],stats:{chunks:chunks.length,candidates:visited,meshMs:performance.now()-started}};
+ }
+}
