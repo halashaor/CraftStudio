@@ -153,7 +153,7 @@ public class BridgeRuntime {
 
     private JsonObject validateProject(JsonObject project){
         JsonArray errors=new JsonArray();boolean nativeData=project.has("entities")&&!project.getAsJsonArray("entities").isEmpty();JsonObject metadata=project.has("metadata")?project.getAsJsonObject("metadata"):new JsonObject();
-        nativeData|=metadata.has("nativeExtra")&&!metadata.getAsJsonObject("nativeExtra").isEmpty();boolean blockNbt=false;for(JsonElement e:project.getAsJsonArray("blocks"))if(e.getAsJsonObject().has("nbt"))blockNbt=true;
+        nativeData|=metadata.has("nativeExtra")&&metadata.getAsJsonObject("nativeExtra").size()>0;boolean blockNbt=false;for(JsonElement e:project.getAsJsonArray("blocks"))if(e.getAsJsonObject().has("nbt"))blockNbt=true;
         int source=project.has("dataVersion")?project.get("dataVersion").getAsInt():0,target=SharedConstants.getCurrentVersion().getDataVersion().getVersion();
         if(nativeData)errors.add("Native entity/association data requires native schematic placement; it cannot be discarded");
         if(source!=target&&blockNbt)errors.add("Block entity NBT needs an exact DataVersion match; export a native schematic or convert it in Minecraft");
@@ -166,7 +166,7 @@ public class BridgeRuntime {
         int[] size=ints(project.getAsJsonArray("size"));bounds(level,origin,size);
         JsonObject validation=validateProject(project);if(!validation.get("ok").getAsBoolean())throw new IllegalArgumentException(validation.get("errors").toString());
         JsonObject extra=project.getAsJsonObject("metadata").has("nativeExtra")?project.getAsJsonObject("metadata").getAsJsonObject("nativeExtra"):new JsonObject();
-        if(!project.getAsJsonArray("entities").isEmpty() || !extra.isEmpty()) throw new IllegalArgumentException("Native entity/association data requires Create-native schematic placement; bridge cannot discard it");
+        if(!project.getAsJsonArray("entities").isEmpty() || extra.size()>0) throw new IllegalArgumentException("Native entity/association data requires Create-native schematic placement; bridge cannot discard it");
         List<BlockState> palette=new ArrayList<>();for(JsonElement s:project.getAsJsonArray("palette")) palette.add(parseState(s.getAsJsonObject()));
         Job job=new Job(level,origin); Set<BlockPos> positions=new HashSet<>();
         boolean overwrite=body.has("overwrite")&&body.get("overwrite").getAsBoolean();
@@ -238,7 +238,7 @@ public class BridgeRuntime {
     private static JsonObject stateJson(BlockState state){
         JsonObject result=obj("Name",BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString()),props=new JsonObject();
         for(Property<?> property:state.getProperties())props.addProperty(property.getName(),propertyName(state,property));
-        if(!props.isEmpty())result.add("Properties",props);return result;
+        if(props.size()>0)result.add("Properties",props);return result;
     }
     private static <T extends Comparable<T>> String propertyName(BlockState state,Property<T> property){return property.getName(state.getValue(property));}
     private static BlockState parseState(JsonObject data){
