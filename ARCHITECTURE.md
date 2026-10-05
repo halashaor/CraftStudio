@@ -79,3 +79,10 @@ Python 后端（工程操作 / 格式转换 / AI 规划）
 `python tests/smoke_library.py`：隔离目录中启动真实后端，执行保存、编辑、旧版本读取、停止再启动、恢复、草稿切换、素材索引与前端接口检查。
 
 此验证没有替代真实浏览器的视觉和交互检查，也没有替代游戏内建造验证。
+
+
+## Shared local / Lite architecture
+
+`lite/src` is the single designer frontend. `lite/build.mjs` emits identical `lite/dist/CraftStudio-Lite.html`, `web/index.html`, and `web/lite.html` plus the worker bundle. Runtime capability detection selects SQLite on the genuine local service, or IndexedDB for standalone/static Lite. The browser Worker remains the one voxel/modeling engine in both modes. Local service helpers add explicit instance file reads and game bridge forwarding; they do not replace the designer with legacy generators.
+
+Designer snapshots are stored in namespaced `designer_records` tables in the existing SQLite database. Legacy projects and APIs remain available for import/compatibility. Public builds embed no personal data unless fixture environment variables are explicitly supplied. CI tests both layers and synchronizes committed build outputs on main.

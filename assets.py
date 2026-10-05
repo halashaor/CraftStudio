@@ -6,7 +6,8 @@ import threading
 import zipfile
 from pathlib import Path
 
-MC = Path(os.environ.get('CRAFTSTUDIO_MINECRAFT_HOME', str(Path(os.environ.get('APPDATA', str(Path.home()))) / '.minecraft')))
+_nearby = Path(__file__).resolve().parent.parent / '.minecraft'
+MC = Path(os.environ.get('CRAFTSTUDIO_MINECRAFT_HOME', str(_nearby if _nearby.is_dir() else Path(os.environ.get('APPDATA', Path.home())) / '.minecraft')))
 
 
 def read_json(path):
@@ -18,8 +19,7 @@ def read_json(path):
 
 def instances():
     result = []
-    if not (MC / 'versions').is_dir():
-        return result
+    if not (MC / 'versions').is_dir(): return result
     for path in sorted((MC / 'versions').iterdir()):
         if not path.is_dir() or not (path / (path.name + '.json')).is_file():
             continue

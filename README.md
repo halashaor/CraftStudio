@@ -32,12 +32,17 @@ Node.js 22+。构建默认不嵌入用户数据。可选环境变量 LITE_SOURCE
 后端使用 Python 标准库：
 
 ```sh
-python server.py --port 18765
+python server.py --port 18767
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-打开 http://127.0.0.1:18765/lite.html。CRAFTSTUDIO_MINECRAFT_HOME 可指定 .minecraft 目录；默认从用户目录定位。数据和日志在本机生成，已列入忽略规则。
+打开 `http://127.0.0.1:18767/`。`CRAFTSTUDIO_MINECRAFT_HOME` 可指定 .minecraft 目录；默认从用户目录定位。数据和日志在本机生成，已列入忽略规则。
 
 桥接针对 Minecraft 1.21.1 / NeoForge 21.1.209，需要 JDK 21 与 Gradle；构建后手动安装到所选实例。桥接仅绑定本机，带令牌、建造备份与回读。完整游戏运行时和复杂 Create 行为尚未全部适配。外部 AI 的自主工具循环仍需连接当前接口。
 
 第三方声明见 [THIRD-PARTY](lite/THIRD-PARTY.txt)。Create 参考代码保留原许可证，公开包不带 Minecraft / Mod 原始游戏材质。项目当前未另行声明主代码的开源许可证。
+
+
+## 两个版本同源更新
+
+本地版和 Lite 共用 `lite/src` 设计器。本地版额外使用 SQLite 保存完整工程、版本和草稿，并可按需读取 Minecraft 实例文件。离线 Lite 保持文件导入和浏览器存储。所有页面入口由同一次构建生成；GitHub main 更新并通过检查后，自动同步仓库中的预构建 HTML。下载 / 拉取新版后，重新启动本地服务即可使用。

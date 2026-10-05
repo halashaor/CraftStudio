@@ -16,6 +16,8 @@ from assets import MC, index, instances, scope_path
 from formats import import_nbt, import_region, export_structure
 from design import room, materials, validate, apply_operations, rotate
 from storage import Library
+from designer_storage import DesignerLibrary
+from desktop_files import list_files, read_file, home_for
 
 ROOT = Path(__file__).resolve().parent
 STORAGE_ROOT = Path(os.environ.get('CRAFTSTUDIO_STORAGE_DIR', str(ROOT))).resolve()
@@ -23,6 +25,7 @@ DATA_DIR, PROJECTS_DIR, EXPORTS_DIR = (STORAGE_ROOT / name for name in ('data', 
 for directory in (DATA_DIR, PROJECTS_DIR, EXPORTS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 LIBRARY = Library(DATA_DIR / 'craftstudio.sqlite3')
+DESIGNER_LIBRARY = DesignerLibrary(DATA_DIR / 'craftstudio.sqlite3')
 MIGRATION = LIBRARY.migrate_files(PROJECTS_DIR)
 TOKEN = secrets.token_urlsafe(32)
 LOCK = threading.RLock()
@@ -130,11 +133,28 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(raw)))
         self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-CraftStudio-Version','0.3.0')
+        origin=self.headers.get('Origin')
+        if origin in self.allowed_origins():
+            self.send_header('Access-Control-Allow-Origin',origin)
+            self.send_header('Vary','Origin')
+            self.send_header('Access-Control-Allow-Headers','Content-Type, X-CraftStudio-Token')
+            self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS')
         self.send_header('Cache-Control', 'no-store' if 'json' in content_type else 'public, max-age=60')
         if filename:
             self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + urllib.parse.quote(filename))
         self.end_headers()
         self.wfile.write(raw)
+
+    def allowed_origins(self):
+        ports={self.server.server_port}
+        if self.server.server_port==18767:ports.add(18765)
+        return {f'http://{host}:{port}' for host in ('127.0.0.1','localhost') for port in ports}
+
+    def do_OPTIONS(self):
+        try:
+            self.trusted();self.respond(b'',status=204,content_type='text/plain')
+        except Exception as error:self.respond({'error':str(error)},400)
 
     def trusted(self, write=False):
         host = self.headers.get('Host', '')
@@ -142,7 +162,7 @@ class Handler(BaseHTTPRequestHandler):
         if host not in allowed:
             raise ValueError('拒绝未知主机')
         origin = self.headers.get('Origin')
-        if origin and origin not in {'http://' + h for h in allowed}:
+        if origin and origin not in self.allowed_origins():
             raise ValueError('拒绝跨站请求')
         if write and self.headers.get('X-CraftStudio-Token') != TOKEN:
             raise ValueError('本地会话令牌无效，请刷新界面')
@@ -153,7 +173,14 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urllib.parse.urlparse(self.path)
             route, query = parsed.path, urllib.parse.parse_qs(parsed.query)
             arg = lambda name, default='': query.get(name, [default])[0]
-            if route == '/api/bootstrap':
+            if route == '/api/desktop/info':
+                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','instances':instances()})
+            elif route == '/api/desktop/files':
+                self.respond(list_files(arg('instance')))
+            elif route == '/api/desktop/file':
+                file=read_file(arg('instance'),arg('kind'),arg('path'))
+                self.respond(file.read_bytes(),content_type='application/octet-stream',filename=file.name)
+            elif route == '/api/bootstrap':
                 with LOCK:
                     self.respond({'token': TOKEN, 'instances': instances(), 'project': snapshot(), 'version': '0.2.0', 'storage': LIBRARY.stats(), 'migration': MIGRATION})
             elif route == '/api/project':
@@ -188,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                               'write': ['/api/edit', '/api/generate', '/api/import', '/api/export', '/api/save', '/api/library/open', '/api/library/metadata', '/api/library/trash', '/api/library/restore', '/api/library/backup', '/api/bridge/health', '/api/bridge/read', '/api/bridge/apply'],
                               'auth': 'X-CraftStudio-Token; /api/bootstrap returns session token', 'bridge': 'requires running CraftStudio bridge mod'})
             else:
-                file = scope_path(ROOT / 'web', route.lstrip('/') or 'index.html')
+                file = scope_path(ROOT / 'web', 'lite.html' if route in ('/','/index.html') else route.lstrip('/'))
                 if not file.is_file():
                     self.respond({'error': '不存在'}, 404)
                 else:
@@ -205,7 +232,14 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('请求过大，请分区操作')
             body = json.loads(self.rfile.read(length))
             route = urllib.parse.urlparse(self.path).path
-            if route == '/api/models':
+            if route == '/api/desktop/library':
+                self.respond({'value':DESIGNER_LIBRARY.call(body['method'],body.get('args',[]))})
+            elif route == '/api/desktop/world':
+                home=home_for(body['instance']);world=scope_path(home/'saves',body['world']);folder=scope_path(world,body.get('dimension','region'))
+                if folder.name!='region':raise ValueError('请选择有效维度的 region 目录')
+                p=import_region(folder,body['min'],body['max'],body['world']+' · 区域');p['metadata']['instance']=body['instance'];p['metadata']['originConfirmed']=True
+                self.respond(p)
+            elif route == '/api/models':
                 resources = index(body['instance'])
                 self.respond({'models': [resources.block_model(s) for s in body['states']]})
             elif route == '/api/import':
@@ -402,8 +436,8 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', type=int, default=18765)
+    parser.add_argument('--port', type=int, default=18767)
     args = parser.parse_args()
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
-    print(f'CraftStudio http://127.0.0.1:{server.server_port}', flush=True)
+    print(f'CraftStudio 0.3.0 http://127.0.0.1:{server.server_port} | source={ROOT} | desktop={"/api/desktop/info" in Handler.do_GET.__code__.co_consts}', flush=True)
     server.serve_forever()
