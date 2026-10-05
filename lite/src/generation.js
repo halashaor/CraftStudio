@@ -36,7 +36,7 @@ export function regenerateObjects(site,objects,{manualStrategy='preserve',overri
   const records=[...captured.map(r=>({...r,after:cellSnapshot(working,r.pos)})),...(manualRecords.get(o.id)||[])];
   const next=records.length?{...o,recipe:config,...bounds(records),generation:{...o.generation,outdated:false,records,sourceVersions:Object.fromEntries(o.generation.sources.map(id=>[id,working.design.guides.find(g=>g.id===id)?.revision||0]))}}:{...o,recipe:config,cells:[],generation:{...o.generation,records:[]}};
   working.design.objects=working.design.objects.map(v=>v.id===o.id?next:v);
-  const display=working.design.guides.find(g=>g.id===o.guideId);if(display&&type==='feature'){display.points=plan.guide;display.recipe=config;}
+  const display=working.design.guides.find(g=>g.id===o.guideId);if(display&&type==='feature'){display.points=plan.guide;if(plan.guideGroups)display.paths=plan.guideGroups;else delete display.paths;display.recipe=config;}
   warnings.push(...plan.warnings);
  }
  const operations=[];for(const key of touched){const pos=coords(key),before=cellSnapshot(site,pos),after=cellSnapshot(working,pos);if(!equal(before,after))operations.push(operation(pos,after));}

@@ -77,16 +77,17 @@
     },
     {
       "name": "Rhino",
-      "status": "CPlane / Gumball / NamedCPlane 官方正文已阅读；面/三点平面、命名平面与曲线截面原型已验证；Rhino 上机待完成",
+      "status": "CPlane / Gumball / NamedCPlane / Sweep1 官方正文已阅读；工作平面、命名平面、曲线截面与单截面扫掠原型已验证；Rhino 上机待完成",
       "url": "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "研究沿路径生成任意用户截面、方向传递与参照关联；通用约束系统仍待完成",
+      "next": "研究多截面沿轨道变化、接缝控制、边界落格与动态参照关联",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm",
-        "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm"
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm"
       ]
     },
     {
@@ -489,6 +490,45 @@
       "Named frames are snapshots; automatic moving-object/curve-reference attachment is not implemented",
       "Cross-project UI plane import/export is not implemented; AI may explicitly transfer frames using local/world APIs",
       "Other design learning, backend streaming and actual Java game validation remain pending"
+    ]
+  },
+  "profileSweepMilestone": {
+    "date": "2026-10-05",
+    "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
+    "status": "official single-rail/profile/frame documentation studied; CraftStudio implementation and isolated browser validated; Rhino hands-on not performed",
+    "implementation": [
+      "Explicit self-drawn closed profile or legacy quick rectangle; old recipes without a sweep mode retain rectangular semantics",
+      "Single profile shape transported along sampled 3D rail, retaining dimensions and optional drawn offset or centering",
+      "Segment miters, merged voxel overlap, hollow walls, optional global end caps and cut operations",
+      "Lightweight continuous side-surface preview before exact voxel calibration; sparse independent auxiliary loops",
+      "All feature generators accept the shared volume/footprint scope; exclusions are reported",
+      "Source path edits regenerate the sweep, preserving manual edits and single-operation undo",
+      "workspace.describe reports history availability; grouped guide disposal no longer breaks undo UI refresh"
+    ],
+    "validation": {
+      "unitPass": 117,
+      "unitSkipped": 5,
+      "unitCases": [
+        "straight volume counts, interior voids, open/capped ends and cut states",
+        "concave section preserves notch through a connected 3D bend",
+        "legacy rectangle compatibility",
+        "shared scope filters feature volume and exclusion counts"
+      ],
+      "browser": [
+        "round profile and rail selection visible",
+        "626-block open hollow tube; center and entrance cells remain air",
+        "preview without voxel mutation; one undo/redo with enabled redo button",
+        "portable project preserves the sweep",
+        "editing the source curve updates the body and retains a hand-painted gold block",
+        "source update one undo; old rectangle still available"
+      ],
+      "pageErrors": 0,
+      "renderer": "isolated Edge software renderer; no hardware FPS claim"
+    },
+    "remaining": [
+      "Closed nonplanar rails need seam review; general self-intersection repair is not implemented",
+      "Multiple varying sections along a rail, seam editing and adaptive half-block/stair sweep boundaries remain pending",
+      "Dense-scene backend streaming and actual Java game construction verification remain pending"
     ]
   }
 }

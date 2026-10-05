@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-05",
+  "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
+  "status": "official single-rail/profile/frame documentation studied; CraftStudio implementation and isolated browser validated; Rhino hands-on not performed",
+  "implementation": [
+    "Explicit self-drawn closed profile or legacy quick rectangle; old recipes without a sweep mode retain rectangular semantics",
+    "Single profile shape transported along sampled 3D rail, retaining dimensions and optional drawn offset or centering",
+    "Segment miters, merged voxel overlap, hollow walls, optional global end caps and cut operations",
+    "Lightweight continuous side-surface preview before exact voxel calibration; sparse independent auxiliary loops",
+    "All feature generators accept the shared volume/footprint scope; exclusions are reported",
+    "Source path edits regenerate the sweep, preserving manual edits and single-operation undo",
+    "workspace.describe reports history availability; grouped guide disposal no longer breaks undo UI refresh"
+  ],
+  "validation": {
+    "unitPass": 117,
+    "unitSkipped": 5,
+    "unitCases": [
+      "straight volume counts, interior voids, open/capped ends and cut states",
+      "concave section preserves notch through a connected 3D bend",
+      "legacy rectangle compatibility",
+      "shared scope filters feature volume and exclusion counts"
+    ],
+    "browser": [
+      "round profile and rail selection visible",
+      "626-block open hollow tube; center and entrance cells remain air",
+      "preview without voxel mutation; one undo/redo with enabled redo button",
+      "portable project preserves the sweep",
+      "editing the source curve updates the body and retains a hand-painted gold block",
+      "source update one undo; old rectangle still available"
+    ],
+    "pageErrors": 0,
+    "renderer": "isolated Edge software renderer; no hardware FPS claim"
+  },
+  "remaining": [
+    "Closed nonplanar rails need seam review; general self-intersection repair is not implemented",
+    "Multiple varying sections along a rail, seam editing and adaptive half-block/stair sweep boundaries remain pending",
+    "Dense-scene backend streaming and actual Java game construction verification remain pending"
+  ]
+}
