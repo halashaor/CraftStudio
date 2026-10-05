@@ -101,7 +101,9 @@ const result = await window.CraftStudio.request({
 
 This API belongs to the open designer page. It does not automatically expose an unauthenticated HTTP write endpoint. An external AI agent still needs an adapter and its own tool loop. The Python/MCP compatibility interfaces are not yet fully unified with this protocol.
 
-Optional [game bridge source](bridge/) targets **Minecraft 1.21.1 / NeoForge 21.1.209** and requires **JDK 21 and Gradle** to build. It is installed manually into the intended instance and uses a local token, construction backups, and readback. The bridge is optional; full game-runtime compatibility and complex Create behavior remain incomplete.
+The optional [Java game bridge](bridge/README.md) now has separate **NeoForge 1.21.1, Forge 1.20.1, and Fabric 1.20.1 / 1.21.1** profiles. Each profile produces its own JAR; Fabric also needs Fabric API. Open **Files → Connect Java game** in the local designer to identify the running version, read regions, validate target block states, build changes, monitor progress, cancel, or undo. State-only builds can cross DataVersions after registry validation; native entities and cross-version block-entity NBT still need a native schematic/conversion workflow.
+
+Single-player writes require creative mode. Dedicated-server writes require an explicit operator setting; the bridge remains on loopback. Compilation and live-world validation are separate checks. See the bridge documentation for build artifacts, install steps and the compatibility matrix. Bedrock is outside the project's scope.
 
 ## Development
 

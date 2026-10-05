@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="craftstudio"
-version="0.1.0"
+version="0.2.0"
 displayName="CraftStudio Bridge"
 description="Local authenticated region read/build/verify/undo bridge for CraftStudio."
 [[dependencies.craftstudio]]

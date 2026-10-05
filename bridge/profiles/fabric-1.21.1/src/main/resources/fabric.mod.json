@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "craftstudio",
+  "version": "0.2.0",
+  "name": "CraftStudio Bridge",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "local.craftstudio.FabricBridge"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.10",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

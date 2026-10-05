@@ -1,0 +1,43 @@
+name: Build Java bridges
+on:
+  push:
+    paths: ['bridge/**', '.github/workflows/bridge.yml']
+  pull_request:
+    paths: ['bridge/**', '.github/workflows/bridge.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: neoforge-1.21.1
+            directory: bridge
+            java: '21'
+          - profile: forge-1.20.1
+            directory: bridge/profiles/forge-1.20.1
+            java: '17'
+          - profile: fabric-1.20.1
+            directory: bridge/profiles/fabric-1.20.1
+            java: '17'
+          - profile: fabric-1.21.1
+            directory: bridge/profiles/fabric-1.21.1
+            java: '21'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - run: gradle -p ${{ matrix.directory }} build --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: craftstudio-bridge-${{ matrix.profile }}
+          path: ${{ matrix.directory }}/build/libs/*.jar
+          if-no-files-found: error

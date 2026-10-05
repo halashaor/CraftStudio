@@ -1,0 +1,23 @@
+plugins { id 'java'; id 'net.minecraftforge.gradle' version '[6.0,6.2)' }
+version='0.2.0'
+group='local.craftstudio'
+base { archivesName='craftstudio-bridge-forge-1.20.1' }
+java.toolchain.languageVersion=JavaLanguageVersion.of(17)
+tasks.withType(JavaCompile).configureEach { options.encoding='UTF-8' }
+minecraft { mappings channel:'official',version:'1.20.1' }
+dependencies { minecraft 'net.minecraftforge:forge:1.20.1-47.4.0' }
+jar.finalizedBy('reobfJar')
+def generated=file("$buildDir/generated/compat")
+tasks.register('generateCompat') {
+ inputs.file('../../common/src/main/java/local/craftstudio/BridgeRuntime.java')
+ outputs.dir(generated)
+ doLast {
+  def text=file('../../common/src/main/java/local/craftstudio/BridgeRuntime.java').getText('UTF-8')
+  text=text.replace('ResourceLocation.parse(', 'new ResourceLocation(')
+  text=text.replace('saveWithFullMetadata(level.registryAccess())','saveWithFullMetadata()').replace('saveWithFullMetadata(previous.level.registryAccess())','saveWithFullMetadata()').replace('saveWithFullMetadata(job.level.registryAccess())','saveWithFullMetadata()')
+  text=text.replace('be.loadWithComponents(tag,job.level.registryAccess())','be.load(tag)')
+  def out=new File(generated,'local/craftstudio/BridgeRuntime.java');out.parentFile.mkdirs();out.setText(text,'UTF-8')
+ }
+}
+sourceSets.main.java.srcDir generated
+compileJava.dependsOn('generateCompat')

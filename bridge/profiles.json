@@ -1,0 +1,36 @@
+{
+  "protocol": "craftstudio-bridge/1",
+  "edition": "java",
+  "profiles": {
+    "neoforge-1.21.1": {
+      "loader": "neoforge",
+      "minecraft": "1.21.1",
+      "loaderVersion": "21.1.209",
+      "java": 21,
+      "directory": "."
+    },
+    "forge-1.20.1": {
+      "loader": "forge",
+      "minecraft": "1.20.1",
+      "loaderVersion": "47.4.0",
+      "java": 17,
+      "directory": "profiles/forge-1.20.1"
+    },
+    "fabric-1.20.1": {
+      "loader": "fabric",
+      "minecraft": "1.20.1",
+      "loaderVersion": "0.16.10",
+      "api": "0.92.2+1.20.1",
+      "java": 17,
+      "directory": "profiles/fabric-1.20.1"
+    },
+    "fabric-1.21.1": {
+      "loader": "fabric",
+      "minecraft": "1.21.1",
+      "loaderVersion": "0.16.10",
+      "api": "0.116.5+1.21.1",
+      "java": 21,
+      "directory": "profiles/fabric-1.21.1"
+    }
+  }
+}

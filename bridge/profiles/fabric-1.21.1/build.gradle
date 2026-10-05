@@ -1,0 +1,8 @@
+plugins { id 'java'; id 'fabric-loom' version '1.10.5' }
+version='0.2.0'
+group='local.craftstudio'
+base { archivesName='craftstudio-bridge-fabric-1.21.1' }
+java.toolchain.languageVersion=JavaLanguageVersion.of(21)
+tasks.withType(JavaCompile).configureEach { options.encoding='UTF-8' }
+dependencies { minecraft 'com.mojang:minecraft:1.21.1'; mappings loom.officialMojangMappings(); modImplementation 'net.fabricmc:fabric-loader:0.16.10'; modImplementation 'net.fabricmc.fabric-api:fabric-api:0.116.5+1.21.1' }
+sourceSets.main.java.srcDir '../../common/src/main/java'

@@ -358,7 +358,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.respond(commit(PREVIEW['project'], REVISION))
             elif route == '/api/lite/bridge':
                 action = body.get('action')
-                if action not in ('health', 'apply', 'job', 'undo'):
+                if action not in ('health', 'read', 'validate', 'apply', 'job', 'cancel', 'undo'):
                     raise ValueError('未知轻量版施工操作')
                 if action == 'apply':
                     payload = body.get('payload', {})
@@ -369,7 +369,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(request_bridge(body, action))
             elif route.startswith('/api/bridge/'):
                 action = route.rsplit('/', 1)[1]
-                if action not in ('health', 'read', 'apply', 'job', 'undo'):
+                if action not in ('health', 'read', 'validate', 'apply', 'job', 'cancel', 'undo'):
                     raise ValueError('未知桥接操作')
                 if action == 'apply':
                     with LOCK:

@@ -262,6 +262,7 @@ def import_region(folder, lo, hi, name):
                     continue
                 palette = sd.get('block_states', {}).get('palette', sd.get('Palette'))
                 if not palette:
+                    if 'Blocks' in sd: raise ValueError('该区域使用 1.12 或更早的数值方块 ID，请在 Minecraft 中升级副本后再导入')
                     continue
                 data = sd.get('block_states', {}).get('data', sd.get('BlockStates', []))
                 values = packed_values(data, max(4, (len(palette) - 1).bit_length()), 4096, p['dataVersion'] >= 2529)
