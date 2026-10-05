@@ -13,3 +13,9 @@ Keep private worlds, blueprints, resource packs, screenshots, databases, and cre
 Compare the complete publish tree with the remote branch, including local commits, rather than checking only uncommitted files. Keep the launcher and backend build fingerprint changes together.
 
 On Windows, use the normal signed-in user's permissions for Git credential access if sandboxed HTTPS helpers crash or cannot access credentials. For a Codex-created checkout, a per-command safe.directory entry for that exact checkout is sufficient; do not change global trust settings. Reuse an existing reachable proxy when required and keep TLS certificate verification enabled.
+
+## Ongoing design learning
+
+Maintain docs/design-roadmap.json and docs/design-roadmap.html as the learning and implementation ledger. Study primary references around a complete human workflow, record observed behavior and applicability, then implement and validate the chosen improvement. Distinguish documented patterns, hands-on observations, prototypes, completed code, performance benchmarks, and live game validation. Do not mark candidate references or planned capabilities as studied or implemented.
+
+Preserve terrain-first design, unrestricted human/AI voxel editing, arbitrary 3D sketching, and distinct local/Lite scale and storage roles. Borrow coherent operation semantics from mature software rather than mixing unrelated menus. Do not declare the overall ongoing design objective complete because a narrow test or CI build passed.

@@ -58,7 +58,7 @@ The library caches resource assets in SQLite locally or IndexedDB in Lite and re
 
 The interface uses a fixed tool column, central 3D viewport, right-side scene collection and properties, and a bottom material/component shelf. Modeling panels stay outside the viewport. Dragging sketch handles provides immediate shape feedback while the worker calculates the precise block result.
 
-Viewport controls: **left click / drag** selects or box-selects, **right drag** orbits, **middle drag** pans, and **F** frames the selection or scene. Space + left drag also orbits. **Ctrl+Z / Ctrl+Y** undo and redo. Placement currently also supports continuous dragging; its behavior overlaps with a one-block brush.
+Viewport controls: **left click / drag** selects or box-selects, **right drag** orbits, **middle drag** pans, and **F** frames the selection or scene. Space + left drag also orbits. **Ctrl+Z / Ctrl+Y** undo and redo. Placement adds one block per press; the brush draws continuously and each stroke can be undone as one operation.
 
 ## What is available
 
@@ -136,3 +136,7 @@ Public builds do not include private worlds, user blueprints, resource packs, sc
 See [third-party notices](lite/THIRD-PARTY.txt). Bundled third-party code retains its original terms. Minecraft/mod game textures are not bundled in the public release. The main project code currently has **no separately declared open-source license**; a public repository alone does not grant unrestricted reuse rights.
 
 Further reading: [Architecture](ARCHITECTURE.md), [interaction design and implementation status](docs/interaction-spec.html), and [Design API](lite/DESIGN-API.md). These supporting documents are currently primarily in Chinese.
+
+## Design roadmap
+
+See the [design roadmap and research ledger](docs/design-roadmap.html) (Chinese) for current evidence, reference tools, implementation priorities, and end-to-end acceptance tasks. Research, prototypes, compiled checks, and real-world validation are tracked separately. The goal is terrain-first, free human/AI architectural design, with practical differences between local and Lite editions.
