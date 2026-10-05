@@ -15,10 +15,16 @@
       "name": "Axiom",
       "status": "官方文档已阅读；本项目涂改/条件原型验证通过；Axiom 上机观察待完成",
       "url": "https://axiomdocs.moulberry.com/",
-      "learn": "选区、工具蒙版、涂改与新增分工、三维路径、状态保留",
+      "learn": "通用选区及布尔组合、选择边界与内容变换分离、三维路径节点、楼梯/半砖路径、坡道拖动预览",
       "adapt": "共用选择和蒙版；材质替换保留楼梯/半砖类型与朝向；工具状态可理解",
       "avoid": "不要求离线设计器必须运行游戏；不复制整套快捷键冲突",
-      "next": "观察 Axiom 实际操作，并研究更复杂规则、规则预览与其他工具接入"
+      "next": "实际操作观察待完成；先审查通用选区、路径节点与坡道预览的一致性，不照搬浮动窗口",
+      "sources": [
+        "https://axiomdocs.moulberry.com/editor/selections.html",
+        "https://axiomdocs.moulberry.com/tools/selection/intro.html",
+        "https://axiomdocs.moulberry.com/tools/drawing/path.html",
+        "https://axiomdocs.moulberry.com/tools/heightmap/slope.html"
+      ]
     },
     {
       "name": "ObjToSchematic",
@@ -27,7 +33,11 @@
       "learn": "模型/体素/方块分层、向导/工程两种入口、版本图集、调色板",
       "adapt": "连续草图与模型保留为设计输入，方块为派生结果；导出类型清楚",
       "avoid": "不以颜色匹配代替全部建筑设计；半砖和楼梯需按形态处理",
-      "next": "研究旧版开源体素/网格结构，做同数据与同硬件比较"
+      "next": "实际编辑器体验待完成；研究可保存的原模型→体素→方块转换链，参数修改可重新生成",
+      "sources": [
+        "https://objtoschematic.com/",
+        "https://objtoschematic.com/wiki"
+      ]
     },
     {
       "name": "Blender",
@@ -267,5 +277,42 @@
       "result": "嵌套隔离/恢复、正交缩放与相机恢复、无场景变更、隐藏邻居保护通过",
       "limits": "不是所有生成操作的权限沙盒；AI 自由编辑保留；完整上下文淡显与嵌套组件仍待实现"
     }
-  ]
+  ],
+  "viewportMilestone": {
+    "status": "implemented and isolated browser verified; backend data streaming remains pending",
+    "activation": "100000 source plus added blocks",
+    "geometry": "camera-frustum chunk demand; evict off-view GPU geometry; retain complete canonical voxel data",
+    "safety": "conservative resource-model bounds; serialize mesh application; coalesce camera updates; pause editing while geometry loads",
+    "benchmark": {
+      "blocks": 409088,
+      "size": [
+        128,
+        32,
+        128
+      ],
+      "fullChunks": 128,
+      "partialChunks": 48,
+      "fullBytes": 20072448,
+      "partialBytes": 7734144,
+      "singlePatchChunks": 1
+    },
+    "browser": {
+      "engine": "isolated Edge, SwiftShader software renderer",
+      "nearViewResident": 8,
+      "total": 128,
+      "cameraCommandToSettledMs": [
+        61,
+        117,
+        123
+      ],
+      "offViewEditSaveReopen": true,
+      "pageErrors": 0
+    },
+    "limitations": [
+      "One synthetic scene, not a universal speed guarantee",
+      "Camera command to geometry settled is not pointer-to-visible latency or GPU FPS",
+      "Complete voxel data and textures still resident; local backend streaming not implemented",
+      "Four actual Java runtime workflows remain unverified"
+    ]
+  }
 }

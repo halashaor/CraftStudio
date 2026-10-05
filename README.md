@@ -143,3 +143,5 @@ Further reading: [Architecture](ARCHITECTURE.md), [interaction design and implem
 ## Design roadmap
 
 See the [design roadmap and research ledger](docs/design-roadmap.html) (Chinese) for current evidence, reference tools, implementation priorities, and end-to-end acceptance tasks. Research, prototypes, compiled checks, and real-world validation are tracked separately. The goal is terrain-first, free human/AI architectural design, with practical differences between local and Lite editions.
+
+Large scenes (100,000 source plus added blocks) request chunk geometry by camera frustum and evict off-view geometry. Complete voxel data remains available for edits, saves and exports; this is geometry streaming, not backend data streaming. Resource-model bounds are conservative, camera updates are coalesced, and editing waits while visible geometry loads. See [design evidence](docs/design-roadmap.json). Run `node lite/tests/performance-baseline.mjs` for a reproducible synthetic compute/buffer benchmark; it does not measure pointer-to-visible latency or hardware GPU FPS.
