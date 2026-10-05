@@ -1,0 +1,121 @@
+{
+  "schema": "craftstudio-interaction-design/1",
+  "status": "proposed-not-implemented",
+  "date": "2026-10-05",
+  "principles": [
+    "viewport-first",
+    "contextual-fixed-panels",
+    "sketches-as-editable-inputs",
+    "one-operation-one-undo",
+    "free-voxel-and-ai-editing-remain-available"
+  ],
+  "modes": [
+    "object",
+    "sketch-edit",
+    "voxel-edit"
+  ],
+  "objectKinds": [
+    "site-baseline",
+    "protected-region",
+    "reference",
+    "sketch",
+    "generated-feature",
+    "voxel-object",
+    "component-definition",
+    "component-instance",
+    "local-detail"
+  ],
+  "layout": {
+    "viewport": "center",
+    "tools": "left-compact",
+    "tree": "right-top",
+    "properties": "right-bottom",
+    "assets": "collapsible-bottom",
+    "status": "bottom",
+    "modelingDialogs": "none"
+  },
+  "command": {
+    "states": [
+      "idle",
+      "acquiring-input",
+      "adjusting-preview",
+      "rebuilding",
+      "ready",
+      "committing",
+      "committed",
+      "cancelled",
+      "invalid"
+    ],
+    "pointerFeedback": "immediate-frame",
+    "computePolicy": {
+      "inFlightMax": 1,
+      "pendingMax": 1,
+      "pendingReplacement": "latest",
+      "staleResults": "discard"
+    },
+    "completion": {
+      "gizmo-drag": "release",
+      "keyboard-transform": "click-or-enter",
+      "multi-step-feature": "explicit-confirm",
+      "cancel": "escape"
+    },
+    "requiredFields": [
+      "commandId",
+      "workspaceId",
+      "baseRevision",
+      "inputReferences",
+      "parameters",
+      "previewStatus",
+      "affectedObjects"
+    ],
+    "commit": "atomic-revision-checked-single-undo"
+  },
+  "generation": {
+    "inputs": "referenced-persistent-sketches",
+    "dependencyCycles": "reject",
+    "copies": "independent-by-default",
+    "linkedInstances": "explicit-shared-definition-independent-transform",
+    "manualDetails": "separate-or-anchored-overrides",
+    "lostAnchors": "preserve-and-mark-needs-placement",
+    "detach": "explicit-undoable"
+  },
+  "minecraft": {
+    "site": "exact-original-data",
+    "unknownTerrain": "unknown",
+    "designGeometry": "continuous",
+    "placement": "legal-integer-block-positions-and-blockstates",
+    "shapeRoles": [
+      "full",
+      "slab",
+      "stairs",
+      "edge",
+      "support"
+    ],
+    "nativeNBT": "preserve",
+    "createAnimation": "native-derived-viewport-preview"
+  },
+  "acceptance": {
+    "targetsNotMeasurements": true,
+    "inputToVisibleP95Ms": 50,
+    "smallVoxelPreviewTargetMs": 100,
+    "viewportSizes": [
+      [
+        1366,
+        768
+      ],
+      [
+        1920,
+        1080
+      ]
+    ],
+    "checks": [
+      "visible-change-before-pointerup",
+      "no-modeling-panel-overlap",
+      "no-stale-preview-commit",
+      "sketch-and-dependent-result-undo-together",
+      "manual-details-not-silently-overwritten",
+      "save-reopen-retains-references",
+      "identical-local-and-lite-command-engine"
+    ]
+  }
+}

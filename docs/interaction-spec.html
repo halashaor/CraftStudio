@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CraftStudio 交互设计规格 v1</title>
+<style>body{margin:0;background:#f2f3f5;color:#26303b;font:15px/1.8 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1060px;margin:auto;padding:42px 32px 90px}h1{font-size:32px;line-height:1.3}h2{margin-top:48px;font-size:24px;border-top:1px solid #ced5dc;padding-top:26px}h3{font-size:18px;margin-top:26px}p{max-width:940px}a{color:#285c96}table{width:100%;border-collapse:collapse;background:white}td,th{padding:12px;border:1px solid #d6dce2;text-align:left;vertical-align:top}th{background:#e9edf2}li{margin:8px 0}.tag{display:inline-block;background:#e1e8f0;padding:5px 12px;border-radius:6px;font-size:13px}.note{border-left:4px solid #6084ab;background:#eaf0f6;padding:14px 18px}.wire{background:#23272e;border:1px solid #3e4855;border-radius:8px;color:#dce1e9;overflow:hidden;font-size:12px;margin:24px 0}.top{padding:8px 12px;background:#30353e;border-bottom:1px solid #444d59}.body{display:grid;grid-template-columns:54px 1fr 270px;min-height:360px}.tools{padding:14px 8px;border-right:1px solid #4a5260;line-height:3.2}.viewport{display:flex;flex-direction:column;justify-content:center;align-items:center;background:repeating-linear-gradient(0deg,transparent,transparent 35px,#3f465222 36px),repeating-linear-gradient(90deg,#292f37,#292f37 35px,#3f4652 36px);color:#abb6c6}.viewport strong{font-size:25px;color:#e3e7ec}.right{border-left:1px solid #4a5260}.tree{height:140px;padding:12px;border-bottom:1px solid #4a5260}.properties{padding:12px}.properties b{color:#8ebcfa}.shelf{padding:8px 12px;border-top:1px solid #4a5260;background:#30353e}.status{padding:6px 12px;background:#1c2026;color:#acb5c4}.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:20px 0}.flow span{background:white;border:1px solid #cbd5e0;padding:9px 13px;border-radius:5px}.flow i{font-style:normal;color:#7591b0}code,pre{font:13px/1.7 Consolas,monospace;background:#e7ebf0}code{padding:2px 4px}pre{padding:16px;white-space:pre-wrap}.small{font-size:13px;color:#63707d}@media(max-width:700px){main{padding:24px 16px}.body{grid-template-columns:40px 1fr 180px}.wire{font-size:10px}.viewport strong{font-size:18px}table{font-size:12px}td,th{padding:7px}}</style>
+<main>
+<span class="tag">交互设计规格 v1 · 2026-10-05 · 设计目标，尚未完整实现</span>
+<h1>让人围绕建筑设计，<br>让程序处理几何、重复与落格。</h1>
+<p>CraftStudio 面向 Minecraft 建筑审美设计。真实场地是设计依据，用户直接看 3D 场景；草图、参数建模、逐块编辑和 AI 自由建造可以混合使用。本文约定后续实现与验收标准，不代表当前版本已经达到这些标准。</p>
+<p class="note">核心原则：稳定的视口与面板位置；从对象和选择出发；先表达设计意图，再生成方块；拖动必须即时反馈；输入与结果保持可理解的关联；一次操作一次撤销。</p>
+<div class="note"><strong>本轮已实现 · 2026-10-05</strong><p>主界面采用固定工具列、中央视口、右侧场景集合和上下文参数区，素材与构件在底部展开。图形、拉伸、地形、变换参数均停靠显示。拖动控制点时逐帧显示形状与轻量方块预览，后台只校准最新参数；确认后才修改场景，支持一次撤销。支持轮廓定位和专注视图。草图默认保存辅助线，由场景点击确定起终点；同一平面上首尾相接、没有分叉的独立线段会自动识别成拉伸截面。闭合轮廓支持任意方向的共面截面，自动沿截面法线拉伸；支持反向、双向、空心与切除。倾斜平面上的平行截面可放样；非共面轮廓会报错，不自动压平。左键选择和框选、右键旋转、中键平移；保存辅助线保持相机位置。复杂地形依赖与大体积以即时轮廓配合后台精确结果。</p><p>其余章节仍是完整设计目标；完整特征依赖树、任意区域拆分等尚未在本轮实现。已验证 1366×768 布局、持续拖动、素材架、辅助轮廓到拉伸、确认与撤销。</p></div>
+<h2>1. 借鉴什么，以及怎样适配</h2>
+<table><tr><th>成熟设计模式</th><th>CraftStudio 的采用方式</th><th>适配边界</th></tr>
+<tr><td>Blender：区域、上下文工具、对象与编辑模式</td><td>固定视口、对象树、属性区和素材架；改变内容而不移动面板；区分选整件与改内部元素。</td><td>不引入与建筑设计无关的时间线、骨骼和复杂动画工作区。</td></tr>
+<tr><td>AutoCAD：吸附、动态输入、命令预览</td><td>端点/中心/轴线吸附有标记；拖动时显示尺寸；输入数值与鼠标操作连续衔接。</td><td>常用操作不依赖命令行；搜索命令是补充入口。</td></tr>
+<tr><td>SolidWorks：草图、生成特征、树状依赖</td><td>保存草图与拉伸/放样/阵列之间的引用；同一属性区编辑参数；依赖失效定位到具体对象。</td><td>允许未完全约束的草图，保留探索和自由建造，不强迫工程设计程序。</td></tr>
+<tr><td>Rhino：输入几何驱动结果；Blender：关联对象数据</td><td>修改源轮廓可预览关联结果；普通副本和关联实例清楚区分。</td><td>大改轮廓后局部细节可能失去定位，必须显式显示，不能假装能无损重建任意手改。</td></tr></table>
+<h2>2. 人的设计路线</h2>
+<div class="flow"><span>观察真实场地</span><i>→</i><span>定位与测量</span><i>→</i><span>画轮廓 / 放构件</span><i>→</i><span>生成和调整体量</span><i>→</i><span>组织重复结构</span><i>→</i><span>细节与材质</span><i>→</i><span>检查与导出</span></div>
+<p>这是推荐路线，不是必须按顺序完成的向导。用户可以从一条辅助线、一栋已有建筑、一块方块或 AI 提案开始。保存、撤销和场景导航始终可用。</p>
+<ol><li><b>观察现场：</b>打开后立即定位选区。看道路、河岸、高差、旧建筑和地下空间。测量、剖切和隐藏植被帮助观察；原始场地可见但默认不可编辑。</li><li><b>定布局：</b>放体块、画平面轮廓和轴线，调整宽高、朝向及入口位置。材料可使用占位预设，避免早期陷入挑材质。</li><li><b>塑造形体：</b>拉伸、偏移、推拉、放样、开洞。选择对象后给出适用操作，不要求先找一个复杂的全功能面板。</li><li><b>重复与细节：</b>一个窗户或柱子做好后再阵列、镜像或生成关联实例；随后逐块补局部装饰。</li><li><b>校核与施工：</b>检查实际方块、楼梯朝向、入口衔接、碰撞、土方与分层材料；导出当前版本。</li></ol>
+<h2>3. 固定布局：3D 视口是主工作区</h2>
+<div class="wire" role="img" aria-label="固定布局结构示意：顶栏、左侧窄工具条、中央视口、右上对象树、右下属性、底部可收起素材架和状态栏">
+<div class="top">CraftStudio　　文件　编辑　视图　添加　工具　　｜　项目名称　　撤销 / 重做　保存</div>
+<div class="top">对象模式 ▾　　当前工具：移动　　世界坐标 ▾　轴约束　吸附　覆盖显示　　视口最大化</div>
+<div class="body"><div class="tools">选择<br>移动<br>旋转<br>绘制<br>测量</div><div class="viewport"><strong>3D 工作视口</strong><p>现场 · 轮廓 · 手柄 · 必要尺寸</p><p>常规参数面板不覆盖这里</p></div><div class="right"><div class="tree"><b>场景 / 设计树</b><br>▾ 原始场地　🔒<br>▾ 柱廊<br>　草图：走向<br>　平台 ← 走向<br>　柱阵列 ← 走向</div><div class="properties"><b>属性 / 当前操作</b><br>对象：柱阵列<br>输入路径：走向　定位<br>数量　12<br>间距　4 格<br>材质　石材组<br>▸ 更多选项<br>确认　　取消</div></div></div>
+<div class="shelf">▸ 素材架　　方块 / 材质组 / 构件　　搜索　收藏　最近使用　自定义分类　（默认收起）</div>
+<div class="status">选择 1 个对象　｜　拖动调整，输入数值精确定位　｜　Esc 取消　｜　草稿已保存</div></div>
+<ul><li>默认只有一个主视口。右侧区域可调整宽度、收起；素材架展开会分配真实布局高度，而不是盖住模型。</li><li>对象树放“是什么、属于谁”；属性区放“选中的对象怎么改”。草图、材质和历史不各开一个浮动窗口。</li><li>操作参数暂时占用固定属性区。结束后恢复对象属性；视口、相机与其他面板位置不跳动。</li><li>右侧提供“对象 / 生成 / 材质”语义页签；没有相关内容时不出现空白页。</li><li>文件选择、偏好设置等低频任务使用对话框。移动、绘制、拉伸、换材质、阵列和检查都在固定区域完成。</li><li>小屏幕以收起侧栏和素材架释放视口，提供最大化视口。不能仅把面板变小后继续压在模型上。</li><li>默认稳定布局，不在首版实现任意拆分窗口系统；先保证主场景与属性区的使用质量。</li></ul>
+<h2>4. 先定义对象，再定义工具</h2>
+<table><tr><th>对象</th><th>含义与操作</th></tr>
+<tr><td>原始场地 / 保留区</td><td>存档读取的基准数据，保留世界原点与文件来源。可显示、测量、作为吸附参照；写入需明确切换到场地编辑。</td></tr>
+<tr><td>参考几何</td><td>轴线、工作平面、尺寸标注、定位点。可以锁定或隐藏，不生成方块、不计入材料。</td></tr>
+<tr><td>草图</td><td>直线、折线、闭合区域、圆弧、贝塞尔曲线以及约束。开放路径和闭合截面有明确标识。</td></tr>
+<tr><td>生成对象</td><td>保存输入草图、参数、材料规则与结果。例如墙体、平台、拱券、屋顶、阵列。编辑生成参数可重新预览。</td></tr>
+<tr><td>自由方块对象</td><td>逐块或笔刷创作的对象，可以组合、复制、换材质，不要求存在上游草图。</td></tr>
+<tr><td>构件与实例</td><td>独立副本有独立内容；关联实例共享构件定义但各自保留位置和朝向。实例级材质覆盖与几何解除关联分别处理。</td></tr>
+<tr><td>局部细节</td><td>在生成对象上手动补的装饰或开洞。保存为独立对象或带定位依据的局部改动，避免一次重建覆盖手工工作。</td></tr></table>
+<p>用户看到建筑对象和生成关系。内部同时保留设计几何、Minecraft 方块实现、原始场地和施工差异。连续曲面好看不等于实际楼梯、半砖与地形可以照建。</p>
+<h2>5. 草图 → 建筑是主流程</h2>
+<ol><li><b>选工作平面：</b>地面、已有墙面、指定标高、命名参考平面或自由 3D 路径。固定平面与贴地路径明确区分。平面来源始终可见。</li><li><b>画草图：</b>直接点取、拖拉、输入尺寸。线段显示橡皮筋预览；矩形拖动第二角；曲线控制点和切线柄分工明确。点靠近起点时出现“闭合”标记。</li><li><b>整理草图：</b>延长、修剪、连接、断开、闭合、偏移；端点/中心/切线吸附与对齐参照可切换。未闭合或自交的位置在视口标出。</li><li><b>结束草图：</b>命名并保留草图，不自动放置方块。也可直接启动生成命令，以当前合法草图作为输入。</li><li><b>生成：</b>开放路径对应墙/梁/道路/沿线构件；闭合区域对应平台/围墙/拉伸；多个截面对应放样；路径加截面对应沿路径生成。</li><li><b>检查并确认：</b>辅助几何、生成预览、最终方块分别可见。厚度、高度、间距等就地调整，材料从素材架选择。</li><li><b>继续修改：</b>树中选择结果，可定位源草图。改草图时预览所有受影响结果，确认作为一次事务。</li></ol>
+<p class="note">一条走向曲线可以同时驱动平台边缘、柱阵列和路灯。草图默认保留；使用引用，不靠复制一份看不见的轮廓维持生成关系。</p>
+<h3>实例：沿山坡做柱廊</h3>
+<p>在真实场地上确定平台标高 → 绘制走向曲线 → 偏移出平台宽度 → 预览平台和支撑 → 沿同一条曲线布置柱子 → 在柱顶标高生成梁和屋檐 → 调整曲线观察整体变化 → 查看楼梯、地基与入口衔接。用户主要调整走向、宽度、标高和节奏，程序处理重复方块。</p>
+<h2>6. 统一选择与命令规则</h2>
+<table><tr><th>情形</th><th>规则</th></tr>
+<tr><td>对象模式</td><td>默认选择整栋建筑或构件。选中与激活分别显示：多选时最后激活的对象可作为对齐参照，属性区显示数量和可共同修改的属性。</td></tr>
+<tr><td>草图编辑</td><td>优先选择草图的点、线段、曲线柄和区域；不被其生成方块抢走点击。退出后恢复对象选择。</td></tr>
+<tr><td>方块编辑</td><td>只在当前对象或明确区域中选择、刷画；原地形保持参照。进入时清楚标出编辑范围。</td></tr>
+<tr><td>重叠目标</td><td>提供候选循环或小型选择菜单；不能靠反复点击猜目标。透视选择、穿透框选由显式开关控制。</td></tr>
+<tr><td>吸附</td><td>吸附前显示目标、类型和位置。绘图几何可自由精度，落块使用整数格及真实方块状态；半格辅助几何不等于任意方块都可放半格。</td></tr>
+<tr><td>拖动操作</td><td>移动手柄、旋转手柄和笔刷的直接拖动：实时预览，松手提交一次操作。键盘启动的移动/旋转：点击或 Enter 提交。每种启动方式的完成提示固定显示；Esc 取消未提交状态。</td></tr>
+<tr><td>多步骤生成</td><td>新建拉伸、放样和阵列等多步骤操作：选输入 → 调参数 → 预览 → Enter/确认提交。此时松手只结束参数拖动，不等于创建完成。Esc 取消本次操作；不能顺便清空选区或关闭其他界面。</td></tr>
+<tr><td>连续绘制</td><td>点选建立连续路径；Enter 结束当前路径；下一次点击开始新路径。约定每条路径的撤销粒度，Backspace 回退最后一个未确认点。</td></tr>
+<tr><td>精确输入</td><td>操作中直接输入距离，X/Y/Z 限轴，Tab 切换当前命令可编辑尺寸；文本框获得焦点时，字母快捷键不触发建模命令。</td></tr>
+<tr><td>观察场景</td><td>观察与编辑输入分开，导航期间不中断操作预览。默认采用 Blender 导航：中键旋转，Shift+中键平移，滚轮缩放；已有用户保留旧配置，并提供明确的键位预设。</td></tr></table>
+<p>菜单、工具按钮、快捷键和右键菜单应调用同一个命令。F3 搜索作为熟练用户入口；常用操作仍能从可见工具发现。提示说明动作和快捷键，不显示内部对象 ID 或方块状态 JSON。</p>
+<h2>7. 跟手是硬要求</h2>
+<ul><li>鼠标移动这一帧就更新手柄、轮廓和尺寸；不能等停止移动后才显示。</li><li>小规模几何与方块预览持续更新；大模型先显示轻量形体，后台更新实际方块。预览状态明确区分“形状预览 / 方块已校准”。</li><li>后台最多一个正在计算的任务和一个可替换的最新请求。旧结果不能覆盖新位置，也不能积累几十次落后计算。</li><li>拖动期间复用网格与缓冲区；只更新受影响对象或区块，不重建整片地形，不重建整个参数表单。</li><li>锁定平面时不显示该平面法线方向的无效拖动轴；吸附与约束立即反映在手柄和尺寸中。</li><li>确认只提交与当前参数、当前场景修订一致的结果。仍在校准时可排队确认最新结果；Esc 仍能取消。</li><li>导入等真正阻塞的任务显示进度与取消；日常拖动不能用全屏转圈遮罩。</li></ul>
+<p class="small">验收目标，不是当前实测承诺：普通场景拖动的输入到可见反馈 P95 ≤ 50 ms，常用小对象方块预览目标 ≤ 100 ms；大场地至少维持持续的轻量反馈。应记录场景规模、显示设备与渲染环境，不能把软件渲染机器的单次数据当通用保证。</p>
+<h2>8. 关联更新与自由手改</h2>
+<ul><li>普通复制默认独立；“关联副本”是显式动作。实例位置、朝向独立；修改构件定义时所有实例参与预览，确认后一起更新。</li><li>“编辑生成参数”始终保留源草图和生成关系；“逐块细修”进入局部覆盖；“转为自由方块”显式解除生成关系。</li><li>细节定位优先保存对象局部坐标、曲线参数或生成面上的定位依据。源轮廓大改使定位失效时，保留细节并标记待定位，不静默删除或移动到错误位置。</li><li>删除被引用草图时，属性区显示受影响对象，可选择保留结果并解除关联，或连同派生结果删除。两种操作都可撤销。</li><li>依赖图禁止循环引用；失效节点有具体原因，其他对象仍可编辑。重建只影响依赖链，不要求整座建筑从头计算。</li><li>显示隐藏、编辑锁定、暂停生成与排除导出是不同状态。默认隐藏仅改变可见性，不改变导出内容。</li></ul>
+<h2>9. Minecraft 特有的设计层</h2>
+<ul><li><b>实际形态：</b>体积与曲线方块化使用合法的全方块、半砖和楼梯状态；考虑朝向、上下半部与连接规则。实现不足时显示近似程度。</li><li><b>材料角色：</b>素材组可定义主体、半砖、楼梯、边缘、支撑。换风格时替换组，不让用户分别输入 ID。缺少对应形态时显示缺项并允许指定替代物。</li><li><b>地形：</b>自由标高、贴地、支撑和挖填是明确可选策略；默认不改河岸或旧建筑。未知区域不推测成平地。辅助线和建筑可以使用同一地形参照。</li><li><b>Create：</b>装置按真实方块与已有结构数据预览运动；普通建筑工作区不出现单独动画编辑入口。保留原 NBT 与未知字段。</li><li><b>输出：</b>草图与设计关系留在工程文件。NBT/蓝图输出实际方块与状态；施工差异区分新增、替换、拆除以及 structure_void 跳过语义。</li></ul>
+<h2>10. AI 与人使用同一底座</h2>
+<p>AI 可创建/修改草图、设置生成参数、组织实例、提交任意方块操作、读取真实地形、检查差异和获取视角。辅助生成器始终可选。每次提案带输入引用、参数、影响范围与场景修订；在人和 AI 的界面中使用同一预览、冲突检查、提交与撤销模型。</p>
+<p>AI 不需要驱动几十个界面按钮。用户可以接着修改 AI 创建的草图、生成对象或自由方块；AI 也能读懂用户已建立的结构关系。状态读取必须区分原始场地、已提交设计、当前预览与仅视图隐藏。</p>
+<h2>11. 当前代码的差距与改造顺序</h2>
+<table><tr><th>现状</th><th>改造</th></tr><tr><td>多个绝对定位浮动面板遮住视口</td><td>先迁入固定属性区，统一生命周期和滚动范围，再精简工具栏与分组。</td></tr><tr><td>曲线预览在每次移动后重置 180 ms 定时器</td><td>即时视口反馈与后台落格计算分层；最新请求合并，不依赖停止拖动。</td></tr><tr><td>拖动中重建控制点输入行</td><td>更新现有字段和数值，不替换控件，不打断输入焦点。</td></tr><tr><td>辅助线主要作为生成后的记录</td><td>升级为可选择、可命名、可编辑的草图对象，并维护输入引用。</td></tr><tr><td>生成参数保留不完整，关联更新仍靠独立命令</td><td>统一生成特征、依赖重建、实例定义和局部覆盖。</td></tr><tr><td>功能与状态分散在多个入口</td><td>以选择上下文组织命令，固定确认/取消、错误定位和上次操作区域。</td></tr></table>
+<ol><li><b>第一阶段：</b>固定布局、选择/导航规则、单一操作状态、实时反馈。先把选择→移动→撤销和画轮廓→拉伸走通。</li><li><b>第二阶段：</b>草图对象、修剪/闭合/偏移、尺寸约束、生成引用与可修改参数。</li><li><b>第三阶段：</b>关联实例、沿路径构件、局部手改与再生成的兼容，真实地形衔接。</li><li><b>第四阶段：</b>检查、分层输出和 AI 双向工作流打磨。已有功能按规则迁入，不继续增加平级浮窗。</li></ol>
+<h2>12. 用完整任务验收</h2>
+<ol><li>导入真实场地→定位保留建筑→量出入口高差→锁定参照。</li><li>绘制闭合轮廓→尺寸输入→拖拉伸高度；拖动未结束时画面与尺寸连续变化。</li><li>编辑源轮廓→墙和平台一起预览变化→取消恢复；确认后一次撤销恢复全部关联内容。</li><li>做一个窗户→沿墙阵列→修改数量；比较独立副本与关联实例的行为。</li><li>在生成屋顶上加手工细节→改变屋顶轮廓；可保留定位成功的细节，失效项有明确位置提示。</li><li>沿坡做道路/台阶与支撑→检查半砖楼梯→导出实际方块。不得通过换一座虚构山来让设计成立。</li><li>AI 从草图生成建筑→用户继续编辑→保存重开→结构关系、局部手改和 NBT 数据均保留。</li><li>在 1366×768 和 1920×1080 下完成上述任务；常规建模面板不得覆盖中央模型，窄屏通过收起布局应对。</li></ol>
+<p class="note">实施状态：本轮交付交互设计规格。此前新增的 live-preview.js 与 interactive-preview.js 仍是未接入正式页面的实验草稿，不能据此宣称实时拖动或新布局已经完成。实施前应依据本规格整理这些草稿，再用持续拖动和完整工作流验收。</p><h2>参考资料</h2>
+<ul><li><a href="https://docs.blender.org/manual/en/4.5/interface/window_system/regions.html">Blender：编辑区域、工具设置与素材架</a></li><li><a href="https://docs.blender.org/manual/en/4.5/scene_layout/object/editing/link_transfer/link_data.html">Blender：共享对象数据与解除关联</a></li><li><a href="https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DidYouKnow/files/GUID-2EBF913D-2FDC-4D66-A397-068899D492DC.htm">AutoCAD：Command Preview</a></li><li><a href="https://help.autodesk.com/cloudhelp/2026/ENU/AutoCAD-Core/files/GUID-76B81C1A-373E-4BCD-975A-789FB36C89FE.htm">AutoCAD：Object Snaps</a></li><li><a href="https://help.solidworks.com/2026/english/SolidWorks/sldworks/c_FeatureManager_Design_Tree_Conventions.htm?id=2.8.1">SolidWorks：设计树、草图与重建状态</a></li><li><a href="https://docs.mcneel.com/rhino/8/help/en-us/commands/history.htm">Rhino：输入几何与结果的历史关系及其边界</a></li></ul>
+<p class="small">本规格综合用户需求与上述设计模式。性能目标、布局取舍、Minecraft 适配和命令规则是 CraftStudio 的设计决策，不是对其他软件完整行为的逐项复刻。</p>
+</main></html>

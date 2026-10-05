@@ -1,48 +1,130 @@
 # CraftStudio
 
-面向 Minecraft 建筑审美设计的本地 3D 工作台。直接在模型场景中设计，支持原版 / Create 蓝图、真实地形、素材目录、自由方块编辑与 AI 设计接口。
+**English** | [简体中文](README.zh-CN.md)
 
-## 直接使用
+A local 3D workspace for designing Minecraft buildings on real terrain. Import a site, sketch and model in the viewport, review the block changes, and export a buildable blueprint.
 
-下载仓库，双击 **lite/dist/CraftStudio-Lite.html**。这是自包含纯前端版本，无需启动 Minecraft 或后端。导入自己的 NBT / schem / litematic / MCA 文件后开始设计。公开版本不包含作者的私人存档、示例蓝图、材质包、截图或数据库。
+CraftStudio focuses on architectural appearance and creative freedom. Sketches, modeling tools, reusable components, direct block editing, and AI-generated designs can be combined in the same project.
 
-界面使用顶部命令栏、左侧对象 / 素材 / 构件浏览器、中央 3D 和右侧属性检查器。左键选择或框选，右键旋转，中键平移，F 缩放到选择。素材按特征与用户自建类型分类，提供 3D 预览、收藏和本地保存。普通操作无需输入方块 ID。
+> The current application interface is primarily in Chinese. This README is the default English documentation; the complete Chinese version is linked above.
 
-## 功能
+## Quick start
 
-- 保留原始场地，独立记录新增、替换与删除；地形、河水及保留区保护。
-- 自由编辑方块和状态；复制、移动、旋转、镜像、阵列与可复用构件。
-- 素材按来源、形状、用途、色系分类；用户分类可分层且支持多重归属。
-- 自动显示已适配的 Create 旋转件与原生装置；无需手动设置动画。
-- IndexedDB 工程、版本、草稿、分类与备份；便携工程、NBT / Sponge 导出。
-- 公共页面 / Worker API：精确读取、事务、冲突检查、重复请求回执、保存导出和视觉反馈。见 [接口说明](lite/DESIGN-API.md)。
-- 可选 Python 本地后端、SQLite 工程库、MCP stdio 与 NeoForge 游戏桥接源代码。
+### Offline Lite — open a file and start designing
 
-## 开发与构建
+1. Download or clone this repository.
+2. Open [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html) in a recent Chrome or Edge browser.
+3. Import your own structure or terrain file, or begin in an empty workspace.
+4. Save a portable project for later editing, or export a blueprint for Minecraft.
+
+The standalone HTML contains the designer. It needs no backend and does not require Minecraft to be running. Lite reads files you explicitly select; it does not scan your Minecraft installation. Projects, versions, drafts, and asset preferences are stored in the current browser's IndexedDB. Export a portable project or library backup to transfer them to another browser or computer.
+
+### Local edition — SQLite storage and installation access
+
+On Windows, double-click `启动建筑工作台.cmd` (the workspace launcher). The launcher requires an existing Python installation; `CRAFTSTUDIO_PYTHON` can specify its executable.
+
+Alternatively, start the service from the repository root:
+
+```sh
+python server.py --port 18767
+```
+
+Open <http://127.0.0.1:18767/>. Python 3.12 is the version used in CI. The backend uses the Python standard library.
+
+Set `CRAFTSTUDIO_MINECRAFT_HOME` to the `.minecraft` directory you want the local edition to use. The local edition adds a SQLite project library and access to selected installation files. Minecraft itself does not need to run for design work.
+
+| | Offline Lite | Local edition |
+|---|---|---|
+| 3D designer and modeling tools | Shared designer | Shared designer |
+| Inputs | User-selected files | User-selected files and local installation access |
+| Project storage | Browser IndexedDB | Local SQLite library |
+| Portable project and blueprint export | Yes | Yes |
+| Backend required | No | Python local service |
+
+## Design workflow
+
+1. **Import the real site.** Keep terrain, water, and existing structures as the starting point. Review the origin and selected region before designing.
+2. **Choose materials visually.** Browse block previews and filter by source, shape, use, or color. Create your own categories and favorites.
+3. **Draw auxiliary geometry.** Click to define lines, curves, and closed outlines. Sketches default to auxiliary geometry rather than placing blocks immediately.
+4. **Generate a form.** Extrude an outline, loft between sections, or generate along a path. Coplanar, connected line segments can form a closed profile automatically. Inclined profiles support extrusion along their own normal.
+5. **Refine and compare.** Edit blocks, transform selections, reuse components, and inspect the original site, final design, and change views.
+6. **Confirm and save.** Preview generation before committing it. Confirmed modeling operations can be undone as one operation. Save an editable project and export the required blueprint.
+
+The interface uses a fixed tool column, central 3D viewport, right-side scene collection and properties, and a bottom material/component shelf. Modeling panels stay outside the viewport. Dragging sketch handles provides immediate shape feedback while the worker calculates the precise block result.
+
+Viewport controls: **left click / drag** selects or box-selects, **right drag** orbits, **middle drag** pans, and **F** frames the selection or scene. Space + left drag also orbits. **Ctrl+Z / Ctrl+Y** undo and redo. Placement currently also supports continuous dragging; its behavior overlaps with a one-block brush.
+
+## What is available
+
+- **Real terrain and change tracking:** preserve the imported baseline; track additions, replacements, and removals separately; protect terrain, water, and retained regions.
+- **Sketches and modeling:** lines, Bézier curves, rectangles, circles, ellipses, arcs, polygons, extrusion, lofting, path generation, and terrain-following geometry. Curve rasterization can use slabs and stairs when suitable block variants are available.
+- **Arbitrary planar profiles:** recognize inclined closed outlines; extrude forward, backward, or symmetrically; create hollow forms and cuts. Noncoplanar outlines are rejected rather than flattened. Inclined loft sections must be parallel.
+- **Editing and reuse:** block states, clipboard operations, selection transforms, mirrors, arrays, object groups, and reusable components.
+- **Asset library:** lazy previews, search and filters, favorites, aliases, hierarchical user categories, and multiple category memberships per block.
+- **Create visuals:** supported rotating parts and captured native assemblies use adapted Create resources and saved data. This is visual support, not a full production-line simulator.
+- **Local persistence:** editable portable projects, versions, drafts, library backups, and asset preferences. The local edition stores complete designer projects in SQLite.
+- **AI design interface:** exact scene reads, free block edits, transactions, conflict checks, save/export, and viewport capture through the public page/worker API. AI designs do not have to use predefined building templates.
+
+## Files and resources
+
+| Input / output | Current support |
+|---|---|
+| Vanilla / Create structure `.nbt` | Import and NBT export; preserve supported native data and placement masks |
+| Sponge `.schem` | Import and export; format conversion has metadata limits |
+| Litematica `.litematic` | Import; not a lossless Litematica round trip |
+| Anvil `.mca` | Import a selected region from one region file |
+| Resource-pack ZIPs and mod/game JARs | Read supported model and texture assets from selected files |
+| `.craftlite` | Portable editable designer project |
+
+Resource files can be added as needed. Missing resources may use fallback geometry or materials until the appropriate files are supplied. Custom mod renderers and behaviors are not universally supported.
+
+Sponge and Litematica conversions do not preserve every entity, biome, scheduled tick, or multi-region detail. MCA import reads the selected portion of one file and does not convert entities, lighting, or scheduled ticks. Blueprint export is not a complete Minecraft world save exporter.
+
+## AI and game integration
+
+See the [Design API](lite/DESIGN-API.md) for the shared page/worker protocol:
+
+```js
+const result = await window.CraftStudio.request({
+  schema: 'craftstudio-design/1',
+  id: 'describe-workspace',
+  method: 'workspace.describe',
+  params: {}
+});
+```
+
+This API belongs to the open designer page. It does not automatically expose an unauthenticated HTTP write endpoint. An external AI agent still needs an adapter and its own tool loop. The Python/MCP compatibility interfaces are not yet fully unified with this protocol.
+
+Optional [game bridge source](bridge/) targets **Minecraft 1.21.1 / NeoForge 21.1.209** and requires **JDK 21 and Gradle** to build. It is installed manually into the intended instance and uses a local token, construction backups, and readback. The bridge is optional; full game-runtime compatibility and complex Create behavior remain incomplete.
+
+## Development
+
+Install Node.js 22 or later, then:
 
 ```sh
 cd lite
 npm install
 npm test
 npm run build
+npm run check:sync
 ```
 
-Node.js 22+。构建默认不嵌入用户数据。可选环境变量 LITE_SOURCE_NBT / LITE_REFERENCE_HTML 只用于个人构建；不要发布包含私人数据的输出。
-
-后端使用 Python 标准库：
+Run backend checks from the repository root:
 
 ```sh
-python server.py --port 18767
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-打开 `http://127.0.0.1:18767/`。`CRAFTSTUDIO_MINECRAFT_HOME` 可指定 .minecraft 目录；默认从用户目录定位。数据和日志在本机生成，已列入忽略规则。
+Both editions share [`lite/src`](lite/src). One build generates `lite/dist/CraftStudio-Lite.html`, `web/lite.html`, and `web/index.html`; the sync check verifies that these three pages match byte for byte. On a successful `main` update, GitHub Actions rebuilds and commits stale generated outputs. This does not upload local changes automatically: they must first be committed and pushed to GitHub.
 
-桥接针对 Minecraft 1.21.1 / NeoForge 21.1.209，需要 JDK 21 与 Gradle；构建后手动安装到所选实例。桥接仅绑定本机，带令牌、建造备份与回读。完整游戏运行时和复杂 Create 行为尚未全部适配。外部 AI 的自主工具循环仍需连接当前接口。
+After downloading an update, reopen the Lite HTML or restart the local launcher and refresh the page.
 
-第三方声明见 [THIRD-PARTY](lite/THIRD-PARTY.txt)。Create 参考代码保留原许可证，公开包不带 Minecraft / Mod 原始游戏材质。项目当前未另行声明主代码的开源许可证。
+## Scope, data, and licensing
 
+CraftStudio is a work in progress. Current limits include incomplete custom-renderer support, parallel-section requirements for inclined lofts, and no complete engineering simulation or automatic external-AI setup.
 
-## 两个版本同源更新
+Public builds do not include private worlds, user blueprints, resource packs, screenshots, or databases. Builds exclude user data by default. `LITE_SOURCE_NBT` and `LITE_REFERENCE_HTML` are optional personal-build inputs; do not publish generated files containing private data. Databases and logs are created locally and covered by ignore rules.
 
-本地版和 Lite 共用 `lite/src` 设计器。本地版额外使用 SQLite 保存完整工程、版本和草稿，并可按需读取 Minecraft 实例文件。离线 Lite 保持文件导入和浏览器存储。所有页面入口由同一次构建生成；GitHub main 更新并通过检查后，自动同步仓库中的预构建 HTML。下载 / 拉取新版后，重新启动本地服务即可使用。
+See [third-party notices](lite/THIRD-PARTY.txt). Bundled third-party code retains its original terms. Minecraft/mod game textures are not bundled in the public release. The main project code currently has **no separately declared open-source license**; a public repository alone does not grant unrestricted reuse rights.
+
+Further reading: [Architecture](ARCHITECTURE.md), [interaction design and implementation status](docs/interaction-spec.html), and [Design API](lite/DESIGN-API.md). These supporting documents are currently primarily in Chinese.
