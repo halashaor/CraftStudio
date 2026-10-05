@@ -172,3 +172,11 @@ await CraftStudio.request({
 `mode` 为 `draw`、`paint`、`erase` 或 `place`；`points` 是已经生成的整数落点，接口不代替 UI 的路径插值。条件按 AND 组合，`surface` 检查方块邻接的空气/已识别流体，`emptyOnly` 只允许空位，`matchName` 是固定取样名称。选择可以是 `min/max` 包围盒或 `members` 精确 XYZ 集合。`space:'world'` 时点、选区 XYZ 和 Y 范围都按已确认的场地原点换算；世界坐标成员必须为 XYZ 数组。
 
 涂改不填空气或已识别流体。形态保留通过已知的材质变体完成，缺少对应变体会跳过，不虚构方块 ID。目标方块的已支持属性可以从原方块保留。带方块实体数据的位置若要改换方块类型会跳过；同类型操作显式保留原 NBT。场地、对象和保留区保护仍执行。结果包含 `filtered` 与 `warnings`。此机制不是完整 Minecraft 物理模拟，也不是任意 Mod 属性之间的自动转换器。
+
+## 已保存草图与关联生成
+
+`construction.prepare` 的 `type:'geometry'` 可传 `config.editGuideId`。配置仍包含 `kind/points/plane/state` 等原有几何参数；`updateDependents` 默认为 true，`manualStrategy` 默认为 `preserve`（保留手改和手动删除），显式 `overwrite` 则按新来源替换手改。预览会返回 `regeneration`、警告和实际改动网格，不修改工程。用原有 `construction.commit` 确认，草图 ID 和关联对象 ID 保持稳定，撤销一次可恢复两者。
+
+新生成的几何/特征对象保存前后方块状态与 NBT 归属快照、源 ID 和源版本。UI 普通摘要省略逐格快照，便携工程和数据库保存完整记录。旧特征缺少记录时不猜测底层内容；保持旧对象或重新建立关联。对象直接移动/复制后若不再符合归属位置，在来源更新预览中报告并按独立方块对象保留。当前支持直接的草图到几何/特征关系，不等于任意多层约束/DAG 已完成。
+
+`construction.cancel` 接收 `{id: draftId}`，只取消匹配预览，返回 `{cancelled}`，不改场景或版本。取消后的 ID 不可提交；新预览仍会使旧预览失效。
