@@ -192,3 +192,9 @@ await CraftStudio.request({
 - `operation:'detachInstance'`：保留旧接口的完全解除关联行为。
 
 组件定义保存在 `design.componentDefinitions`，实例记录 `instanceOf`、固定 `instancePose`、前后内容快照和版本。普通 UI 摘要省略逐格内容，完整工程保留。直接复制不带关联，移动/四分之一转向更新放置变换。原生方块实体结构的旋转仍需原生蓝图，不能把通用方块状态转向当成完整 Mod NBT 转换。预览不修改工程；确认后定义和实例内容一起撤销。
+
+## 隔离视图
+
+`view.isolate` 保留原有 `objectIds/selection/clear`，新增 `push:true` 保存上一层隔离，`pop:true` 返回上一层。`includeNew:true` 为所选对象／区域保留邻近新编辑内容，基础 UI 画笔采用此范围并跳过隐藏对象成员。普通显示隔离不改变场景数据或原场地。
+
+`workspace.describe().value.view` 返回 `isolated`、`depth` 和可用的 `editBounds`。隔离不是公共 `edit.apply` 的写入权限限制；AI 可按明确请求继续自由编辑，若需要范围条件可使用 `edit.brush.mask`。当前相机可用 `CraftStudio.viewState()` 读取，不需要截图；`setView` 支持正交／透视与 `zoom`。UI 的隔离进入／退出协调相机恢复，协议本身不替远程调用者保存相机。

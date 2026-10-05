@@ -6,6 +6,7 @@ export function toolMask(site,mask={}){
  if(mask.minY!==undefined&&(!Number.isInteger(mask.minY)||mask.minY<0||mask.minY>4095)||mask.maxY!==undefined&&(!Number.isInteger(mask.maxY)||mask.maxY<0||mask.maxY>4095)||mask.minY!==undefined&&mask.maxY!==undefined&&mask.minY>mask.maxY)throw Error('高度蒙版需要有效的局部整数范围');
  return pos=>{const cell=site.at(pos),state=cell?site.palette[cell.state]:null;
   if(mask.selection&&(members?!members.has(coordKey(...pos)):pos.some((n,a)=>n<mask.selection.min[a]||n>mask.selection.max[a])))return false;
+  if(mask.limitBounds&&pos.some((n,a)=>n<mask.limitBounds.min[a]||n>mask.limitBounds.max[a]))return false;
   if(mask.minY!==undefined&&pos[1]<mask.minY||mask.maxY!==undefined&&pos[1]>mask.maxY)return false;
   if(mask.matchName&&state?.Name!==mask.matchName)return false;
   if(mask.emptyOnly&&cell)return false;
