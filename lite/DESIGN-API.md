@@ -180,3 +180,15 @@ await CraftStudio.request({
 新生成的几何/特征对象保存前后方块状态与 NBT 归属快照、源 ID 和源版本。UI 普通摘要省略逐格快照，便携工程和数据库保存完整记录。旧特征缺少记录时不猜测底层内容；保持旧对象或重新建立关联。对象直接移动/复制后若不再符合归属位置，在来源更新预览中报告并按独立方块对象保留。当前支持直接的草图到几何/特征关系，不等于任意多层约束/DAG 已完成。
 
 `construction.cancel` 接收 `{id: draftId}`，只取消匹配预览，返回 `{cancelled}`，不改场景或版本。取消后的 ID 不可提交；新预览仍会使旧预览失效。
+
+## 组件定义与关联实例
+
+`construction.prepare` 的 `type:'designer'` 支持以下操作：
+
+- `operation:'instance'`：从一个已分组对象建立关联副本，数量包含原件，使用原有 `count/step`。
+- `operation:'syncInstances'`：从所选实例的实际内容更新组件定义，保留各实例放置坐标。四分之一转向/镜像使用固定变换还原到定义坐标；不要求从未旋转原件操作。`overlap:'overwrite'` 显式替换其他实例的手改，默认保留手改与删除。新范围碰到无归属内容仍会报告冲突。
+- `expandSource:true` 配合 `selection.min/max`：读取新定义范围，包含新添方块。空位不填充，实例锚点不变。
+- `operation:'makeUniqueInstance'`：为一份实例建立新的独立组件定义，不改变方块。它仍可再创建自己的关联副本。
+- `operation:'detachInstance'`：保留旧接口的完全解除关联行为。
+
+组件定义保存在 `design.componentDefinitions`，实例记录 `instanceOf`、固定 `instancePose`、前后内容快照和版本。普通 UI 摘要省略逐格内容，完整工程保留。直接复制不带关联，移动/四分之一转向更新放置变换。原生方块实体结构的旋转仍需原生蓝图，不能把通用方块状态转向当成完整 Mod NBT 转换。预览不修改工程；确认后定义和实例内容一起撤销。

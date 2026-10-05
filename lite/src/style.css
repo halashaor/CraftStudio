@@ -27,3 +27,7 @@
 @media(max-width:800px){.studio-workspace main{grid-template-columns:44px minmax(180px,1fr) 240px}.studio-workspace #cad-inspector{display:flex}.studio-workspace header{gap:5px;padding:0 8px}.studio-workspace header .brand{min-width:130px}.studio-workspace .workspace-tools button{width:35px}.studio-workspace .scene-toolbar{height:38px;flex-wrap:nowrap}.workspace-quick #cad-assets-open,.workspace-quick #cad-ai-open{display:none}#workspace-tree{flex-basis:135px}.studio-workspace #toast{max-width:calc(100vw - 300px)}}
 
 .studio-workspace #workspace-shelf .asset-results{padding:3px 0;margin:3px 0;height:28px}.studio-workspace #workspace-shelf .asset-results button{padding:3px 7px}.studio-workspace #workspace-shelf .asset-card{padding:4px}.studio-workspace #workspace-shelf .asset-card span{font-size:11px}.studio-workspace #construction-frame{margin-left:auto}
+
+.studio-workspace .tree-object:has(.component-badge){flex-wrap:wrap}.studio-workspace .component-badge{flex-basis:100%;font-size:10px;color:#9eb8d2}.studio-workspace .component-publish,.studio-workspace .component-unique{font-size:10px;padding:3px 6px;flex:0 0 auto}.studio-workspace .tree-object:not(.selected) .component-publish,.studio-workspace .tree-object:not(.selected) .component-unique{display:none}
+
+.studio-workspace .tree-object button.component-publish,.studio-workspace .tree-object button.component-unique{width:auto;min-width:80px;white-space:nowrap;flex:0 0 auto}
