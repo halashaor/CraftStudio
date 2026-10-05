@@ -1,11 +1,13 @@
+import {selectionPredicate} from './selection-mask.js';
 import {coordKey} from './site.js';
 const neighbors=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 export function toolMask(site,mask={}){
+ const selected=mask.selection?selectionPredicate(mask.selection):null;
  if(mask.selection?.members&&!Array.isArray(mask.selection.members))throw Error('选区成员需要坐标数组');if(mask.selection?.members?.some(p=>Array.isArray(p)?p.length!==3||p.some(n=>!Number.isInteger(n)||n<0||n>=4096):!Number.isInteger(p)||p<0||p>=4096**3))throw Error('选区成员坐标无效');const members=mask.selection?.members?new Set(mask.selection.members.map(p=>Array.isArray(p)?coordKey(...p):p)):null;
  if(mask.selection&&!members&&(!mask.selection.min||!mask.selection.max||mask.selection.min.length!==3||mask.selection.max.length!==3||mask.selection.min.some((n,a)=>!Number.isInteger(n)||!Number.isInteger(mask.selection.max[a])||n<0||mask.selection.max[a]>=4096||n>mask.selection.max[a])))throw Error('蒙版选区不完整');
  if(mask.minY!==undefined&&(!Number.isInteger(mask.minY)||mask.minY<0||mask.minY>4095)||mask.maxY!==undefined&&(!Number.isInteger(mask.maxY)||mask.maxY<0||mask.maxY>4095)||mask.minY!==undefined&&mask.maxY!==undefined&&mask.minY>mask.maxY)throw Error('高度蒙版需要有效的局部整数范围');
  return pos=>{const cell=site.at(pos),state=cell?site.palette[cell.state]:null;
-  if(mask.selection&&(members?!members.has(coordKey(...pos)):pos.some((n,a)=>n<mask.selection.min[a]||n>mask.selection.max[a])))return false;
+  if(selected&&!selected(pos))return false;
   if(mask.limitBounds&&pos.some((n,a)=>n<mask.limitBounds.min[a]||n>mask.limitBounds.max[a]))return false;
   if(mask.minY!==undefined&&pos[1]<mask.minY||mask.maxY!==undefined&&pos[1]>mask.maxY)return false;
   if(mask.matchName&&state?.Name!==mask.matchName)return false;
