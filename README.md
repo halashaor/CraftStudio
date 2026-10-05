@@ -41,6 +41,12 @@ Set `CRAFTSTUDIO_MINECRAFT_HOME` to the `.minecraft` directory you want the loca
 | Portable project and blueprint export | Yes | Yes |
 | Backend required | No | Python local service |
 
+## Set up the base resource library
+
+Open **Asset library → Resource library**. In the local edition, choose **Set up base materials from a local instance**, select the intended instance, and import the preselected vanilla and Create files. Lite users choose their own game/Mod JARs or resource-pack ZIPs once.
+
+The library caches resource assets in SQLite locally or IndexedDB in Lite and restores enabled files for new projects and later launches. Add other Mods and packs as needed; enable or disable each entry and move it up or down. Files load from top to bottom, with later files overriding earlier ones. Loading a new vanilla/Create base disables the previously cached base of that kind. Library backups include cached resources; portable projects retain the assets used by the project. No game or Mod assets are added to the public distribution.
+
 ## Design workflow
 
 1. **Import the real site.** Keep terrain, water, and existing structures as the starting point. Review the origin and selected region before designing.
