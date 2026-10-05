@@ -77,15 +77,16 @@
     },
     {
       "name": "Rhino",
-      "status": "CPlane / Gumball 官方正文已阅读；面/三点工作平面与平面轴原型已验证；Rhino 上机待完成",
+      "status": "CPlane / Gumball / NamedCPlane 官方正文已阅读；面/三点平面、命名平面与曲线截面原型已验证；Rhino 上机待完成",
       "url": "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "研究可复用平面、曲线上的截面平面与参照关联；通用约束系统仍待完成",
+      "next": "研究沿路径生成任意用户截面、方向传递与参照关联；通用约束系统仍待完成",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
-        "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm"
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm",
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm"
       ]
     },
     {
@@ -451,6 +452,43 @@
       "Named reusable construction-plane library and linked moving-object references remain pending",
       "Full constraint solver and general dependency graph remain pending",
       "Other research tools and backend streaming, actual Java gameplay validation remain pending"
+    ]
+  },
+  "planeLibraryMilestone": {
+    "date": "2026-10-05",
+    "references": [
+      "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
+      "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm"
+    ],
+    "status": "official documentation studied; own named-plane and curve-section workflow verified; Rhino hands-on not performed",
+    "implementation": [
+      "Project-local named frame save, explicit use, rename/update and deletion",
+      "Plane library CRUD uses shared workspace revisions, transactions, replay receipts, history and portable project storage",
+      "Existing guides keep their own frame snapshots; library changes do not relocate them",
+      "Curve stations use sampled-polyline arc length, with transported orthogonal frames and a distinct preview icon",
+      "Explicit station adoption starts drawing a section; preview alone does not alter sketch frame or voxels",
+      "Readonly curve/list APIs support local/world coordinates; plane puts convert world origins after confirmation",
+      "Tool buttons keep horizontal text instead of squeezing to vertical labels"
+    ],
+    "validation": {
+      "unitPass": 113,
+      "unitSkipped": 5,
+      "browser": [
+        "station preview without voxel mutation",
+        "named save without voxel mutation",
+        "curve station to closed section and extrusion",
+        "portable project restores named planes and solid blocks",
+        "explicit plane use, rename/delete and undo preserve existing solid",
+        "arbitrary-plane and locked-axis workflows still pass"
+      ],
+      "pageErrors": 0,
+      "renderer": "isolated Edge software renderer"
+    },
+    "remaining": [
+      "A general user-drawn profile sweep along the entire rail remains pending; current sweep still has a vertical rectangle path",
+      "Named frames are snapshots; automatic moving-object/curve-reference attachment is not implemented",
+      "Cross-project UI plane import/export is not implemented; AI may explicitly transfer frames using local/world APIs",
+      "Other design learning, backend streaming and actual Java game validation remain pending"
     ]
   }
 }

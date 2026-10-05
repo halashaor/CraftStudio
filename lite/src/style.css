@@ -35,3 +35,5 @@
 #isolation-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#364760;color:#dfebfa;font-size:11px;flex-shrink:0}#isolation-bar[hidden]{display:none}#isolation-bar span{flex:1;color:#b4c8dd}#isolation-bar button{padding:3px 6px;font-size:11px}
 
 .workspace-task-panel .workspace-confirm{flex-wrap:wrap}.workspace-task-panel .workspace-confirm .workspace-result{flex:0 0 100%;max-height:96px;overflow:auto;margin:0 0 6px!important;line-height:1.5!important;font-size:11px;white-space:normal}
+
+.scene-toolbar .row{flex:0 0 auto}.scene-toolbar .row>button{flex:0 0 auto;white-space:nowrap}#cad-object-list .tree-object button.generation-detach,#cad-object-list .tree-object button.component-publish,#cad-object-list .tree-object button.component-unique{flex:0 0 auto;white-space:nowrap}

@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-05",
+  "references": [
+    "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
+    "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm"
+  ],
+  "status": "official documentation studied; own named-plane and curve-section workflow verified; Rhino hands-on not performed",
+  "implementation": [
+    "Project-local named frame save, explicit use, rename/update and deletion",
+    "Plane library CRUD uses shared workspace revisions, transactions, replay receipts, history and portable project storage",
+    "Existing guides keep their own frame snapshots; library changes do not relocate them",
+    "Curve stations use sampled-polyline arc length, with transported orthogonal frames and a distinct preview icon",
+    "Explicit station adoption starts drawing a section; preview alone does not alter sketch frame or voxels",
+    "Readonly curve/list APIs support local/world coordinates; plane puts convert world origins after confirmation",
+    "Tool buttons keep horizontal text instead of squeezing to vertical labels"
+  ],
+  "validation": {
+    "unitPass": 113,
+    "unitSkipped": 5,
+    "browser": [
+      "station preview without voxel mutation",
+      "named save without voxel mutation",
+      "curve station to closed section and extrusion",
+      "portable project restores named planes and solid blocks",
+      "explicit plane use, rename/delete and undo preserve existing solid",
+      "arbitrary-plane and locked-axis workflows still pass"
+    ],
+    "pageErrors": 0,
+    "renderer": "isolated Edge software renderer"
+  },
+  "remaining": [
+    "A general user-drawn profile sweep along the entire rail remains pending; current sweep still has a vertical rectangle path",
+    "Named frames are snapshots; automatic moving-object/curve-reference attachment is not implemented",
+    "Cross-project UI plane import/export is not implemented; AI may explicitly transfer frames using local/world APIs",
+    "Other design learning, backend streaming and actual Java game validation remain pending"
+  ]
+}
