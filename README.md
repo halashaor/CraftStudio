@@ -51,7 +51,7 @@ The library caches resource assets in SQLite locally or IndexedDB in Lite and re
 
 1. **Import the real site.** Keep terrain, water, and existing structures as the starting point. Review the origin and selected region before designing.
 2. **Choose materials visually.** Browse block previews and filter by source, shape, use, or color. Create your own categories and favorites.
-3. **Draw auxiliary geometry.** Click to define lines, curves, and closed outlines. Sketches default to auxiliary geometry rather than placing blocks immediately.
+3. **Draw auxiliary geometry.** Click to define lines, curves, and closed outlines. Sketches default to auxiliary geometry rather than placing blocks immediately. Bézier control points move freely in X/Y/Z by default; an optional plane lock is visible in the main sketch controls.
 4. **Generate a form.** Extrude an outline, loft between sections, or generate along a path. Coplanar, connected line segments can form a closed profile automatically. Inclined profiles support extrusion along their own normal.
 5. **Refine and compare.** Edit blocks, transform selections, reuse components, and inspect the original site, final design, and change views.
 6. **Confirm and save.** Preview generation before committing it. Confirmed modeling operations can be undone as one operation. Save an editable project and export the required blueprint.
