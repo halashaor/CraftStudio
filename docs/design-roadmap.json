@@ -1082,5 +1082,62 @@
       "metadata headers and export buffers still complete",
       "Worker remains canonical; backend authority, viewport-only editing and autosave migration pending"
     ]
+  },
+  "checkpointAutosaveMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented; SQLite/IndexedDB tests and isolated large browser reload/switch verified",
+    "implementation": [
+      "immutable digest-addressed draft chunk content and session references",
+      "revision-pinned source capture and resource attachment reuse",
+      "resume/backup materialize legacy portable draft bytes",
+      "active draft import never replaces existing draft",
+      "shared pending save and pre-import checkpoint preservation"
+    ],
+    "validation": {
+      "syntheticEditedBlocks": 204800,
+      "checkpointAutosave": true,
+      "immutableSavedDraftAfterLiveSync": true,
+      "typedLongNbtAndGuidePreserved": true,
+      "assetsReusedOnLaterSave": true,
+      "reloadResumesLatestDraft": true,
+      "noWholeDeltaPayloadInAutosave": true,
+      "packets": [
+        {
+          "revision": 3,
+          "bytes": 789,
+          "assetBytesIncluded": true,
+          "hasWholeDeltaPayload": false
+        },
+        {
+          "revision": 4,
+          "bytes": 298,
+          "assetBytesIncluded": false,
+          "hasWholeDeltaPayload": false
+        }
+      ],
+      "pageErrors": [],
+      "scope": "isolated browser/SQLite autosave and reload; packet sizes exclude preceding checkpoint and initial asset transfer",
+      "switchValidation": {
+        "switchWaitsForPendingAutosave": true,
+        "oldDesignSavedBeforeImport": true,
+        "newSceneNotAttachedToOldProject": true,
+        "pageErrors": []
+      },
+      "pythonChecks": [
+        "immutable saved content after live changes",
+        "dedup and collection preserve other project drafts",
+        "stale capture rolls back attachments",
+        "backup materializes portable sessions",
+        "active restore does not overwrite",
+        "missing content recapture",
+        "surrogate metadata text preserved"
+      ],
+      "liteCheck": "empty IndexedDB active draft restore and existing draft preservation"
+    },
+    "remaining": [
+      "initial full data and resume/backup materialization still present",
+      "metadata and resource transfers still have costs",
+      "backend editing authority and viewport-only data pending"
+    ]
   }
 }

@@ -1,3 +1,4 @@
+from draft_storage import setup as setup_drafts, capture as capture_draft, materialize as materialize_draft, prune as prune_drafts, set_refs as set_draft_refs
 """Portable designer snapshots in the same local SQLite database as legacy projects."""
 from chunk_export import export_workspace
 from chunk_storage import setup as setup_chunks, manifest as chunk_manifest, read_chunks, checkpoint, workspace_head, workspace_chunks
@@ -15,7 +16,7 @@ class DesignerLibrary:
     def __init__(self, path):
         self.path = Path(path)
         with self.connection() as conn:
-            conn.execute('CREATE TABLE IF NOT EXISTS designer_records (store TEXT NOT NULL, key TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(store,key))');setup_chunks(conn)
+            conn.execute('CREATE TABLE IF NOT EXISTS designer_records (store TEXT NOT NULL, key TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(store,key))');setup_chunks(conn);setup_drafts(conn)
     @contextmanager
     def connection(self):
         conn = sqlite3.connect(self.path, timeout=15)
@@ -32,7 +33,8 @@ class DesignerLibrary:
     def rows(self, conn, store):
         return [json.loads(zlib.decompress(row[0])) for row in conn.execute('SELECT payload FROM designer_records WHERE store=?', (store,))]
     def put(self, conn, store, row):
-        conn.execute('INSERT OR REPLACE INTO designer_records VALUES (?,?,?)', (store, self.key(store,row), zlib.compress(json.dumps(row,ensure_ascii=False,separators=(',',':')).encode(),1)))
+        conn.execute('INSERT OR REPLACE INTO designer_records VALUES (?,?,?)', (store, self.key(store,row), zlib.compress(json.dumps(row,ensure_ascii=False,separators=(',',':')).encode('utf-8',errors='backslashreplace'),1)))
+        if store=='sessions':set_draft_refs(conn,row)
     @staticmethod
     def timestamp():
         return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
@@ -86,20 +88,29 @@ class DesignerLibrary:
             for key in ('favorite','deleted','title','tags','description'):
                 if key in changes: item[key]=changes[key]
             item['updatedAt']=self.timestamp(); self.put(conn,'projects',item); return item
+        if method == 'draftCheckpoint':
+            data=args[0];identifier=args[1] if len(args)>1 else None
+            if data.get('assetKey') and data.get('assetBytes') is not None and not self.get(conn,'bases',data['assetKey']):self.put(conn,'bases',dict(id=data['assetKey'],bytes=data['assetBytes']))
+            if data.get('assetKey') and not self.get(conn,'bases',data['assetKey']):raise ValueError('草稿资源附件不存在')
+            ref=capture_draft(conn,data)
+            if not self.get(conn,'bases',ref['baseKey']):raise ValueError('草稿缺少原始基线')
+            row=dict(id='active',baseKey=ref['baseKey'],assetKey=data.get('assetKey'),checkpointDraft=ref,projectId=identifier,updatedAt=self.timestamp());self.put(conn,'sessions',row)
+            if identifier:self.put(conn,'sessions',dict(row,id='draft:'+identifier))
+            prune_drafts(conn);return {'revision':ref['revision'],'digest':ref['digest'],'chunkReferences':len(ref['chunks'])}
         if method == 'draft':
             data=args[0]; identifier=args[1] if len(args)>1 else None
             for key, payload in [(data['baseKey'],data['baseline']),(data.get('assetKey'),data.get('assetBytes'))]:
                 if key and not self.get(conn,'bases',key): self.put(conn,'bases',dict(id=key,bytes=payload))
             row=dict(id='active',baseKey=data['baseKey'],assetKey=data.get('assetKey'),bytes=data['payload'],projectId=identifier,updatedAt=self.timestamp());self.put(conn,'sessions',row)
             if identifier: self.put(conn,'sessions',dict(row,id='draft:'+identifier))
-            return None
+            prune_drafts(conn);return None
         if method == 'resume':
             row=self.get(conn,'sessions',args[0] if args else 'active')
             if not row:return None
             base=self.get(conn,'bases',row['baseKey']); assets=self.get(conn,'bases',row['assetKey']) if row.get('assetKey') else None
             if not base or row.get('assetKey') and not assets: raise ValueError('草稿缺少原始场地或资源附件')
-            return dict(row,baseline=base['bytes'],assetBytes=assets['bytes'] if assets else None)
-        if method == 'backup': return dict(schema='craftstudio-lite-library/1',**{key:self.rows(conn,key) for key in self.STORES})
+            return dict(materialize_draft(conn,row),baseline=base['bytes'],assetBytes=assets['bytes'] if assets else None)
+        if method == 'backup': return dict(schema='craftstudio-lite-library/1',**{key:[materialize_draft(conn,row) for row in self.rows(conn,key)] if key=='sessions' else self.rows(conn,key) for key in self.STORES})
         if method == 'restore':
             backup=copy.deepcopy(args[0])
             if backup.get('schema')!='craftstudio-lite-library/1' or not isinstance(backup.get('projects'),list) or not isinstance(backup.get('versions'),list):raise ValueError('无效工程库备份')
@@ -116,6 +127,8 @@ class DesignerLibrary:
             for row in backup.get('sessions',[]):
                 if row['id'].startswith('prefs:'):
                     if not self.get(conn,'sessions',row['id']):self.put(conn,'sessions',row)
+                elif row['id']=='active' and not self.get(conn,'sessions','active'):
+                    row['projectId']=mapping.get(row.get('projectId'));self.put(conn,'sessions',row)
                 elif row['id']!='active' and row.get('projectId') in mapping:
                     row['projectId']=mapping[row['projectId']];row['id']='draft:'+row['projectId'];self.put(conn,'sessions',row)
             return dict(mapping=mapping)
