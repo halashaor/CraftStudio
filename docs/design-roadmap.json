@@ -808,5 +808,34 @@
       "Axiom hands-on comparison still pending",
       "Further unify sketch, terrain and transform operation feedback"
     ]
+  },
+  "keyboardContextMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented and browser verified",
+    "workflow": "Text editing owns native shortcuts; preview undo cancels the pending operation; committed scene undo/redo remain separate",
+    "validation": {
+      "constructionUndoCancelsPreview": true,
+      "designerUndoCancelsPreview": true,
+      "ctrlShiftZRedoesScene": true,
+      "deleteDoesNotChangeSceneDuringPreview": true,
+      "inputPasteDoesNotCommit": true,
+      "ctrlZCancelsPreview": true,
+      "undoButtonCancelsPreview": true,
+      "cursorInitialAnchor": true,
+      "liveCursorGhost": true,
+      "previewDoesNotEdit": true,
+      "clickLocksPlacement": true,
+      "enterCommitsAtPreview": true,
+      "undoAndEscape": true,
+      "spaceDoesNotLock": true,
+      "ctrlVConfirms": true,
+      "pageErrors": [],
+      "scope": "Isolated browser/SQLite workflow and unit classification tests; input paste interception checked with a dispatched shortcut, not system clipboard contents."
+    },
+    "reference": "Axiom confirmation/placement semantics previously studied; Blender undo page could not be fetched this turn; no new Blender hands-on claim",
+    "remaining": [
+      "Further unify pending-operation behavior with AI previews and API-driven scene changes",
+      "Full backend streaming editing and live game validation remain pending"
+    ]
   }
 }

@@ -171,3 +171,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 完整本地服务现将 Worker 的版本检查点镜像为区块增量。`scene.chunkSnapshot` 同步元数据和增量，`scene.readStoredChunks` 读取原始基线加当前检查点改动，包含删除、新范围和类型化 NBT；结果锁定版本/摘要，查询缓存按变化区块失效。未变版本避免重复发送完整增量/设计。这仍是派生查询镜像：Worker 保留完整编辑权威，限量视口编辑、后端生成仍未完成；本地保存/下载工程及完整 NBT 已采用版本锁定的逐区块导出，压缩输出和资源仍缓存，见[检查点导出说明](docs/checkpoint-export.md)；便携工程仍是恢复格式。见[增量区块验证记录](docs/validation/workspace-chunks.json)。
 
 剪贴板放置：Ctrl+C 复制选区，Ctrl+V 开始跟随鼠标的预览；单击锁定后用操纵器或数字微调，Enter / Ctrl+V 确认，Esc 取消且不写入方块。快速复制粘贴会等待复制数据完成。见[工作流验证](docs/validation/paste-cursor.json)。
+
+快捷键按上下文工作：输入框保留文本粘贴、删除和撤销；移动/粘贴、草图及排列预览中的撤销先取消预览，Delete 不再穿透预览删除原选区。场景重做支持 Ctrl+Y 和 Ctrl+Shift+Z。见[验证记录](docs/validation/keyboard-context.json)。
