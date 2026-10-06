@@ -51,3 +51,7 @@
 #sketch-snap-feedback{flex:0 0 100%}
 
 #import-cancel{margin-top:16px;pointer-events:auto}#import-cancel[hidden]{display:none}
+
+.generation-sources{flex:0 0 100%;width:100%;margin:5px 0!important;padding:4px 0;border-top:1px solid #465463}.generation-sources summary{font-size:11px;color:#acc4e0;cursor:pointer}.generation-sources>button{display:block;width:100%!important;margin-top:5px;text-align:left;white-space:normal!important}#sketch-related-summary{white-space:normal;color:#b7cce5}
+
+#cad-object-list .tree-object:has(.generation-sources){flex-wrap:wrap;min-width:0}#cad-object-list .generation-sources>button{flex:none;min-width:0;text-align:left;width:100%;white-space:normal}#workspace-tree{overflow-x:hidden}

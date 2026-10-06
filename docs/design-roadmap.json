@@ -1462,5 +1462,43 @@
       "broader loader/version rendering adapters",
       "backend streaming authority and working sets"
     ]
+  },
+  "generationNavigationMilestone": {
+    "date": "2026-10-06",
+    "status": "implemented; read-only relation and browser source-edit workflow verified",
+    "reference": "https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/Tree_view.md",
+    "implementation": [
+      "named source links in generated object rows",
+      "dependent counts on saved sketches",
+      "named linked/source-only update scope",
+      "precise regenerated/manual-preserved counts",
+      "missing/outdated/detached status",
+      "read-only public generation.links"
+    ],
+    "validation": {
+      "resultToSourceNavigation": true,
+      "guideDependentCount": true,
+      "namedUpdateScopeVisible": true,
+      "linkedRegenerationPreview": true,
+      "commitUpdatesResult": true,
+      "oneUndoRestoresResult": true,
+      "sourceOnlyEditMarksOutdated": true,
+      "readonlyLinkApi": true,
+      "pageErrors": [],
+      "visualInspection": true,
+      "inspectorWidthChecked": true,
+      "unitChecks": [
+        "multi/loop/missing source links",
+        "detached state",
+        "read-only inspection leaves version/history intact"
+      ],
+      "reference": "https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/Tree_view.md",
+      "referenceStudy": "official body read; no hands-on FreeCAD claim"
+    },
+    "remaining": [
+      "full dependency editor and multilevel propagation",
+      "persistent snap-source following",
+      "backend streaming authority and live game validation"
+    ]
   }
 }
