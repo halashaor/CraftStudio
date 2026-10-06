@@ -18,6 +18,7 @@ jobs:
           python-version: '3.12'
       - run: npm install
         working-directory: lite
+      - run: node lite/check-publication.mjs
       - run: npm test
         working-directory: lite
       - run: npm run build && npm run check:sync

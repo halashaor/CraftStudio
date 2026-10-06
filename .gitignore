@@ -22,3 +22,9 @@ bridge/build/
 bridge/toolchain/
 bridge/installed-backups/
 .publish/
+
+# Local planning, research and verification material
+/docs/
+/ARCHITECTURE.md
+/output/
+/lite/reference/

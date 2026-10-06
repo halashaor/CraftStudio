@@ -74,6 +74,9 @@ Viewport controls: **left click / drag** selects or box-selects, **right drag** 
 - **Local persistence:** editable portable projects, versions, drafts, library backups, and asset preferences. The local edition stores complete designer projects in SQLite.
 - **AI design interface:** exact scene reads, free block edits, transactions, conflict checks, save/export, and viewport capture through the public page/worker API. AI designs do not have to use predefined building templates.
 
+- **Measurement and views:** distance, spatial angles, polyline length, sketch snapping and saved observation views.
+- **Reusable tool settings:** searchable brush presets with selectable drawing planes and JSON import/export.
+
 ## Files and resources
 
 | Input / output | Current support |
@@ -110,7 +113,7 @@ Single-player writes require creative mode. Dedicated-server writes require an e
 
 ## Development
 
-Install Node.js 22 or later, then:
+Install Node.js 22.13 or later, then:
 
 ```sh
 cd lite
@@ -138,90 +141,4 @@ Public builds do not include private worlds, user blueprints, resource packs, sc
 
 See [third-party notices](lite/THIRD-PARTY.txt). Bundled third-party code retains its original terms. Minecraft/mod game textures are not bundled in the public release. The main project code currently has **no separately declared open-source license**; a public repository alone does not grant unrestricted reuse rights.
 
-Further reading: [Architecture](ARCHITECTURE.md), [interaction design and implementation status](docs/interaction-spec.html), and [Design API](lite/DESIGN-API.md). These supporting documents are currently primarily in Chinese.
-
-## Design roadmap
-
-See the [design roadmap and research ledger](docs/design-roadmap.html) (Chinese) for current evidence, reference tools, implementation priorities, and end-to-end acceptance tasks. Research, prototypes, compiled checks, and real-world validation are tracked separately. The goal is terrain-first, free human/AI architectural design, with practical differences between local and Lite editions.
-
-Large scenes (100,000 source plus added blocks) request chunk geometry by camera frustum and evict off-view geometry. Complete voxel data remains available for edits, saves and exports; this is geometry streaming, not backend data streaming. Resource-model bounds are conservative, camera updates are coalesced, and editing waits while visible geometry loads. See [design evidence](docs/design-roadmap.json). Run `node lite/tests/performance-baseline.mjs` for a reproducible synthetic compute/buffer benchmark; it does not measure pointer-to-visible latency or hardware GPU FPS.
-
-Selections support replace/add/subtract/intersect. Shift adds and Ctrl subtracts when clicking blocks/objects or box-selecting; the inspector also offers explicit modes. Exact object membership and region volumes share brush, clipboard, transform, deletion and component extraction rules. Yellow indicates the extent; blue/red/purple indicate added/subtracted/intersection operands. Selection changes do not edit blocks. See [selection evidence](docs/validation/selection-combine.json).
-
-Paths/figures and terrain tools can use the shared selection as an exact 3D volume or an XZ footprint. Footprint mode projects each operand before combining it and ignores Y; volume mode limits every voxel, including supports and earthwork. Guides retain their complete design shape. The selected range is captured for the operation and may be explicitly refreshed; saved path recipes retain it. Pick the target ground layer directly from an existing static block. Preview reports stay above confirmation controls. See [scope validation](docs/validation/construction-scope.json).
-
-For a terrain ramp, choose **Drag a ramp**, press a static block at the start and drag toward the end. A lightweight plane and signed measurements update while dragging; release recalibrates the voxel preview, then confirm to apply. Edit either endpoint ground layer as needed. Escape restores the previous settings. Beyond the endpoints the ramp stays at the first/last heights, within the chosen scope. Only relevant terrain controls are shown. Terrain recipes retain endpoints in portable projects; reopening their voxels is verified, while saved terrain recipe editing is still pending. See [ramp evidence](docs/validation/terrain-slope.json).
-
-Sketches can set a construction plane from an actual model face or three noncollinear points, then face the plane directly. Custom-plane state, grid and local axes are visible. Snapping, shape generation and locked gizmos share that frame; unlocking retains free 3D editing. Automatic extrusion respects the saved normal, including negative-axis faces. Portable guide recipes retain the frame. Moving-object attachments are still pending. See [workplane evidence](docs/validation/custom-workplane.json).
-
-The sketch panel can save, use, rename/update and delete named planes within a project. Plane metadata shares revision checks, transactions, undo and portable storage. Existing sketches retain snapshots. A curve station slider uses sampled-polyline arc length and transported axes; its small yellow icon previews a section before explicit adoption and drawing. `workplanes.list`, `workplanes.put`, `workplanes.remove` and `workplanes.atCurve` expose the same capabilities to AI. Automatic reference attachment remains pending. See [plane library validation](docs/validation/plane-library.json).
-
-Single-rail sweeps now accept one or more user-drawn closed profiles, including concave shapes, along a sampled 3D path. Choose retained drawing offset or centered placement, hollow walls, optional end caps or cutting. Exact voxel preview is separate from the lightweight continuous surface; auxiliary loops are sparse. Shared generation scopes also apply to extrusion, loft and sweep. Source path updates retain manual edits and one-operation undo. Old recipes and quick rectangular sweeps remain supported. Nonplanar closed seams, self-intersection repair, multiple varying profiles and further slab/stair boundary refinement remains pending. See [sweep validation](docs/validation/profile-sweep.json).
-
-Profile sweeps also support multiple sections positioned along the rail. They are sorted by station, resampled and matched by cyclic start/winding before linear or smooth interpolation. Intermediate bulges are included; hollow caps use arc-length thickness across subdivisions. Editing any source section regenerates the result while retaining manual overrides. Automatic shape-seam repair and further adaptive boundary refinement remains pending. See [variable sweep validation](docs/validation/variable-sweep.json).
-
-Closed spatial rail sweeps now distribute accumulated frame rotation to align the first/last section direction. The correction may be disabled. Automatic or manual perimeter correspondence, start fraction and winding reversal are available per selected section, with orange start markers. Corrected continuous previews and voxel sampling share frames. This handles frame closure, not automatic repair of differing endpoint contours or self-intersections. See [closed sweep validation](docs/validation/closed-sweep.json).
-
-Profile sweeps offer optional half-cell boundary fitting. Occupancy is unioned across segments, then matched to full blocks, top/bottom slabs and straight stairs with valid facing/half states. Variants come from explicit role choices or available material families; missing/unsupported boundaries are reported. Pure block mode remains available and cuts stay voxel-based. Closed membership now uses corrected frames, not only corrected display rings. Eight-sample fitting is approximate; inspect thin walls, cavities and corner cases. See [boundary validation](docs/validation/voxel-fit.json).
-
-Sweep diagnostics now mark center-sampled voxel overlap between distant rail portions, with a red location overlay and focus action. Keep merged volume or explicitly stop confirmation; the same blocker applies to AI commits and source regeneration. Shared scopes filter overlap reports. This is voxel sampling, not exact continuous self-intersection or automatic topology repair, and may miss thin/nearby contacts. See [overlap validation](docs/validation/sweep-overlap.json).
-
-The full local service exposes immutable baseline chunk queries: `scene.baselineManifest` and `scene.readBaselineChunks` through `window.CraftStudio.request`. SQLite caches 16³ chunks while retaining original portable baselines; masks, metadata, entities and typed NBT are preserved. Reads return requested records only and distinguish empty-records from outside bounds. The query client has bounded LRU caching. This is a baseline-only foundation: current Worker editing still holds the complete scene; overlay authority and stream-aware rendering/generation/export remain pending. Lite keeps file-based editing. See [local chunk evidence](docs/validation/local-chunks.json).
-
-The full local service now mirrors versioned Worker checkpoints as chunk-indexed overlays. `scene.chunkSnapshot` synchronizes metadata and delta state; `scene.readStoredChunks` reads baseline plus current checkpoint edits, including deletions, new extents and typed NBT. Reads are revision/digest pinned and the query cache invalidates changed chunks. Unchanged revisions avoid reposting full delta/design. This remains a derived query mirror: Worker retains complete canonical editing state; viewport-only editing and backend generation are not complete. Local project save/download and full NBT now export pinned SQLite checkpoints chunk by chunk; compressed output and resources remain buffered. See [checkpoint export](docs/checkpoint-export.md). Portable projects remain the recovery format. See [workspace chunk evidence](docs/validation/workspace-chunks.json).
-
-Clipboard placement: Ctrl+C copies the selection; Ctrl+V starts a cursor-following preview. Click to lock its anchor, then adjust with the gizmo or numeric offsets. Enter or Ctrl+V confirms; Escape cancels without editing. Fast copy/paste waits for the clipboard data. See [workflow evidence](docs/validation/paste-cursor.json).
-
-Shortcut context: text fields retain native clipboard/deletion/undo. Undo during a transform, sketch or designer preview cancels that preview before affecting committed scene history; Delete does not delete the original selection behind a preview. Scene redo supports Ctrl+Y and Ctrl+Shift+Z. See [validation](docs/validation/keyboard-context.json).
-
-Optional reviewable AI proposals now expose `proposal.prepare/inspect/commit/cancel`, connected to the 3D preview. Proposal ID and scene revision guard adoption, true deletions and typed NBT survive, and accepted edits undo as one step. External API edits invalidate old direct-transform previews. See [proposal API](docs/proposal-api.md).
-
-Pending modelling previews now preserve parameters and recompute after external edits in the same workspace. Late or invalid results cannot be confirmed; deleted profile/path references remain explicit instead of being silently replaced. Workspace switching ends the old operation. See [recompute workflow](docs/draft-recompute.md).
-
-Press F3 or 查找工具 to search design tools by Chinese labels, English aliases or category. Results show shortcuts and unavailable reasons; Up/Down and Enter open the existing tool. Escape returns to the previous sketch/transform, and recent tool IDs persist in the local library. See [tool finder](docs/command-search.md).
-
-Small edits now use chunked copy-on-write overlays and incremental summary counts, preserving undo/candidate isolation and portable formats. A 204800-edit browser import/brush/SQLite/export/reopen workflow passed. Local microbenchmark improvements cover only the editing-data phase, not overall rendering latency. See [overlay performance](docs/overlay-performance.md).
-
-The upgraded local service synchronizes only changed checkpoint chunks after the initial snapshot (`workspace-delta/1`), with version-checked atomic updates, explicit undo removals and full retry on missing bases/cache. A synthetic one-cell edit sent about 117 KB instead of the initial 12 MB; metadata-only workplane update sent 672 bytes. These are request-size measurements. See [checkpoint deltas](docs/workspace-delta.md).
-
-Local autosave now captures immutable checkpoint chunk references (`checkpoint-draft/1`) and reuses resource attachments, with portable resume/backup materialization and legacy/Lite compatibility. Import waits for pending saves and preserves the current design. Empty-library active draft restore is supported without replacing an existing draft. See [checkpoint autosave](docs/checkpoint-autosave.md).
-
-Measure actual scene surfaces with the left-side 测量 tool or F3: fractional spacing, rise and slope appear in the fixed inspector and 3D ruler. Saved metadata annotations support edit/delete/undo, world-coordinate API and portable persistence without placing blocks. See [measurement](docs/measurement.md).
-
-Sketch picking now identifies saved-guide endpoints, midpoints and centers near the cursor, with a cyan marker and fixed source badge. Workplane filtering, optional Ctrl bypass and exact numeric/reference coordinate preservation support connected design without mandatory constraints. See [object snaps](docs/object-snaps.md).
-
-Private provided-file regressions can be run locally with `node lite/verify-fixtures.mjs` and explicit paths. The latest local run passed 165 tests with zero skips; the supplied V3 change blueprint matched its reference exactly. Public CI still excludes private files and licensed assets. See [fixture verification scope](docs/private-fixture-validation.md).
-
-Original point lookup and chunk indexing now share immutable baseline maps. A supplied-region Node sample reduced retained index heap from about 31 MB to 16 MB; timing/lookup scope and tradeoffs are documented. Real-file tests and an isolated browser/backend full NBT export matched all original records. This is not viewport-only streaming. See [baseline indexing](docs/baseline-index.md).
-
-Replacement imports and draft resume now parse in a candidate Worker with phase feedback and cancellation, preserving the active design until successful swap. Invalid/cancelled input leaves original data intact; writes during staging are rejected. Peak memory can rise temporarily, and HTML reference proposals keep their existing flow. See [staged import](docs/staged-import.md).
-
-Embedded partial geometry/textures now survive portable re-export before visual demand, with namespace-correct selected resource precedence. Captured assembly original-view controller NBT is separated from current edits and undo restores supported speeds. See [Create resource fidelity](docs/create-resource-fidelity.md).
-
-Generated result rows expose named source sketches; saved guides show dependant counts. Source editing explains linked vs source-only scope and preview update/manual-preservation counts, with one-step undo. Read-only `generation.links` exposes existing provenance. See [generation navigation](docs/generation-navigation.md).
-
-Recorded generated-output dependencies now propagate source and upstream-feature updates in dependency order, with cycle/missing-reference rejection, manual preservation and one undo. The edit panel includes indirect affected results; ordinary snaps remain snapshots. See [generation propagation](docs/generation-propagation.md).
-
-Saved views now capture the current camera including projection, zoom, up direction and orthographic extent. The fixed panel/F3 entry supports metadata save/update/delete/undo and portable restore, with legacy compatibility; restoration preserves pending sketches and does not edit voxels. See [saved views](docs/saved-views.md).
-
-Saved views optionally include the cut layer, comparison mode and vegetation/terrain/existing-building display switches. Camera-only bookmarks preserve current display settings. See [display snapshot evidence](docs/validation/display-snapshot.json).
-
-Brush presets support search, rename, delete/undo and portable JSON import/export with conflict copies and atomic validation. See [brush presets](docs/brush-presets.md).
-
-Saved sketch rows expose context actions for extrusion and path generation, automatically selecting the source, including joined closed line loops. See [source sketch actions](docs/guide-actions.md).
-
-Opt-in `CraftStudio.diagnostics` records bounded input/Worker/scene/frame submission timings without scene content. See [latency measurements and limits](docs/performance-trace.md).
-
-Unchanged inspector/tree content is retained across voxel edits, with dependency-aware sketch actions and `ui-summary` timing. See [panel refresh scope and measurements](docs/panel-refresh.md).
-
-Diagnostics now include `scene-pick`; the [browser thread trace](docs/browser-thread-trace.md) distinguishes page, Worker and software-GPU scheduling instead of attributing all delays to the editor.
-
-Brush drawing supports automatic grazing-face fallback and explicit surface/view/axis planes; real vanilla/Create resources were used to verify continuous drag, undo and portable reopen in both storage modes. See [drawing planes](docs/brush-plane.md).
-
-Measure supports three-point spatial angles and accumulated polyline lengths with live preview, step-back, XYZ edits and portable metadata. See [measurement modes](docs/measurement.md).
-
-Measurement reuses sketch endpoint/midpoint/center snaps with visible feedback, exact fractional coordinates and Ctrl/layer suspension. See [measurement snapping](docs/measurement.md).
-
-A [local engine host prototype](local-engine/README.md) executes the shared editing engine in Node with revision/transaction/typed-data parity tests and private real-fixture verification. It is not enabled in the UI; durable authority, transport and browser working sets remain pending.
-
-The local host now has immutable chunk/history checkpoints and a manual SQLite commit/recovery layer, verified across worker/database restart. The per-edit durable controller and UI handoff are still pending. See [local engine persistence](local-engine/README.md).
+API reference: [Design API](lite/DESIGN-API.md).
