@@ -7,7 +7,7 @@ export function closedProfiles(guides=[]){
  const result=[],edges=[],vertices=[];
  const vertex=p=>{let i=vertices.findIndex(v=>distance(v.point,p)<=tolerance);if(i<0){i=vertices.length;vertices.push({point:p,edges:[]});}return i;};
  for(const g of guides){
-  if(!['line','bezier','arc','rectangle','circle','ellipse','polygon'].includes(g.recipe?.kind)||g.points?.length<2)continue;
+  if(!['line','polyline','bezier','arc','rectangle','circle','ellipse','polygon'].includes(g.recipe?.kind)||g.points?.length<2)continue;
   const points=g.points.filter((p,i)=>!i||distance(p,g.points[i-1])>tolerance);
   if(distance(points[0],points.at(-1))<=tolerance){const plane=planeOf(points);if(plane)result.push({...g,recipe:{...g.recipe,plane}});continue;}
   if(['rectangle','circle','ellipse','polygon'].includes(g.recipe.kind)){const plane=planeOf(points);if(plane)result.push({...g,recipe:{...g.recipe,plane}});continue;}
