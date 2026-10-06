@@ -1,0 +1,11 @@
+{
+  "portableRoundTrip": true,
+  "nbtRoundTrip": true,
+  "deletedBlocks": true,
+  "newExtent": true,
+  "typedLongNbt": true,
+  "modStateProperties": true,
+  "originalBaselineAndGuides": true,
+  "pageErrors": [],
+  "limitations": "Export traverses SQLite chunks; Worker and checkpoint upload still retain full editing state. Compressed output and resource bundle are buffered."
+}

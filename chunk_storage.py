@@ -12,7 +12,7 @@ def setup(conn):
     conn.execute('CREATE TABLE IF NOT EXISTS designer_baseline_chunks (base_key TEXT NOT NULL, chunk_key TEXT NOT NULL, block_count INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(base_key,chunk_key))')
 
 def encode(value):
-    return gzip.compress(json.dumps(value,ensure_ascii=False,separators=(',',':')).encode('utf-8'),compresslevel=1,mtime=0)
+    return gzip.compress(json.dumps(value,ensure_ascii=False,separators=(',',':')).encode('utf-8',errors='backslashreplace'),compresslevel=1,mtime=0)
 
 def manifest(conn,base_key,load_base):
     cached=conn.execute('SELECT header FROM designer_chunk_manifests WHERE base_key=?',(base_key,)).fetchone()

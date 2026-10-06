@@ -1,4 +1,5 @@
 """Portable designer snapshots in the same local SQLite database as legacy projects."""
+from chunk_export import export_workspace
 from chunk_storage import setup as setup_chunks, manifest as chunk_manifest, read_chunks, checkpoint, workspace_head, workspace_chunks
 import copy
 from contextlib import contextmanager
@@ -37,7 +38,7 @@ class DesignerLibrary:
         return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
     def call(self, method, args):
         with self.connection() as conn:
-            conn.execute('BEGIN' if method in ('baselineChunks','workspaceHead','workspaceChunks') else 'BEGIN IMMEDIATE')
+            conn.execute('BEGIN' if method in ('baselineChunks','workspaceHead','workspaceChunks','workspaceExport') else 'BEGIN IMMEDIATE')
             result = self.execute(conn, method, args)
             return result
     def execute(self, conn, method, args):
@@ -49,6 +50,7 @@ class DesignerLibrary:
                 if not old:self.put(conn,'bases',{'id':args[0],'bytes':data})
             return chunk_manifest(conn,args[0],lambda key:self.get(conn,'bases',key))
         if method == 'baselineChunks':return read_chunks(conn,args[0],args[1])
+        if method == 'workspaceExport':return export_workspace(conn,args[0],args[1],args[2] if len(args)>2 else 'craftlite',args[3] if len(args)>3 else None,args[4] if len(args)>4 else None)
         if method == 'workspaceHead':
             head=workspace_head(conn,args[0])
             if head and len(args)>1 and args[1]:head.pop('snapshot',None)

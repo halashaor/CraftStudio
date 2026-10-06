@@ -23,7 +23,11 @@
         "https://axiomdocs.moulberry.com/editor/selections.html",
         "https://axiomdocs.moulberry.com/tools/selection/intro.html",
         "https://axiomdocs.moulberry.com/tools/drawing/path.html",
-        "https://axiomdocs.moulberry.com/tools/heightmap/slope.html"
+        "https://axiomdocs.moulberry.com/tools/heightmap/slope.html",
+        "https://axiomdocs.moulberry.com/editor/gizmos.html",
+        "https://axiomdocs.moulberry.com/editor/windows/clipboard.html",
+        "https://axiomdocs.moulberry.com/editor/windows/blueprints.html",
+        "https://axiomdocs.moulberry.com/editor/windows/toolmasks.html"
       ]
     },
     {
@@ -754,6 +758,32 @@
       "Mirror tables are derived query state; portable project/version backups remain the main recovery format",
       "Viewport-only editable data, backend global generation/export and transactional edit authority remain pending",
       "Lite remains file-based; original game-validation and design-learning objective remain active"
+    ]
+  },
+  "checkpointExportMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented and browser roundtrip verified",
+    "implementation": [
+      "Pinned SQLite checkpoint export in 16 cubed chunks",
+      "Portable project retains baseline, overlays, design and resource bundle",
+      "Merged NBT preserves typed NBT, entities, native root extras and placement masks",
+      "Existing local save and download controls; Lite fallback retained"
+    ],
+    "validation": {
+      "portableRoundTrip": true,
+      "nbtRoundTrip": true,
+      "deletedBlocks": true,
+      "newExtent": true,
+      "typedLongNbt": true,
+      "modStateProperties": true,
+      "originalBaselineAndGuides": true,
+      "pageErrors": [],
+      "limitations": "Export traverses SQLite chunks; Worker and checkpoint upload still retain full editing state. Compressed output and resource bundle are buffered."
+    },
+    "remaining": [
+      "Worker retains full canonical scene; first indexing/checkpoint upload are not streaming",
+      "Compressed output and resources buffered",
+      "Backend editing authority and global generation still pending"
     ]
   }
 }

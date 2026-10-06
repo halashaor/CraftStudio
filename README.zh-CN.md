@@ -168,4 +168,4 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 
 完整本地服务现可通过 `window.CraftStudio.request` 使用 `scene.baselineManifest` 和 `scene.readBaselineChunks` 查询原始基线区块。SQLite 缓存 16³ 区块并保留完整便携基线、蒙版、元数据、实体及类型化 NBT；只返回请求记录，区分空记录与越界。查询客户端采用限量 LRU 缓存。这是基线读取底座：当前 Worker 编辑仍持有完整场景，增量权威、渲染/生成/导出流式处理仍待实现；Lite 保留文件式编辑。见[本地区块验证记录](docs/validation/local-chunks.json)。
 
-完整本地服务现将 Worker 的版本检查点镜像为区块增量。`scene.chunkSnapshot` 同步元数据和增量，`scene.readStoredChunks` 读取原始基线加当前检查点改动，包含删除、新范围和类型化 NBT；结果锁定版本/摘要，查询缓存按变化区块失效。未变版本避免重复发送完整增量/设计。这仍是派生查询镜像：Worker 保留完整编辑权威，限量视口编辑、后端生成/导出仍未完成；便携工程仍是恢复格式。见[增量区块验证记录](docs/validation/workspace-chunks.json)。
+完整本地服务现将 Worker 的版本检查点镜像为区块增量。`scene.chunkSnapshot` 同步元数据和增量，`scene.readStoredChunks` 读取原始基线加当前检查点改动，包含删除、新范围和类型化 NBT；结果锁定版本/摘要，查询缓存按变化区块失效。未变版本避免重复发送完整增量/设计。这仍是派生查询镜像：Worker 保留完整编辑权威，限量视口编辑、后端生成仍未完成；本地保存/下载工程及完整 NBT 已采用版本锁定的逐区块导出，压缩输出和资源仍缓存，见[检查点导出说明](docs/checkpoint-export.md)；便携工程仍是恢复格式。见[增量区块验证记录](docs/validation/workspace-chunks.json)。
