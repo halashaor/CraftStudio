@@ -142,3 +142,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 第三方声明见 [THIRD-PARTY](lite/THIRD-PARTY.txt)，第三方代码保留原许可条款。公开发布不包含 Minecraft／Mod 原始游戏贴图。主项目代码目前**尚未单独声明开源许可证**；仓库公开不代表获得无限制复用授权。
 
 接口说明：[设计 API](lite/DESIGN-API.md)。
+
+后端开发可使用 [local-engine](local-engine/README.md) 的共享 Node 宿主、SQLite 检查点与逐笔落盘确认控制器；当前界面和 Python 服务尚未启用。

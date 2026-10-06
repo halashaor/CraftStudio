@@ -40,6 +40,38 @@ Resource, database and report arguments are optional. Inputs remain local; outpu
 
 ## Current limits
 
-A worker still holds the full scene in RAM. SQLite commits are manual: edits are not automatically persisted before being acknowledged. HTTP transport, runtime packaging and UI handoff are not enabled. This module does not change Lite or the current local designer's storage behavior.
+A worker still holds the full scene in RAM. Direct EngineWorkspace calls require manual checkpoints. EngineController wraps calls with persist-before-acknowledgement; it is not enabled in the application service. HTTP transport, runtime packaging and UI handoff are not enabled. This module does not change Lite or the current local designer's storage behavior.
 
 中文：本模块为开发者使用的本地引擎原型，提供独立工作线程、检查点与手动 SQLite 保存/恢复。尚未接入当前界面或 Python 服务；文件、资源和验证结果仅在本机使用。
+
+## Durable controller API
+
+```js
+import {EngineStore} from './store.mjs';
+import {EngineController} from './controller.mjs';
+const store = new EngineStore('/path/independent.sqlite');
+const controller = await EngineController.open({store, key: 'project-id'});
+try {
+  const description = await controller.call('api', {method: 'workspace.describe'});
+  // Use the same Worker actions and guarded DesignAPI requests.
+} finally {
+  await controller.close();
+  store.close();
+}
+```
+
+Calls are serialized. Canonical edits are acknowledged after their checkpoint transaction succeeds; queued reads wait. Storage failure restores the committed checkpoint or fails closed if recovery is impossible. An uncertain acknowledgement after COMMIT is recovered from storage; retrying a still-cached request ID retains the shared engine's bounded idempotence semantics.
+
+Imports and resource changes run in a candidate workspace and swap only after storage succeeds. Invalid imports keep the live scene and uncommitted transactions. Pending strokes/proposals block replacement; pending transactions/construction also block resource replacement. A successful scene import ends old transient operations. `engineCapture`/`engineRestore` cannot bypass the controller. `close()` stops accepting requests and drains already accepted calls.
+
+`sequence` is the storage checkpoint sequence. Independent controllers retain their own in-memory snapshots; SQLite version checks prevent overwriting another committed writer. This is not a collaborative owner/lease service or automatic cross-client refresh.
+
+Explicit file verification is available:
+
+```sh
+node local-engine/verify-controller.mjs --nbt=/path/region.nbt --database=/path/test.sqlite --vanilla=/path/client.jar --create=/path/create.jar --report=/path/report.json
+```
+
+Inputs and reports remain local. No HTTP transport, runtime discovery, UI handoff or browser working-set eviction is enabled yet. The Python service still uses the existing designer path.
+
+中文补充：EngineController 串行处理请求，编辑检查点提交后才确认；失败恢复最后落盘状态。新文件和资源先在候选宿主处理，保存成功才替换；关闭会处理完已接受请求。它尚未接入界面或 HTTP 服务，不提供多客户端租约和自动刷新。

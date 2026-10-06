@@ -142,3 +142,5 @@ Public builds do not include private worlds, user blueprints, resource packs, sc
 See [third-party notices](lite/THIRD-PARTY.txt). Bundled third-party code retains its original terms. Minecraft/mod game textures are not bundled in the public release. The main project code currently has **no separately declared open-source license**; a public repository alone does not grant unrestricted reuse rights.
 
 API reference: [Design API](lite/DESIGN-API.md).
+
+For backend development, [local-engine](local-engine/README.md) provides a shared Node host, immutable SQLite checkpoints and a persist-before-acknowledgement controller. It is not enabled in the application UI or Python service.
