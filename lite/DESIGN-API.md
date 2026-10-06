@@ -200,3 +200,7 @@ await CraftStudio.request({
 `workspace.describe().value.view` 返回 `isolated`、`depth` 和可用的 `editBounds`。隔离不是公共 `edit.apply` 的写入权限限制；AI 可按明确请求继续自由编辑，若需要范围条件可使用 `edit.brush.mask`。当前相机可用 `CraftStudio.viewState()` 读取，不需要截图；`setView` 支持正交／透视与 `zoom`。UI 的隔离进入／退出协调相机恢复，协议本身不替远程调用者保存相机。
 
 `construction.prepare` 的 `type:"geometry"` 支持 `config.kind:"polyline"`。`points` 保存连续顶点，`closed:true` 显式闭合，默认保持开放，不添加末点到起点的隐含线段。开放折线不能填充；闭合共面的采样辅助线可作为拉伸截面。保存后的路径可通过 `pathId` 用于扫掠，沿用源草图重编辑、关联重建和一次撤销。半砖/楼梯仍由现有落格与素材变体规则决定。轮廓偏移支持可识别的单个闭合共面路径，沿轮廓自身平面计算，也支持倾斜工作平面；正距离向外、负距离向内。结果保存自身工作平面与拐角，且是独立辅助轮廓。向内偏移导致边界消失或反向会拒绝；复杂凹轮廓的拓扑分裂/自交修复尚未自动实现。
+
+新建偏移辅助线保存 `provenance:{kind:"offset",guideId,sourceRevision,distance,independent:true}`。`generation.links` 的对应 guide 增加 `source` 状态，包含来源 ID、名称、距离、`outdated/canRebuild/reason`；这是独立副本的来源记录，不表示源变化时自动修改副本。
+
+通过 `construction.prepare` 的 `type:"designer"`、`config.operation:"updateOffset"` 与 `config.guideId` 预览按来源重建；可传 `distance` 修改距离，默认沿用记录值，`manualStrategy` 默认 `preserve`。确认沿用 `construction.commit`，保持目标草图 ID，重建其下游几何并支持一次撤销。多级偏移先更新上一级，缺失/循环来源拒绝重建；旧记录没有 provenance 时不推断来源。
