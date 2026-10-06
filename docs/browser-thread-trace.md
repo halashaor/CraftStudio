@@ -9,3 +9,11 @@ Only aggregate timings and task counts are published in [evidence](validation/br
 Next: a comparable hardware-GPU run with resource models and repeated matched camera/input paths; then decide whether geometry, material/draw-call batching or browser scheduling needs changing. Backend-owned editing and viewport-only voxel working sets are still separate outstanding architecture requirements. This result corrects the earlier tentative inference of page-main-thread delay, not a demonstrated performance improvement.
 
 中文：浏览器线程追踪显示软件渲染 GPU 进程的任务最长，不能把所有 RunTask 当作页面主线程。拾取约 1 ms 以内，不据此重写拾取算法；原版硬件 GPU 与真实资源模型复测仍待完成。公开仅聚合数据，原始追踪与场地数据不上传。
+
+## Verified hardware-renderer follow-up
+
+A separate fresh Edge headless context requested D3D11; SystemInfo confirmed ANGLE/NVIDIA Direct3D11 and enabled WebGL, rather than assuming hardware from a launch flag. The same region, camera and three-click/undo path returned 28.5, 13.6 and 23.6 ms to scene-frame submission, with about 0.1–1 ms picking and 4–11 ms meshing. Import automation wall time was about 834 ms. See [aggregate hardware evidence](validation/hardware-thread-trace.json).
+
+This demonstrates a hardware-rendered functional sample and shows test-renderer choice affects latency observations. It is not a code-speedup comparison, sustained FPS measurement or monitor-presentation measurement. Resources were still fallback models without a complete pack; long brush strokes and resource-heavy scenes remain unmeasured. Exact GPU driver/device identifiers and raw traces remain private.
+
+中文补充：实际渲染器已确认使用 NVIDIA D3D11。同一场地三次点击到场景帧提交约 14–29 ms；不能当作代码优化前后比较，完整资源模型和连续拖绘仍待测。
