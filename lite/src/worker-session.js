@@ -1,4 +1,4 @@
-const readMethods=new Set(['workspace.describe','scene.readRegion','scene.getBlocks','terrain.readColumns','materials.search','generation.links','objects.list','workplanes.list','workplanes.atCurve','measurements.list','design.inspect']);
+const readMethods=new Set(['workspace.describe','scene.readRegion','scene.getBlocks','terrain.readColumns','materials.search','views.list','generation.links','objects.list','workplanes.list','workplanes.atCurve','measurements.list','design.inspect']);
 const writes=new Set(['rename','preview','platform','reference','cancel','prepareConstruction','edit','brush','beginStroke','studio','origin','protect','unprotect','accept','commitConstruction','detachGeneration','resources','resourceLibrary']);
 export class WorkerSession{
  constructor(factory,{resources=()=>[],status=()=>{},beforeSwap=async()=>{}}={}){this.factory=factory;this.resources=resources;this.status=status;this.beforeSwap=beforeSwap;this.sequence=0;this.staging=null;this.active=this.slot();}

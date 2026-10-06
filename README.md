@@ -201,3 +201,5 @@ Embedded partial geometry/textures now survive portable re-export before visual 
 Generated result rows expose named source sketches; saved guides show dependant counts. Source editing explains linked vs source-only scope and preview update/manual-preservation counts, with one-step undo. Read-only `generation.links` exposes existing provenance. See [generation navigation](docs/generation-navigation.md).
 
 Recorded generated-output dependencies now propagate source and upstream-feature updates in dependency order, with cycle/missing-reference rejection, manual preservation and one undo. The edit panel includes indirect affected results; ordinary snaps remain snapshots. See [generation propagation](docs/generation-propagation.md).
+
+Saved views now capture the current camera including projection, zoom, up direction and orthographic extent. The fixed panel/F3 entry supports metadata save/update/delete/undo and portable restore, with legacy compatibility; restoration preserves pending sketches and does not edit voxels. See [saved views](docs/saved-views.md).

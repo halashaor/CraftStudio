@@ -55,3 +55,7 @@
 .generation-sources{flex:0 0 100%;width:100%;margin:5px 0!important;padding:4px 0;border-top:1px solid #465463}.generation-sources summary{font-size:11px;color:#acc4e0;cursor:pointer}.generation-sources>button{display:block;width:100%!important;margin-top:5px;text-align:left;white-space:normal!important}#sketch-related-summary{white-space:normal;color:#b7cce5}
 
 #cad-object-list .tree-object:has(.generation-sources){flex-wrap:wrap;min-width:0}#cad-object-list .generation-sources>button{flex:none;min-width:0;text-align:left;width:100%;white-space:normal}#workspace-tree{overflow-x:hidden}
+
+#saved-views summary{cursor:pointer;color:#bed1e6}#saved-view-list .row{margin:6px 0;align-items:start}#saved-view-list button:first-child{flex:1;text-align:left;white-space:normal}#saved-view-list button:last-child{flex:0 0 auto;white-space:nowrap}@media(max-width:1100px){#saved-views-open{display:none}}
+
+#saved-views{flex:0 0 auto;max-height:270px;overflow:auto}#saved-views:not([open]){padding:8px 12px}#saved-views[open]{padding:12px}

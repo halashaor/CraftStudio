@@ -97,7 +97,8 @@
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm",
-        "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm"
+        "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm",
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedview.htm"
       ]
     },
     {
@@ -1534,6 +1535,44 @@
     "remaining": [
       "persistent snap constraints and dependency editor",
       "broader generated profile inputs and topology repair",
+      "backend authority/working sets and live game validation"
+    ]
+  },
+  "savedViewsMilestone": {
+    "date": "2026-10-06",
+    "status": "implemented; unit and isolated browser/portable/sketch-preservation verified",
+    "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedview.htm",
+    "implementation": [
+      "current-camera capture and full saved projection state",
+      "up-vector orbit cache refresh",
+      "fixed independent saved-view panel and F3 entry",
+      "legacy restore compatibility",
+      "world-coordinate metadata API and history",
+      "restoration without voxel/revision changes"
+    ],
+    "validation": {
+      "currentCameraCapturedAfterProjectionSwitch": true,
+      "projectionZoomUpExtentRestored": true,
+      "restorationDoesNotEditVoxelsOrRevision": true,
+      "portableReopenRetains": true,
+      "deleteUndo": true,
+      "savedViewsAccessibleDuringSketch": true,
+      "restorePreservesPendingSketch": true,
+      "pageErrors": [],
+      "visualInspection": true,
+      "unitChecks": [
+        "projection/zoom/up and orthographic height",
+        "world-space conversion",
+        "metadata undo and portable restore",
+        "legacy camera update",
+        "invalid camera state atomic"
+      ],
+      "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedview.htm",
+      "referenceStudy": "official body read; no hands-on Rhino claim"
+    },
+    "remaining": [
+      "complete display/clipping/isolation snapshots",
+      "thumbnails/transitions/keymaps",
       "backend authority/working sets and live game validation"
     ]
   }

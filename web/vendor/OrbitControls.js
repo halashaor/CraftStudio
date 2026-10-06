@@ -131,6 +131,7 @@ class OrbitControls extends Controls {
 		// so camera.up is the orbit axis
 		this._quat = new Quaternion().setFromUnitVectors( object.up, new Vector3( 0, 1, 0 ) );
 		this._quatInverse = this._quat.clone().invert();
+		this._lastUp = object.up.clone();
 
 		// current position in spherical coordinates
 		this._spherical = new Spherical();
@@ -290,6 +291,13 @@ class OrbitControls extends Controls {
 	}
 
 	update( deltaTime = null ) {
+
+		// CraftStudio switches workplane up vectors without replacing the controls.
+		if ( ! this._lastUp.equals( this.object.up ) ) {
+			this._quat.setFromUnitVectors( this.object.up, new Vector3( 0, 1, 0 ) );
+			this._quatInverse.copy( this._quat ).invert();
+			this._lastUp.copy( this.object.up );
+		}
 
 		const position = this.object.position;
 

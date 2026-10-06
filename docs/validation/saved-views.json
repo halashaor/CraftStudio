@@ -1,0 +1,20 @@
+{
+  "currentCameraCapturedAfterProjectionSwitch": true,
+  "projectionZoomUpExtentRestored": true,
+  "restorationDoesNotEditVoxelsOrRevision": true,
+  "portableReopenRetains": true,
+  "deleteUndo": true,
+  "savedViewsAccessibleDuringSketch": true,
+  "restorePreservesPendingSketch": true,
+  "pageErrors": [],
+  "visualInspection": true,
+  "unitChecks": [
+    "projection/zoom/up and orthographic height",
+    "world-space conversion",
+    "metadata undo and portable restore",
+    "legacy camera update",
+    "invalid camera state atomic"
+  ],
+  "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedview.htm",
+  "referenceStudy": "official body read; no hands-on Rhino claim"
+}
