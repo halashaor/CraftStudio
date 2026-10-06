@@ -33,3 +33,15 @@ Rhino's official [Angle](https://docs.mcneel.com/rhino/8/help/en-us/commands/ang
 Browser validation covered hover angle preview before the third point, 90-degree save, a four-point path with 12-unit total, backtracking, a vertical edit producing 13 units, Enter save, metadata undo, portable reopen, editing typed records and no voxel changes. The earlier half-height surface regression also passed. See [typed measurement evidence](validation/measurement-types.json).
 
 中文补充：测量面板可选三点夹角（第二点为顶点）和连续折线总长；支持实时预览、退回上一点、三维数值修改、Enter 保存、重读和撤销。角度是空间内角，路径按直线段累计，不是曲线解析长度、方块数量或强制约束。
+
+## Pick exact sketch locations
+
+Measurement uses the same `guideSnapTargets`/`nearestScreenSnap` utility as sketching. Endpoints, polyline half-length midpoints and supported shape centers/corners are selectable within a 12-pixel pointer radius, even when the guide is above a block surface. A cyan marker and source/kind text show the picked location. Marker size follows camera projection so it remains readable when zooming. Exact sketch positions take precedence over the half/full-grid setting and are not rounded again.
+
+The geometry snap checkbox is optional. Hold Ctrl to pause sketch snapping for a pick (grid snapping remains active); disabling the global auxiliary-guide layer also disables its measurement snaps. Hidden guide records are excluded. Workspace/guide changes refresh targets, and snapshots retain their stored coordinates after source geometry changes. No persistent dependency or constraint is created.
+
+Reference: official [Rhino object snaps](https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm) describes precise object locations, marker feedback and temporary suspension. CraftStudio keeps its existing Ctrl convention and visible auxiliary-guide workflow. This is sketch-target snapping, not arbitrary block-mesh edges, analytic intersections/tangents or full occlusion-aware CAD snapping; overlay guides can be picked as displayed.
+
+An isolated browser verified airborne endpoints, half-length midpoints, fractional coordinates with half-grid enabled, Ctrl bypass, hidden guide layer, workspace target refresh and unchanged saved coordinates after guide movement. Angle/polyline and legacy half-slab regressions passed. See [snap evidence](validation/measurement-snaps.json).
+
+中文：测量可吸附已有草图端点、中点和中心，青色标记提示来源；精确坐标不再半格取整。Ctrl 暂停草图吸附（网格仍生效），关闭辅助线也会暂停。保存的标注仍是位置快照，不会随源线移动。

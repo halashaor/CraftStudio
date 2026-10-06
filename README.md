@@ -219,3 +219,5 @@ Diagnostics now include `scene-pick`; the [browser thread trace](docs/browser-th
 Brush drawing supports automatic grazing-face fallback and explicit surface/view/axis planes; real vanilla/Create resources were used to verify continuous drag, undo and portable reopen in both storage modes. See [drawing planes](docs/brush-plane.md).
 
 Measure supports three-point spatial angles and accumulated polyline lengths with live preview, step-back, XYZ edits and portable metadata. See [measurement modes](docs/measurement.md).
+
+Measurement reuses sketch endpoint/midpoint/center snaps with visible feedback, exact fractional coordinates and Ctrl/layer suspension. See [measurement snapping](docs/measurement.md).
