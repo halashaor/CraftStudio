@@ -8,7 +8,7 @@ export class RemoteEngineWorker{
 
  postMessage(message){
   if(this.terminated)return;const owned=structuredClone(message);
-  const next=this.tail.then(async()=>{const session=await this.ready;if(this.terminated)return;const ack=this.ack.splice(0),response=await this.request({operation:'call',lease:session.lease,id:owned.id,action:owned.action,data:owned.data,ack});if(this.terminated)return;this.ack.push(owned.id);this.onmessage?.({data:{id:owned.id,value:response.value}});});
+  const next=this.tail.then(async()=>{const session=await this.ready;if(this.terminated)return;const ack=this.ack.splice(0),response=await this.request({operation:'call',lease:session.lease,id:owned.id,action:owned.action,data:owned.data,ack,...(owned.trace?{trace:true}:{})});if(this.terminated)return;this.ack.push(owned.id);this.onmessage?.({data:{id:owned.id,value:response.value,...(response.performance?{performance:response.performance}:{})}});});
   this.tail=next.catch(error=>{if(!this.terminated){if(error.replyReceived)this.ack.push(owned.id);this.onmessage?.({data:{id:owned.id,error:error.message}});}});
  }
  terminate(){if(this.terminated)return;this.terminated=true;this.ready.then(session=>this.request({operation:'close',lease:session.lease},{keepalive:true})).catch(()=>{});}

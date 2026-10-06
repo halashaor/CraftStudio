@@ -31,7 +31,7 @@ LIBRARY = Library(DATA_DIR / 'craftstudio.sqlite3')
 DESIGNER_LIBRARY = DesignerLibrary(DATA_DIR / 'craftstudio.sqlite3')
 MIGRATION = LIBRARY.migrate_files(PROJECTS_DIR)
 TOKEN = secrets.token_urlsafe(32)
-ENGINE = EngineGateway(ROOT, DATA_DIR / 'craftstudio.sqlite3', TOKEN)
+ENGINE = EngineGateway(ROOT, DATA_DIR / 'craftstudio-engine.sqlite3', TOKEN, legacy_database=DATA_DIR / 'craftstudio.sqlite3')
 LOCK = threading.RLock()
 CURRENT = room()
 HISTORY, REDO = [], []

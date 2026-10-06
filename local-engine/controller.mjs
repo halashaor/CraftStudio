@@ -7,12 +7,12 @@ export class EngineController{
  constructor({store,key,factory=()=>new EngineWorkspace(),beforeCommit=async()=>{}}){this.store=store;this.key=key;this.factory=factory;this.beforeCommit=beforeCommit;}
  static async open(options){const c=new EngineController(options);c.#engine=c.factory();try{const packet=c.store.load(c.key);if(packet){await c.#engine.call('engineRestore',packet);c.#sequence=packet.sequence;}else{await c.#engine.call('summary');await c.#save(c.#engine);}return c;}catch(error){await c.#engine.close();throw error;}}
  get sequence(){return this.#sequence;}
- call(action,data={}){
+ call(action,data={}, {onTiming}={}){
   if(this.#closed)return Promise.reject(Error('Durable workspace is closed'));
   if(['engineCapture','engineRestore'].includes(action))return Promise.reject(Error('Checkpoint commands are controller-internal'));
-  let owned;try{owned=structuredClone(data);}catch(error){return Promise.reject(error);}const next=this.#tail.then(()=>this.#run(action,owned));this.#tail=next.catch(()=>{});return next;
+  let owned;try{owned=structuredClone(data);}catch(error){return Promise.reject(error);}const observe=onTiming?stage=>{try{onTiming(stage);}catch{}}:undefined;const next=this.#tail.then(()=>this.#run(action,owned,observe));this.#tail=next.catch(()=>{});return next;
  }
- async #save(engine){const packet=await engine.call('engineCapture',{known:this.store.known()});await this.beforeCommit(packet);const result=this.store.commit(this.key,packet,this.#sequence);this.#sequence=result.sequence;return result;}
+ async #save(engine,onTiming){let started=performance.now();const packet=await engine.call('engineCapture',{known:this.store.known()});onTiming?.({stage:'capture',ms:performance.now()-started,blobs:packet.blobs.length,bytes:packet.blobs.reduce((n,b)=>n+b.bytes.length,0)});await this.beforeCommit(packet);started=performance.now();const result=this.store.commit(this.key,packet,this.#sequence,{onTiming: onTiming?stage=>onTiming({...stage,stage:'sqlite-'+stage.stage}):undefined});this.#sequence=result.sequence;onTiming?.({stage:'sqlite',ms:performance.now()-started});return result;}
  async #recover(){
   const old=this.#engine;let next;try{next=this.factory();const packet=this.store.load(this.key);if(!packet)throw Error('Committed workspace is missing');await next.call('engineRestore',packet);this.#engine=next;this.#sequence=packet.sequence;this.#transactions.clear();this.#construction=false;this.#stroke=false;await old.close();}catch(error){this.#closed=true;await Promise.all([old.close(),next?.close()]);throw Error('Cannot recover committed workspace',{cause:error});}
  }
@@ -33,17 +33,17 @@ export class EngineController{
   if(['cancelConstruction','commitConstruction'].includes(action)||action==='api'&&['construction.cancel','construction.commit'].includes(data.method)&&result.ok)this.#construction=false;
   if(action==='api'&&result.ok){if(data.method==='transaction.begin')this.#transactions.add(result.value.transactionId);if(['transaction.abort','transaction.commit'].includes(data.method))this.#transactions.delete(data.params.transactionId);}
  }
- async #run(action,data){
+ async #run(action,data,onTiming){
   if(this.#engine.closed)await this.#recover();
   if(resourceChanges.has(action))return this.#replace(action,data,true);
   if(['load','resume'].includes(action)||action==='import'&&!/\.html?$/i.test(data.name||''))return this.#replace(action,data);
-  const before=await this.#engine.call('api',{method:'workspace.describe'});let result;
+  const before=await this.#engine.call('api',{method:'workspace.describe'});let result;const started=performance.now();
   try{result=await this.#engine.call(action,data);}catch(error){if(action==='api'||directChanges.has(action)||this.#engine.closed)await this.#recover();throw error;}
-  if(action==='api'&&!result.ok)return result;
+  onTiming?.({stage:'execute',ms:performance.now()-started});if(action==='api'&&!result.ok)return result;
   this.#track(action,data,result);
   const after=await this.#engine.call('api',{method:'workspace.describe'});
   const dirty=before.revision!==after.revision||before.workspaceId!==after.workspaceId||directChanges.has(action)||action==='api'&&canonical.has(data.method)||['package','compressed','draft'].includes(action)&&!!data.title;
-  if(dirty)try{await this.#save(this.#engine);}catch(error){await this.#recover();throw Error('Edit was not acknowledged; restored the committed workspace',{cause:error});}
+  if(dirty)try{await this.#save(this.#engine,onTiming);}catch(error){await this.#recover();throw Error('Edit was not acknowledged; restored the committed workspace',{cause:error});}
   return result;
  }
  async close(){this.#closed=true;await this.#tail;await this.#engine.close();}

@@ -97,3 +97,11 @@ This adapter has been exercised in an isolated browser designer, but normal boot
 The UI persists its active engine key before adopting a staged scene, and its project association after save/open. A confirmed engine scene takes precedence over an older browser/project draft on reload. A normal page unload releases the remote lease; a cached history page keeps its connection. The standalone file Lite never activates this gateway.
 
 The original input fingerprint and serialized baseline identity are distinct. Baseline keys hash the actual stored bytes, preventing a reordered chunk export from colliding with a previous baseline.
+
+## Editing journal isolation and timing
+
+The optional Python gateway uses `data/craftstudio-engine.sqlite3` for committed scene/history records. The existing `craftstudio.sqlite3` remains the project/resource library. This prevents derived baseline/library writes from taking the same SQLite writer lock as an interactive edit. Old engine tables are copied from the legacy database on startup without deleting source data or replacing a destination head that already exists.
+
+Opt-in traced requests return execute/capture/SQLite stage timings through the Worker-like adapter. SQLite timing distinguishes writer-lock acquisition, data writes and COMMIT. Observers cannot change editing success. The normal path does not record these metrics.
+
+This separation does not weaken commit-before-acknowledgement or replace SQLite durability settings. Both databases, process logs and measurement reports remain local. The backend still requires explicit activation while overall remote-path latency and lifecycle work continue.

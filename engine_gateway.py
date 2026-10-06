@@ -1,10 +1,11 @@
 """Optional loopback engine process; forwards binary RPC after Python authentication."""
-import atexit,json,os,queue,re,shutil,subprocess,threading,urllib.request,urllib.error
+import atexit,json,os,queue,re,shutil,sqlite3,subprocess,threading,urllib.request,urllib.error
 from pathlib import Path
+from contextlib import closing
 
 class EngineGateway:
-    def __init__(self, root, database, token):
-        self.root=Path(root);self.database=Path(database);self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False
+    def __init__(self, root, database, token, legacy_database=None):
+        self.root=Path(root);self.database=Path(database);self.legacy_database=Path(legacy_database) if legacy_database else None;self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False
         candidates=[os.environ.get('CRAFTSTUDIO_NODE'),shutil.which('node')]
         profile=os.environ.get('USERPROFILE')
         if profile:candidates.append(str(Path(profile)/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe'))
@@ -18,10 +19,25 @@ class EngineGateway:
                     if match and tuple(map(int,match.groups()))>=(22,13,0):self.node=candidate;break
                 except (OSError,subprocess.SubprocessError):pass
         atexit.register(self.close)
+    def migrate(self):
+        source=self.legacy_database
+        if not source or source.resolve()==self.database.resolve() or not source.is_file():return
+        self.database.parent.mkdir(parents=True,exist_ok=True)
+        with closing(sqlite3.connect('file:'+source.as_posix()+'?mode=ro',uri=True,timeout=15)) as old,closing(sqlite3.connect(self.database,timeout=15)) as new:
+            old.execute('BEGIN')
+            names={row[0] for row in old.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {'designer_engine_blobs','designer_engine_heads'}<=names:return
+            new.execute('CREATE TABLE IF NOT EXISTS designer_engine_blobs(id TEXT PRIMARY KEY,payload BLOB NOT NULL)')
+            new.execute('CREATE TABLE IF NOT EXISTS designer_engine_heads(key TEXT PRIMARY KEY,sequence INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL)')
+            new.executemany('INSERT OR IGNORE INTO designer_engine_blobs VALUES (?,?)',old.execute('SELECT id,payload FROM designer_engine_blobs'))
+            new.executemany('INSERT OR IGNORE INTO designer_engine_heads VALUES (?,?,?,?)',old.execute('SELECT key,sequence,digest,payload FROM designer_engine_heads'))
+            new.commit()
+
     def ensure(self):
         with self.lock:
             if self.closed or not self.node:return False
             if self.process and self.process.poll() is None:return True
+            self.migrate()
             env=os.environ.copy();env['CRAFTSTUDIO_ENGINE_TOKEN']=self.token
             logs=self.database.parent/'engine-process.log';logs.parent.mkdir(parents=True,exist_ok=True)
             with logs.open('ab') as error_log:

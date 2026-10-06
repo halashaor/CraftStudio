@@ -24,7 +24,7 @@ export async function createEngineService({database,token,port=0,allowedOrigins=
   for(const id of body.ack||[]){if(Number.isSafeInteger(id)&&id>0){lease.requests.delete(id);lease.retired=Math.max(lease.retired,id);}}
   const fingerprint=createHash('sha256').update(raw).digest('hex');let request=lease.requests.get(body.id);
   if(request&&request.fingerprint!==fingerprint)throw Error('RPC id reused with different envelope');
-  if(!request){if(body.id<=lease.retired)throw Error('RPC was already acknowledged');const promise=lease.owner.controller.then(c=>c.call(body.action,body.data)).then(value=>({value}),error=>({error:error.message}));request={fingerprint,promise};lease.requests.set(body.id,request);}
+  if(!request){if(body.id<=lease.retired)throw Error('RPC was already acknowledged');const stages=[],promise=lease.owner.controller.then(c=>c.call(body.action,body.data,{onTiming:body.trace?stage=>stages.push(stage):undefined})).then(value=>({value,...(body.trace?{performance:{stages}}:{})}),error=>({error:error.message}));request={fingerprint,promise};lease.requests.set(body.id,request);}
   reply(res,await request.promise);
  }catch(error){if(!res.headersSent)reply(res,{error:error.message},400);else res.destroy();}});
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
