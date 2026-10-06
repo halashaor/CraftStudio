@@ -88,7 +88,7 @@ POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `
 
 `RemoteEngineWorker({url, token, key?, fetcher?})` from `lite/src/remote-worker.js` exposes the Worker-like `postMessage`, `onmessage` and `terminate` boundary used by WorkerSession. Requests are sent in order; response loss retries the same envelope. Replies preserve mesh/NBT types. Termination suppresses later callbacks and releases the lease with replacement cancellation. The last lease stops an unconfirmed candidate worker; accepted canonical edits still finish their durable commit. With other clients on the same key, releasing one lease does not cancel their shared controller.
 
-This adapter has been exercised in an isolated browser designer, but normal bootstrap selects the remote adapter when the optional Python gateway advertises local-engine/1. The Python gateway launches the service with a private process token and proxies binary messages through its existing authentication. Idle cleanup and large-file streaming remain integration work. Keep service configuration, tokens, datasets and reports local.
+This adapter has been exercised in an isolated browser designer, but normal bootstrap selects the remote adapter when the optional Python gateway advertises local-engine/1. The Python gateway launches the service with a private process token and proxies binary messages through its existing authentication. Idle lease cleanup is available; large-file streaming remains integration work. Keep service configuration, tokens, datasets and reports local.
 
 ## Python gateway configuration
 
@@ -107,3 +107,11 @@ Opt-in traced requests return execute/capture/SQLite stage timings through the W
 This separation does not weaken commit-before-acknowledgement or replace SQLite durability settings. Both databases, process logs and measurement reports remain local. The backend still requires explicit activation while overall remote-path latency and lifecycle work continue.
 
 Cancellation is checked before candidate checkpoint/commit and can interrupt the pre-commit preparation wait. A candidate is marked committed immediately after successful SQLite save; canceling afterwards does not undo that confirmed scene. Default service shutdown remains a drain. Cancellation/close do not delete persisted engine heads or project data.
+
+## Lease liveness and idle reclamation
+
+The service defaults to a ten-minute idle lease timeout and a one-minute sweep. The browser adapter sends a heartbeat at most every thirty seconds and stops it on termination. `heartbeat` renews a lease without touching scene history. Each accepted in-flight RPC protects its lease from sweeping and renews activity when it finishes.
+
+Abandoned idle leases release their owner reference; only the last lease closes the shared controller. Saved SQLite heads and project records are not deleted. Reopening the same key restores the committed scene. A suspended client whose lease expired receives a message to refresh and recover; old requests are not silently replayed under a new lease.
+
+For embedding/tests, `createEngineService` accepts `leaseTimeoutMs`, `sweepIntervalMs` and an injectable `clock`. A zero sweep interval disables automatic sweeping; `sweep()` runs it explicitly and `stats()` returns aggregate owner/lease/busy counts. These developer controls do not expose tokens or project data.
