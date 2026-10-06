@@ -217,3 +217,5 @@ Unchanged inspector/tree content is retained across voxel edits, with dependency
 Diagnostics now include `scene-pick`; the [browser thread trace](docs/browser-thread-trace.md) distinguishes page, Worker and software-GPU scheduling instead of attributing all delays to the editor.
 
 Brush drawing supports automatic grazing-face fallback and explicit surface/view/axis planes; real vanilla/Create resources were used to verify continuous drag, undo and portable reopen in both storage modes. See [drawing planes](docs/brush-plane.md).
+
+Measure supports three-point spatial angles and accumulated polyline lengths with live preview, step-back, XYZ edits and portable metadata. See [measurement modes](docs/measurement.md).
