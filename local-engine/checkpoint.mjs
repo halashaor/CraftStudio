@@ -20,8 +20,9 @@ export class EngineCheckpoint{
   const memo=(object,make)=>{let record=this.memo.get(object);if(!record){const bytes=make();record={id:digest(bytes),bytes};this.memo.set(object,record);}if(!known.has(record.id))blobs.set(record.id,record);return record.id;};
   const overlay=value=>{value.owned.clear();return[...value.chunks].map(([bucket,root])=>[bucket,memo(root,()=>encode([...root]))]);};
   const frame=value=>({overlay:overlay(value.overlay),size:[...value.size],design:structuredClone(value.design)});
-  const stamp=[api.workspaceId,resources.version,resources.partialVersion,site.palette.length].join(':');
-  if(stamp!==this.resourceStamp){this.resourceStamp=stamp;this.resourceRecord={bytes:encode(resources.bundle(site.palette))};this.resourceRecord.id=digest(this.resourceRecord.bytes);}
+  const archiveNames=new Set(libraryResources.map(file=>file.name)),covered=!resources.files.size||libraryResources.length>0&&resources.sources.every(source=>archiveNames.has(source.name));
+  const stamp=[api.workspaceId,resources.version,...(covered?[]:[resources.partialVersion,site.palette.length])].join(':');
+  if(stamp!==this.resourceStamp||this.resourceRecord?.owner!==resources){this.resourceStamp=stamp;this.resourceRecord={owner:resources,bytes:encode(covered?resources.saved:resources.bundle(site.palette))};this.resourceRecord.id=digest(this.resourceRecord.bytes);}
   const assets=blob(this.resourceRecord.bytes),archives=libraryResources.map(file=>({name:file.name,id:memo(file.bytes,()=>Buffer.from(new Uint8Array(file.bytes)))}));
   const receipts=[...api.receipts].filter(([,record])=>{const method=JSON.parse(record.fingerprint).method;return!method.startsWith('transaction.')||method==='transaction.commit';});
   const head={schema:'craftstudio-engine-checkpoint/1',base:memo(site.base,()=>encode(site.base)),baseKey,workspaceId:api.workspaceId,revision:api.revision,site:{...site.packHeader(),size:[...site.size]},overlay:overlay(site.overlay),undo:site.undo.map(frame),redo:site.redo.map(frame),assets,archives,receipts};

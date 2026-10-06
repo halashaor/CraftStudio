@@ -18,10 +18,11 @@ from formats import import_nbt, import_region, export_structure
 from design import room, materials, validate, apply_operations, rotate
 from storage import Library
 from designer_storage import DesignerLibrary
+from engine_gateway import EngineGateway
 from desktop_files import list_files, read_file, home_for
 
 ROOT = Path(__file__).resolve().parent
-BACKEND_BUILD = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py'))).hexdigest().upper()
+BACKEND_BUILD = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py','engine_gateway.py','local-engine/run-service.mjs','local-engine/service.mjs','local-engine/controller.mjs','local-engine/workspace.mjs','local-engine/worker.mjs','local-engine/checkpoint.mjs','local-engine/store.mjs','lite/src/engine-wire.js','lite/dist/worker.bundle.js'))).hexdigest().upper()
 STORAGE_ROOT = Path(os.environ.get('CRAFTSTUDIO_STORAGE_DIR', str(ROOT))).resolve()
 DATA_DIR, PROJECTS_DIR, EXPORTS_DIR = (STORAGE_ROOT / name for name in ('data', 'projects', 'exports'))
 for directory in (DATA_DIR, PROJECTS_DIR, EXPORTS_DIR):
@@ -30,6 +31,7 @@ LIBRARY = Library(DATA_DIR / 'craftstudio.sqlite3')
 DESIGNER_LIBRARY = DesignerLibrary(DATA_DIR / 'craftstudio.sqlite3')
 MIGRATION = LIBRARY.migrate_files(PROJECTS_DIR)
 TOKEN = secrets.token_urlsafe(32)
+ENGINE = EngineGateway(ROOT, DATA_DIR / 'craftstudio.sqlite3', TOKEN)
 LOCK = threading.RLock()
 CURRENT = room()
 HISTORY, REDO = [], []
@@ -176,7 +178,7 @@ class Handler(BaseHTTPRequestHandler):
             route, query = parsed.path, urllib.parse.parse_qs(parsed.query)
             arg = lambda name, default='': query.get(name, [default])[0]
             if route == '/api/desktop/info':
-                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','workspace-delta/1','checkpoint-export/1','checkpoint-draft/1'],'instances':instances(),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
+                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','workspace-delta/1','checkpoint-export/1','checkpoint-draft/1']+(['local-engine/1'] if ENGINE.ensure() else []),'instances':instances(),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
             elif route == '/api/desktop/files':
                 self.respond(list_files(arg('instance')))
             elif route == '/api/desktop/file':
@@ -232,6 +234,10 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', 0))
             if length > 64 * 1024 * 1024:
                 raise ValueError('请求过大，请分区操作')
+            if urllib.parse.urlparse(self.path).path == '/api/desktop/engine':
+                status,raw=ENGINE.forward(self.rfile.read(length))
+                self.respond(raw,status,content_type='application/x-craftstudio-engine')
+                return
             body = json.loads(self.rfile.read(length))
             route = urllib.parse.urlparse(self.path).path
             if route == '/api/desktop/library':
@@ -442,4 +448,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     print(f'CraftStudio 0.3.0 http://127.0.0.1:{server.server_port} | source={ROOT} | desktop={"/api/desktop/info" in Handler.do_GET.__code__.co_consts}', flush=True)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close();ENGINE.close()

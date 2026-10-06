@@ -42,7 +42,7 @@ export class EngineController{
   if(action==='api'&&!result.ok)return result;
   this.#track(action,data,result);
   const after=await this.#engine.call('api',{method:'workspace.describe'});
-  const dirty=before.revision!==after.revision||before.workspaceId!==after.workspaceId||directChanges.has(action)||action==='api'&&canonical.has(data.method);
+  const dirty=before.revision!==after.revision||before.workspaceId!==after.workspaceId||directChanges.has(action)||action==='api'&&canonical.has(data.method)||['package','compressed','draft'].includes(action)&&!!data.title;
   if(dirty)try{await this.#save(this.#engine);}catch(error){await this.#recover();throw Error('Edit was not acknowledged; restored the committed workspace',{cause:error});}
   return result;
  }

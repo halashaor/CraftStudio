@@ -144,3 +144,11 @@ See [third-party notices](lite/THIRD-PARTY.txt). Bundled third-party code retain
 API reference: [Design API](lite/DESIGN-API.md).
 
 For backend development, [local-engine](local-engine/README.md) provides a shared Node host, immutable SQLite checkpoints and a persist-before-acknowledgement controller. It is not enabled in the application UI or Python service.
+
+## Optional backend editing
+
+The local service can run the editing engine in Node behind the existing authenticated Python endpoint. This path is opt-in while resource-heavy performance is being improved. It requires existing Node 22.13+ and the dependencies installed in `lite`; no runtime is installed automatically.
+
+Set `CRAFTSTUDIO_ENGINE=1` before starting the local launcher/service. Set `CRAFTSTUDIO_NODE` to a Node executable if it is not discoverable. The service advertises `local-engine/1` only after startup succeeds. The page then uses the backend, remembers its last confirmed scene and retains undo/redo across reloads. Standalone Lite continues to use browser Workers and IndexedDB. `CRAFTSTUDIO_ENGINE=0` disables the new path.
+
+Large-file streaming and remote-path latency are not fully optimized. See [local engine API](local-engine/README.md) for developer usage.

@@ -1,6 +1,6 @@
 # Local engine prototype
 
-Developer API for running the shared `lite/src/worker.js` engine in isolated Node workers. This prototype is not enabled in the application UI or Python HTTP service.
+Developer API for running the shared `lite/src/worker.js` engine in isolated Node workers. The application can select this backend through the optional Python gateway when explicitly enabled.
 
 Requires Node 22.13+ and the dependencies installed in `lite` with `npm install`.
 
@@ -40,7 +40,7 @@ Resource, database and report arguments are optional. Inputs remain local; outpu
 
 ## Current limits
 
-A worker still holds the full scene in RAM. Direct EngineWorkspace calls require manual checkpoints. EngineController wraps calls with persist-before-acknowledgement; it is not enabled in the application service. HTTP transport, runtime packaging and UI handoff are not enabled. This module does not change Lite or the current local designer's storage behavior.
+A worker still holds the full scene in RAM. Direct EngineWorkspace calls require manual checkpoints. EngineController wraps calls with persist-before-acknowledgement; it is used by the optional application gateway. HTTP transport, runtime packaging and UI handoff are not enabled. This module does not change Lite or the current local designer's storage behavior.
 
 中文：本模块为开发者使用的本地引擎原型，提供独立工作线程、检查点与手动 SQLite 保存/恢复。尚未接入当前界面或 Python 服务；文件、资源和验证结果仅在本机使用。
 
@@ -72,7 +72,7 @@ Explicit file verification is available:
 node local-engine/verify-controller.mjs --nbt=/path/region.nbt --database=/path/test.sqlite --vanilla=/path/client.jar --create=/path/create.jar --report=/path/report.json
 ```
 
-Inputs and reports remain local. The separate HTTP service and browser adapter are available below, but runtime discovery, application UI handoff and browser working-set eviction are not enabled yet. The Python service still uses the existing designer path.
+Inputs and reports remain local. The separate HTTP service and browser adapter are available below, but runtime discovery and opt-in application selection are available; large-file streaming and browser working-set eviction remain incomplete. The default Python configuration retains the existing browser designer path.
 
 中文补充：EngineController 串行处理请求，编辑检查点提交后才确认；失败恢复最后落盘状态。新文件和资源先在候选宿主处理，保存成功才替换；关闭会处理完已接受请求。它尚未接入界面或 HTTP 服务，不提供多客户端租约和自动刷新。
 
@@ -88,4 +88,12 @@ POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `
 
 `RemoteEngineWorker({url, token, key?, fetcher?})` from `lite/src/remote-worker.js` exposes the Worker-like `postMessage`, `onmessage` and `terminate` boundary used by WorkerSession. Requests are sent in order; response loss retries the same envelope. Replies preserve mesh/NBT types. Termination suppresses later callbacks and releases the lease; already accepted server operations drain rather than being forcibly canceled.
 
-This adapter has been exercised in an isolated browser designer, but normal application bootstrap still constructs browser Workers. This service is not yet launched/proxied by Python, advertised in desktop capabilities or used automatically by the local edition. Runtime/process discovery, idle cleanup, large-file streaming and active import cancellation remain integration work. Keep service configuration, tokens, datasets and reports local.
+This adapter has been exercised in an isolated browser designer, but normal bootstrap selects the remote adapter when the optional Python gateway advertises local-engine/1. The Python gateway launches the service with a private process token and proxies binary messages through its existing authentication. Runtime/process discovery, idle cleanup, large-file streaming and active import cancellation remain integration work. Keep service configuration, tokens, datasets and reports local.
+
+## Python gateway configuration
+
+`engine_gateway.py` discovers an existing compatible Node executable, starts `run-service.mjs` in a hidden process on Windows and forwards authenticated binary calls. Enable with `CRAFTSTUDIO_ENGINE=1`; choose a runtime with `CRAFTSTUDIO_NODE`. Both launcher and backend fingerprints include the engine implementation and shared worker build so an update requires the matching service restart.
+
+The UI persists its active engine key before adopting a staged scene, and its project association after save/open. A confirmed engine scene takes precedence over an older browser/project draft on reload. A normal page unload releases the remote lease; a cached history page keeps its connection. The standalone file Lite never activates this gateway.
+
+The original input fingerprint and serialized baseline identity are distinct. Baseline keys hash the actual stored bytes, preventing a reordered chunk export from colliding with a previous baseline.

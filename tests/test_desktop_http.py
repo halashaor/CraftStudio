@@ -25,6 +25,19 @@ class DesktopHttpTests(unittest.TestCase):
         snap={'size':[48,4,4],'origin':[0,64,0],'palette':project['palette'],'design':{},'overlay':[{'pos':[33,1,1],'state':None}]}
         call('workspaceCheckpoint',[{'workspaceId':'http-workspace','baseKey':'http-chunk-fixture','revision':1,'snapshot':snap},None]);current=call('workspaceChunks',['http-workspace',['2,0,0'],1]);self.assertEqual(current['items'][0]['blocks'],0)
 
+    def test_engine_proxy_authenticates_before_forwarding_binary(self):
+        from unittest.mock import patch
+        payload=b'\x1f\x8bsynthetic-binary'
+        with patch.object(server.ENGINE,'forward',return_value=(200,payload)) as forward:
+            request=urllib.request.Request(self.base+'/api/desktop/engine',data=payload,headers={'Content-Type':'application/x-craftstudio-engine'})
+            with self.assertRaises(urllib.error.HTTPError):urllib.request.urlopen(request)
+            forward.assert_not_called()
+            request.add_header('X-CraftStudio-Token',server.TOKEN)
+            response=urllib.request.urlopen(request)
+            self.assertEqual(response.read(),payload)
+            self.assertEqual(response.headers['Content-Type'],'application/x-craftstudio-engine')
+            forward.assert_called_once_with(payload)
+
     def test_unknown_library_method_is_rejected(self):
         body=json.dumps({'method':'delete_everything','args':[]}).encode();req=urllib.request.Request(self.base+'/api/desktop/library',data=body,headers={'Content-Type':'application/json','X-CraftStudio-Token':server.TOKEN})
         with self.assertRaises(urllib.error.HTTPError):urllib.request.urlopen(req)

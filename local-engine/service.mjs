@@ -15,8 +15,8 @@ export async function createEngineService({database,token,port=0,allowedOrigins=
   if(body.operation==='open'){
    const key=body.key||'workspace:'+randomUUID();if(typeof key!=='string'||!key||key.length>256)throw Error('Invalid workspace key');
    if(owners.get(key)?.closing)await owners.get(key).closing;
-   if(!owners.has(key)){const owner={clients:0,controller:EngineController.open({store,key})};owners.set(key,owner);owner.controller.catch(()=>{if(owners.get(key)===owner)owners.delete(key);});}
-   const owner=owners.get(key);await owner.controller;const lease=randomUUID();owner.clients++;leases.set(lease,{key,owner,requests:new Map(),retired:0});reply(res,{lease,key,protocol:'craftstudio-engine-wire/1'});return;
+   if(!owners.has(key)){const owner={clients:0,restored:!!store.db.prepare('SELECT key FROM designer_engine_heads WHERE key=?').get(key),controller:EngineController.open({store,key})};owners.set(key,owner);owner.controller.catch(()=>{if(owners.get(key)===owner)owners.delete(key);});}
+   const restored=!!body.key&&!!store.db.prepare('SELECT key FROM designer_engine_heads WHERE key=?').get(key);const owner=owners.get(key);await owner.controller;const lease=randomUUID();owner.clients++;leases.set(lease,{key,owner,requests:new Map(),retired:0});reply(res,{lease,key,restored,protocol:'craftstudio-engine-wire/1'});return;
   }
   const lease=leases.get(body.lease);if(!lease)throw Error('Engine lease is missing');
   if(body.operation==='close'){leases.delete(body.lease);lease.owner.clients--;if(!lease.owner.clients){const owner=lease.owner;owner.closing=owner.controller.then(c=>c.close()).finally(()=>{if(owners.get(lease.key)===owner)owners.delete(lease.key);});await owner.closing;}reply(res,{closed:true});return;}
