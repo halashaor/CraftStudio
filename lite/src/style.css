@@ -45,3 +45,7 @@
 #measurement-report{font:12px/1.8 system-ui;color:#d5e6f9;background:#263548;padding:10px;border-radius:4px;white-space:pre-wrap}#measurement-points .cad-vector{margin:8px 0;grid-template-columns:36px repeat(3,minmax(0,1fr))}#measurement-points input{min-width:0}#measurement-list .row{margin:6px 0;align-items:start}#measurement-list .row button:first-child{flex:1;text-align:left;white-space:normal}
 
 #measurement-list .row button:last-child{flex:0 0 auto;width:auto;white-space:nowrap}
+
+#sketch-snap-feedback{color:#76e1dc;font-size:12px;margin:4px 0!important}#sketch-snap-feedback:empty{display:none}
+
+#sketch-snap-feedback{flex:0 0 100%}

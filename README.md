@@ -187,3 +187,5 @@ The upgraded local service synchronizes only changed checkpoint chunks after the
 Local autosave now captures immutable checkpoint chunk references (`checkpoint-draft/1`) and reuses resource attachments, with portable resume/backup materialization and legacy/Lite compatibility. Import waits for pending saves and preserves the current design. Empty-library active draft restore is supported without replacing an existing draft. See [checkpoint autosave](docs/checkpoint-autosave.md).
 
 Measure actual scene surfaces with the left-side 测量 tool or F3: fractional spacing, rise and slope appear in the fixed inspector and 3D ruler. Saved metadata annotations support edit/delete/undo, world-coordinate API and portable persistence without placing blocks. See [measurement](docs/measurement.md).
+
+Sketch picking now identifies saved-guide endpoints, midpoints and centers near the cursor, with a cyan marker and fixed source badge. Workplane filtering, optional Ctrl bypass and exact numeric/reference coordinate preservation support connected design without mandatory constraints. See [object snaps](docs/object-snaps.md).

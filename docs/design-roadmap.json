@@ -90,13 +90,14 @@
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "研究拓扑检查、复杂空腔/薄壁及设计失败的可定位反馈",
+      "next": "继续研究多源交点、切线、遮挡与参照跟随；Rhino 上机仍待完成",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
-        "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm"
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm",
+        "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm"
       ]
     },
     {
@@ -1175,6 +1176,47 @@
     "remaining": [
       "multi-segment and angular dimensions",
       "persistent geometric snapping references",
+      "backend streaming authority and live Minecraft validation"
+    ]
+  },
+  "objectSnapMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented; unit/isolated browser and screenshot verified",
+    "reference": "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm",
+    "implementation": [
+      "pixel-radius saved-guide picking with source/kind feedback",
+      "correct path midpoints and explicit circle centers",
+      "rectangle corners/edge midpoints/center",
+      "plane-compatible targets and optional Ctrl bypass",
+      "precise cursor/numeric input retained through saved recipe"
+    ],
+    "validation": {
+      "endpointAndMidpointFeedback": true,
+      "circleCenterFeedback": true,
+      "fractionalReferenceCoordinatesPreserved": true,
+      "typedCoordinatesNotRounded": true,
+      "otherPlaneExcluded": true,
+      "controlTemporarilyDisables": true,
+      "toggleDisables": true,
+      "savedGuidePreservesInputs": true,
+      "noVoxelChanges": true,
+      "pageErrors": [],
+      "visualInspection": true,
+      "fixedBadgeVisible": true,
+      "unitChecks": [
+        "path-length midpoint",
+        "rectangle corners/edge midpoints/center",
+        "explicit circular center",
+        "plane/depth/pixel radius filtering",
+        "hidden/excluded guide filtering",
+        "exact UI input versus legacy grid rounding"
+      ],
+      "reference": "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm",
+      "referenceStudy": "official body read; no hands-on Rhino claim"
+    },
+    "remaining": [
+      "surface/mesh edge, intersection and tangent modes",
+      "persistent source-following constraints and per-kind modes",
       "backend streaming authority and live Minecraft validation"
     ]
   }

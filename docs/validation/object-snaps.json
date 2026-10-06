@@ -1,0 +1,24 @@
+{
+  "endpointAndMidpointFeedback": true,
+  "circleCenterFeedback": true,
+  "fractionalReferenceCoordinatesPreserved": true,
+  "typedCoordinatesNotRounded": true,
+  "otherPlaneExcluded": true,
+  "controlTemporarilyDisables": true,
+  "toggleDisables": true,
+  "savedGuidePreservesInputs": true,
+  "noVoxelChanges": true,
+  "pageErrors": [],
+  "visualInspection": true,
+  "fixedBadgeVisible": true,
+  "unitChecks": [
+    "path-length midpoint",
+    "rectangle corners/edge midpoints/center",
+    "explicit circular center",
+    "plane/depth/pixel radius filtering",
+    "hidden/excluded guide filtering",
+    "exact UI input versus legacy grid rounding"
+  ],
+  "reference": "https://docs.mcneel.com/rhino/8/help/en-us/user_interface/object_snaps.htm",
+  "referenceStudy": "official body read; no hands-on Rhino claim"
+}
