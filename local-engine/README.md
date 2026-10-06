@@ -115,3 +115,13 @@ The service defaults to a ten-minute idle lease timeout and a one-minute sweep. 
 Abandoned idle leases release their owner reference; only the last lease closes the shared controller. Saved SQLite heads and project records are not deleted. Reopening the same key restores the committed scene. A suspended client whose lease expired receives a message to refresh and recover; old requests are not silently replayed under a new lease.
 
 For embedding/tests, `createEngineService` accepts `leaseTimeoutMs`, `sweepIntervalMs` and an injectable `clock`. A zero sweep interval disables automatic sweeping; `sweep()` runs it explicitly and `stats()` returns aggregate owner/lease/busy counts. These developer controls do not expose tokens or project data.
+
+## Chunked RPC uploads
+
+The remote adapter splits call envelopes larger than 8 MiB into 4 MiB upload slices by default. This keeps each authenticated Python proxy request below its single-request limit. The original call ID and encoded envelope remain unchanged when the upload is executed, so slice retries and completion-response retries cannot execute a second import.
+
+Upload operations are lease-bound: `uploadStart` declares ID/size/SHA-256, `uploadChunk` sends ordered bytes at an offset, `uploadedCall` validates and invokes the completed envelope, and `uploadAbort` discards temporary data. Identical slice retries are accepted; conflicting bytes, missing slices, checksum mismatches and cross-lease use are rejected. Temporary filenames are generated server-side. Consumed files are removed; abort, lease release and service close clean pending records.
+
+`RemoteEngineWorker` accepts `uploadThreshold` and `uploadChunkBytes` for embedding/tests and emits upload progress through the existing Worker message channel. Lite's ordinary browser Worker path is unaffected.
+
+This is bounded-request transport, not end-to-end low-memory file parsing. The browser currently materializes the original call envelope, and the server assembles it before handing it to the shared parser/controller. Full streaming input, parser working sets and cleanup after abrupt process termination remain incomplete. Do not treat a large transport test as unlimited world-size support.
