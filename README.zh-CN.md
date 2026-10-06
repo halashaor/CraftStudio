@@ -209,3 +209,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 画笔预设支持查找、重命名、删除撤销和 JSON 导入导出；同名另存副本，无效文件不会部分导入。见[画笔预设](docs/brush-presets.md)。
 
 草图树提供拉伸和沿路径生成，自动选中来源；多段闭合线框也可直接拉伸，无法生成时显示原因。见[草图上下文操作](docs/guide-actions.md)。
+
+按需开启 `CraftStudio.diagnostics` 可记录有限的点击/Worker/场景/帧提交耗时，不记录场景内容。见[真实区域延迟样本与限制](docs/performance-trace.md)。

@@ -209,3 +209,5 @@ Saved views optionally include the cut layer, comparison mode and vegetation/ter
 Brush presets support search, rename, delete/undo and portable JSON import/export with conflict copies and atomic validation. See [brush presets](docs/brush-presets.md).
 
 Saved sketch rows expose context actions for extrusion and path generation, automatically selecting the source, including joined closed line loops. See [source sketch actions](docs/guide-actions.md).
+
+Opt-in `CraftStudio.diagnostics` records bounded input/Worker/scene/frame submission timings without scene content. See [latency measurements and limits](docs/performance-trace.md).

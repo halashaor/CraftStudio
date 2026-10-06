@@ -1,0 +1,210 @@
+{
+  "sourceBlocks": 520227,
+  "importMs": 1435.5891,
+  "importStages": [
+    {
+      "stage": "worker-call",
+      "action": "import",
+      "durationMs": 702.3000000119209
+    },
+    {
+      "stage": "worker-call",
+      "action": "assetCatalogue",
+      "durationMs": 5.600000023841858
+    },
+    {
+      "stage": "worker-call",
+      "action": "meshChunks",
+      "durationMs": 77
+    },
+    {
+      "stage": "worker-call",
+      "action": "createScene",
+      "durationMs": 80.60000002384186
+    },
+    {
+      "stage": "scene-ready",
+      "durationMs": 162.60000002384186,
+      "meshMs": 72.69999998807907
+    }
+  ],
+  "samples": [
+    {
+      "inputToSceneFrameSubmitMs": 27.80000001192093,
+      "scenePrepareMs": 10,
+      "meshMs": 5.100000023841858,
+      "updatedChunks": 2,
+      "residentChunks": 56,
+      "frameSubmitCpuMs": 1.199999988079071,
+      "workerExecution": [
+        {
+          "action": "beginStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0
+        },
+        {
+          "action": "brush",
+          "queueWaitMs": 0,
+          "executeMs": 0.8999999761581421
+        },
+        {
+          "action": "meshChunks",
+          "queueWaitMs": 0,
+          "executeMs": 5.100000023841858
+        },
+        {
+          "action": "createScene",
+          "queueWaitMs": 0,
+          "executeMs": 1.800000011920929
+        },
+        {
+          "action": "endStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0.10000002384185791
+        }
+      ],
+      "workers": [
+        {
+          "action": "beginStroke",
+          "ms": 7.399999976158142
+        },
+        {
+          "action": "brush",
+          "ms": 1.7000000476837158
+        },
+        {
+          "action": "meshChunks",
+          "ms": 6.900000035762787
+        },
+        {
+          "action": "createScene",
+          "ms": 2.199999988079071
+        },
+        {
+          "action": "endStroke",
+          "ms": 0.19999998807907104
+        }
+      ]
+    },
+    {
+      "inputToSceneFrameSubmitMs": 53.5,
+      "scenePrepareMs": 17.19999998807907,
+      "meshMs": 8.800000011920929,
+      "updatedChunks": 2,
+      "residentChunks": 56,
+      "frameSubmitCpuMs": 1.2999999523162842,
+      "workerExecution": [
+        {
+          "action": "beginStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0
+        },
+        {
+          "action": "brush",
+          "queueWaitMs": 0,
+          "executeMs": 0.19999998807907104
+        },
+        {
+          "action": "meshChunks",
+          "queueWaitMs": 0,
+          "executeMs": 8.800000011920929
+        },
+        {
+          "action": "createScene",
+          "queueWaitMs": 0,
+          "executeMs": 3.399999976158142
+        },
+        {
+          "action": "endStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0
+        }
+      ],
+      "workers": [
+        {
+          "action": "beginStroke",
+          "ms": 23.30000001192093
+        },
+        {
+          "action": "brush",
+          "ms": 1.899999976158142
+        },
+        {
+          "action": "meshChunks",
+          "ms": 9.100000023841858
+        },
+        {
+          "action": "createScene",
+          "ms": 6.5
+        },
+        {
+          "action": "endStroke",
+          "ms": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "inputToSceneFrameSubmitMs": 54.89999997615814,
+      "scenePrepareMs": 12.399999976158142,
+      "meshMs": 6.800000011920929,
+      "updatedChunks": 2,
+      "residentChunks": 56,
+      "frameSubmitCpuMs": 1.5,
+      "workerExecution": [
+        {
+          "action": "beginStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0
+        },
+        {
+          "action": "brush",
+          "queueWaitMs": 0,
+          "executeMs": 0.5
+        },
+        {
+          "action": "meshChunks",
+          "queueWaitMs": 0,
+          "executeMs": 6.899999976158142
+        },
+        {
+          "action": "createScene",
+          "queueWaitMs": 0,
+          "executeMs": 3.5
+        },
+        {
+          "action": "endStroke",
+          "queueWaitMs": 0,
+          "executeMs": 0
+        }
+      ],
+      "workers": [
+        {
+          "action": "beginStroke",
+          "ms": 26.399999976158142
+        },
+        {
+          "action": "brush",
+          "ms": 2
+        },
+        {
+          "action": "meshChunks",
+          "ms": 7.199999988079071
+        },
+        {
+          "action": "createScene",
+          "ms": 4.100000023841858
+        },
+        {
+          "action": "endStroke",
+          "ms": 0.30000001192092896
+        }
+      ]
+    }
+  ],
+  "threePointerPlacementsVerified": true,
+  "undoRestoresAir": true,
+  "pageErrors": [],
+  "environment": "Windows Edge headless with SwiftShader software rendering; no imported resource pack; isolated SQLite storage",
+  "limits": "input-to-WebGL frame submission, not monitor presentation or hardware GPU completion; single run, three edits, not a general FPS claim",
+  "date": "2026-10-06"
+}
