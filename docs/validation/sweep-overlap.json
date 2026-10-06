@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-05",
+  "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm",
+  "status": "official curve-diagnostic pattern studied; own voxel sweep diagnostic implemented and browser verified; not exact Rhino curve/mesh intersection",
+  "implementation": [
+    "Reuse sweep-center membership to track arc positions occupying each voxel",
+    "Report overlap between rail portions separated by more than a profile-radius-based neighborhood; ordinary local joins excluded",
+    "Merged volume remains default; explicit stop mode blocks both UI confirmation and API commit",
+    "Red instanced voxel outlines and focus command locate up to 256 sample positions; total count retained",
+    "Shared scope filters diagnostics and can remove out-of-scope blockers",
+    "Source regeneration respects the stored stop policy"
+  ],
+  "validation": {
+    "unitPass": 130,
+    "unitSkipped": 5,
+    "unitCases": [
+      "crossing rail yields sampled overlap locations; merge/stop geometry consistent",
+      "ordinary bend has no distant overlap",
+      "clipped scope removes unrelated overlap and blockers"
+    ],
+    "browser": [
+      "64 overlap voxels with visible location markers",
+      "readonly preview leaves scene unchanged",
+      "API blocked commit rejected",
+      "UI confirmation disabled under stop policy",
+      "explicit merge commits and one undo restores scene",
+      "original sweep/source-update regression passed"
+    ],
+    "pageErrors": 0,
+    "renderer": "isolated Edge software rendering; no performance guarantee"
+  },
+  "remaining": [
+    "Center-sampled overlap diagnostics can miss thin/partial or nearby intersections",
+    "This does not analytically intersect original curves/surfaces or automatically repair topology",
+    "Complex cavities, corner stairs, backend streaming and actual Java gameplay roundtrip remain pending"
+  ]
+}

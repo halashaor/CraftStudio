@@ -77,17 +77,18 @@
     },
     {
       "name": "Rhino",
-      "status": "官方正文已阅读；工作平面、多截面扫掠、闭合方向与手动起点控制已验证；Rhino 上机待完成",
+      "status": "官方正文已阅读；平面、扫掠、边界与采样重叠诊断已验证；Rhino 上机待完成",
       "url": "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
       "learn": "工作平面原点与方向、三点定义、选中面与曲线截面、局部/世界变换参照",
       "adapt": "在实际设计位置建立草图平面，减少画后搬移；可见的平面锁定和参照状态",
       "avoid": "不把候选功能写成已研究或已实现",
-      "next": "研究边界落格、不同首尾形状处理、自交识别与动态参照关联",
+      "next": "研究拓扑检查、复杂空腔/薄壁及设计失败的可定位反馈",
       "sources": [
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/cplane.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/gumball.htm",
         "https://docs.mcneel.com/rhino/8/help/en-us/commands/namedcplane.htm",
-        "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm"
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/sweep1.htm",
+        "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm"
       ]
     },
     {
@@ -640,6 +641,43 @@
       "Unsupported corner masks keep center-sampled full blocks or exclude extra thin cells with reports",
       "Complex thin walls, inner/outer corner stairs and comprehensive topology repair remain pending",
       "General self-intersection repair, backend streaming and real Java gameplay verification remain pending"
+    ]
+  },
+  "sweepOverlapMilestone": {
+    "date": "2026-10-05",
+    "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/intersectself.htm",
+    "status": "official curve-diagnostic pattern studied; own voxel sweep diagnostic implemented and browser verified; not exact Rhino curve/mesh intersection",
+    "implementation": [
+      "Reuse sweep-center membership to track arc positions occupying each voxel",
+      "Report overlap between rail portions separated by more than a profile-radius-based neighborhood; ordinary local joins excluded",
+      "Merged volume remains default; explicit stop mode blocks both UI confirmation and API commit",
+      "Red instanced voxel outlines and focus command locate up to 256 sample positions; total count retained",
+      "Shared scope filters diagnostics and can remove out-of-scope blockers",
+      "Source regeneration respects the stored stop policy"
+    ],
+    "validation": {
+      "unitPass": 130,
+      "unitSkipped": 5,
+      "unitCases": [
+        "crossing rail yields sampled overlap locations; merge/stop geometry consistent",
+        "ordinary bend has no distant overlap",
+        "clipped scope removes unrelated overlap and blockers"
+      ],
+      "browser": [
+        "64 overlap voxels with visible location markers",
+        "readonly preview leaves scene unchanged",
+        "API blocked commit rejected",
+        "UI confirmation disabled under stop policy",
+        "explicit merge commits and one undo restores scene",
+        "original sweep/source-update regression passed"
+      ],
+      "pageErrors": 0,
+      "renderer": "isolated Edge software rendering; no performance guarantee"
+    },
+    "remaining": [
+      "Center-sampled overlap diagnostics can miss thin/partial or nearby intersections",
+      "This does not analytically intersect original curves/surfaces or automatically repair topology",
+      "Complex cavities, corner stairs, backend streaming and actual Java gameplay roundtrip remain pending"
     ]
   }
 }
