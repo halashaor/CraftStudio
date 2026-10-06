@@ -1,0 +1,39 @@
+{
+  "schema": "craftstudio-local-engine-verification/1",
+  "durableVerification": {
+    "sqliteReopenAndNewWorker": true,
+    "workspaceAndRevisionRetained": true,
+    "undoRedoAcrossRestart": true,
+    "exactSourceStatesAndTags": true,
+    "knownBaselineNotResent": true,
+    "emittedAfterUndo": 0
+  },
+  "sourceBlocks": 520227,
+  "sourceEntities": 169,
+  "sourceBlockEntities": 716,
+  "resourceArchives": 2,
+  "importMs": 898.9059,
+  "typedMeshChunks": 95,
+  "portableBytes": 1680959,
+  "unknownStateEditAndReplay": true,
+  "portableReopenRetainsCountsAndEdit": true,
+  "nbtExportRetainsCountsAndUnknownState": true,
+  "undoRestoresSource": true,
+  "exactSourceStatesAndBlockEntityTags": true,
+  "exactEntityTags": true,
+  "scope": "shared engine with manual SQLite checkpoints; per-edit durable controller, HTTP/UI authority and browser working sets remain pending",
+  "date": "2026-10-06",
+  "boundaryChecks": [
+    "COW root references omit known baseline",
+    "restart preserves undo/redo and API identity",
+    "restart replays prior accepted edit without duplication",
+    "atomic missing-reference rollback",
+    "storage sequence conflict",
+    "older engine revision rejected",
+    "corrupt blob rejected at load"
+  ],
+  "references": [
+    "https://nodejs.org/api/sqlite.html",
+    "https://www.sqlite.org/lang_transaction.html"
+  ]
+}

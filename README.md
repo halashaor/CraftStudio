@@ -223,3 +223,5 @@ Measure supports three-point spatial angles and accumulated polyline lengths wit
 Measurement reuses sketch endpoint/midpoint/center snaps with visible feedback, exact fractional coordinates and Ctrl/layer suspension. See [measurement snapping](docs/measurement.md).
 
 A [local engine host prototype](local-engine/README.md) executes the shared editing engine in Node with revision/transaction/typed-data parity tests and private real-fixture verification. It is not enabled in the UI; durable authority, transport and browser working sets remain pending.
+
+The local host now has immutable chunk/history checkpoints and a manual SQLite commit/recovery layer, verified across worker/database restart. The per-edit durable controller and UI handoff are still pending. See [local engine persistence](local-engine/README.md).
