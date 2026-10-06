@@ -1638,5 +1638,32 @@
       "path and terrain presets",
       "Axiom hands-on observation"
     ]
+  },
+  "guideContextActions": {
+    "status": "implemented and browser verified",
+    "validation": {
+      "joinedLinesContextExtrude": true,
+      "sourceAutomaticallySelected": true,
+      "invalidExtrudeExplained": true,
+      "previewDoesNotEditRevision": true,
+      "commitAndUndo": true,
+      "explicitPathSelected": true,
+      "pageErrors": [],
+      "date": "2026-10-06",
+      "reference": "https://objtoschematic.com/wiki/editor_workflows",
+      "referenceStudy": "official body read; no hands-on editor claim",
+      "visualInspection": true,
+      "unitChecks": [
+        "joined/reversed lines",
+        "open loop reasons",
+        "degenerate paths",
+        "tilted loop source preservation"
+      ]
+    },
+    "remaining": [
+      "full mesh-to-voxel import pipeline",
+      "backend editing authority",
+      "live game validation"
+    ]
   }
 }

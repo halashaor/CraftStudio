@@ -207,3 +207,5 @@ Saved views now capture the current camera including projection, zoom, up direct
 Saved views optionally include the cut layer, comparison mode and vegetation/terrain/existing-building display switches. Camera-only bookmarks preserve current display settings. See [display snapshot evidence](docs/validation/display-snapshot.json).
 
 Brush presets support search, rename, delete/undo and portable JSON import/export with conflict copies and atomic validation. See [brush presets](docs/brush-presets.md).
+
+Saved sketch rows expose context actions for extrusion and path generation, automatically selecting the source, including joined closed line loops. See [source sketch actions](docs/guide-actions.md).

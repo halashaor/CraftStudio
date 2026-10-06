@@ -61,3 +61,5 @@
 #saved-views{flex:0 0 auto;max-height:270px;overflow:auto}#saved-views:not([open]){padding:8px 12px}#saved-views[open]{padding:12px}
 
 #saved-views .saved-view-display-option{display:flex;align-items:center;gap:8px;margin:8px 0}#saved-views .saved-view-display-option input{width:auto;margin:0;flex:none}
+
+#cad-sketch-list>.row{flex-wrap:wrap;gap:4px;padding:6px 0;border-bottom:1px solid #3b4859}#cad-sketch-list>.row>button:first-child{flex-basis:100%;text-align:left}#cad-sketch-list [data-guide-action]{font-size:11px;padding:5px 8px}
