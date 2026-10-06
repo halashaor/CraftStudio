@@ -27,7 +27,8 @@
         "https://axiomdocs.moulberry.com/editor/gizmos.html",
         "https://axiomdocs.moulberry.com/editor/windows/clipboard.html",
         "https://axiomdocs.moulberry.com/editor/windows/blueprints.html",
-        "https://axiomdocs.moulberry.com/editor/windows/toolmasks.html"
+        "https://axiomdocs.moulberry.com/editor/windows/toolmasks.html",
+        "https://axiomdocs.moulberry.com/tools/utility/ruler.html"
       ]
     },
     {
@@ -1138,6 +1139,43 @@
       "initial full data and resume/backup materialization still present",
       "metadata and resource transfers still have costs",
       "backend editing authority and viewport-only data pending"
+    ]
+  },
+  "measurementMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented; unit/isolated browser and screenshot verified",
+    "reference": "https://axiomdocs.moulberry.com/tools/utility/ruler.html",
+    "implementation": [
+      "scene-surface two-point picking with half/full/free snap",
+      "live 3D segment and camera-sized labels",
+      "distance/rise/slope readout in fixed panel",
+      "saved metadata ruler list/edit/delete/undo and API/world coordinates",
+      "portable and draft persistence without construction voxels"
+    ],
+    "validation": {
+      "surfacePickingOnHalfHeightBlocks": true,
+      "liveDistancePreview": true,
+      "fractionalLevelsAndWorldCoordinates": true,
+      "noVoxelChanges": true,
+      "saveDeleteUndo": true,
+      "portableExportReopen": true,
+      "commandSearchPreservesMeasurement": true,
+      "escapeEndsPicking": true,
+      "pageErrors": [],
+      "visualInspection": true,
+      "unitChecks": [
+        "fractional/sign/vertical/zero metrics",
+        "world origin conversion",
+        "revision guards",
+        "metadata-only undo",
+        "portable restore"
+      ],
+      "referenceStudy": "Axiom official ruler documentation read; no hands-on Axiom comparison"
+    },
+    "remaining": [
+      "multi-segment and angular dimensions",
+      "persistent geometric snapping references",
+      "backend streaming authority and live Minecraft validation"
     ]
   }
 }

@@ -1,4 +1,4 @@
-export function workspaceUI({$,construction,designer,direct,dock,chooseTool}){
+export function workspaceUI({$,construction,designer,direct,measurement,dock,chooseTool}){
  document.body.classList.add('studio-workspace');const left=$('cad-browser'),right=$('cad-inspector'),viewport=$('viewport');
  const tree=document.createElement('section');tree.id='workspace-tree';tree.innerHTML='<div class="workspace-caption">场景集合 <span>对象与构件</span></div>';tree.append($('dock-objects'));
  const defaults=document.createElement('div');defaults.id='workspace-properties';for(const child of [...right.children])defaults.append(child);
@@ -7,14 +7,14 @@ export function workspaceUI({$,construction,designer,direct,dock,chooseTool}){
  const bottom=viewport.querySelector('.scene-bottom');bottom.before(shelf);$('workspace-shelf-content').append($('dock-assets'),$('dock-components'));$('workspace-shelf-preview').append($('asset-detail'),$('dock-assets').querySelector('.asset-data'));
  const oldTabs=left.querySelector('.dock-tabs');$('workspace-shelf-tabs').append(...oldTabs.children);$('workspace-shelf-tabs').querySelector('[data-dock="objects"]').textContent='收起';
  left.replaceChildren();left.className='workspace-tools';const toolButtons=[...document.querySelectorAll('#cad-tools [data-tool]')];for(const id of ['inspect','place','paint','erase','sample']){const b=toolButtons.find(b=>b.dataset.tool===id);if(b)left.append(b);}for(const id of ['cad-rotate-direct','cad-move-direct'])left.insertBefore($(id),left.children[1]);
- const draw=document.createElement('button');draw.id='workspace-draw';draw.textContent='绘制';draw.title='绘制辅助轮廓';draw.onclick=()=>{$('cad-figure').click();};left.append(draw);
+ const draw=document.createElement('button');draw.id='workspace-draw';draw.textContent='绘制';draw.title='绘制辅助轮廓';draw.onclick=()=>{$('cad-figure').click();};left.append(draw);const measure=document.createElement('button');measure.id='workspace-measure';measure.textContent='测量';measure.title='点取位置，测量间距、高差与坡度';measure.onclick=()=>measurement.open();left.append(measure);
  const bar=$('cad-ribbon');const allCommands=document.createElement('div');allCommands.id='workspace-commands';const groups={edit:[],draw:[],model:[],site:[]};const commandIds={edit:['cad-copy-direct','cad-paste-direct','cad-modify-open','cad-components-open'],draw:['cad-figure'],model:['cad-feature','cad-create-open','cad-designer'],site:['cad-terrain']};
  for(const[k,ids]of Object.entries(commandIds))for(const id of ids)if($(id)){groups[k].push($(id));allCommands.append($(id));}
  const quick=document.createElement('div');quick.className='workspace-quick';for(const id of ['undo','redo','cad-assets-open','cad-ai-open','cad-material-chip'])if($(id))quick.append($(id));
  const tabs=document.createElement('div');tabs.className='workspace-modes';for(const[key,label]of [['edit','编辑'],['draw','草图'],['model','建模'],['site','场地']]){const b=document.createElement('button');b.dataset.workspace=key;b.textContent=label;b.onclick=()=>selectCategory(key);tabs.append(b);}
  const focus=document.createElement('button');focus.id='workspace-focus';focus.textContent='专注视图';focus.title='最大化视口 / 恢复布局';focus.onclick=()=>{document.body.classList.toggle('viewport-focus');focus.textContent=document.body.classList.contains('viewport-focus')?'恢复布局':'专注视图';};quick.append(focus);
  bar.replaceChildren(tabs,allCommands,quick,$('cad-active-tool'));function selectCategory(key){for(const b of tabs.children)b.classList.toggle('active',b.dataset.workspace===key);for(const[k,buttons]of Object.entries(groups))for(const b of buttons)b.hidden=k!==key;}selectCategory('edit');
- const panels=[{node:$('construction-panel'),close:construction.close},{node:$('designer-panel'),close:designer.close},{node:$('direct-edit-bar'),close:direct.cancel}];
+ const panels=[{node:$('construction-panel'),close:construction.close},{node:$('designer-panel'),close:designer.close},{node:$('direct-edit-bar'),close:direct.cancel},{node:$('measurement-panel'),close:measurement.close}];
  for(const p of panels){p.node.classList.add('workspace-task-panel');tasks.append(p.node);}
  for(const id of ['cad-modify-dialog','cad-build-dialog','cad-component-dialog','cad-advanced-dialog','cad-site-dialog','cad-history-dialog']){const node=$(id);node.classList.add('workspace-task-panel','workspace-dialog');tasks.append(node);panels.push({node,close:()=>node.close()});}
  const visible=p=>p.node.tagName==='DIALOG'?p.node.open:!p.node.hidden;let current=null;

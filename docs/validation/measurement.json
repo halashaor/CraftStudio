@@ -1,0 +1,20 @@
+{
+  "surfacePickingOnHalfHeightBlocks": true,
+  "liveDistancePreview": true,
+  "fractionalLevelsAndWorldCoordinates": true,
+  "noVoxelChanges": true,
+  "saveDeleteUndo": true,
+  "portableExportReopen": true,
+  "commandSearchPreservesMeasurement": true,
+  "escapeEndsPicking": true,
+  "pageErrors": [],
+  "visualInspection": true,
+  "unitChecks": [
+    "fractional/sign/vertical/zero metrics",
+    "world origin conversion",
+    "revision guards",
+    "metadata-only undo",
+    "portable restore"
+  ],
+  "referenceStudy": "Axiom official ruler documentation read; no hands-on Axiom comparison"
+}
