@@ -125,3 +125,9 @@ Viewport mesh requests include world-space frustum planes for large scenes. Chun
 Worker 的 `baselineReference` 提供原始压缩基线和不可变 baseKey；相同查询源后续只传引用。`BaselineChunkSource` 通过 UnifiedLibrary → 认证 `/api/desktop/library` 查询 `baselineManifest` / `baselineChunks`。SQLite 的 `designer_chunk_manifests` 与 `designer_baseline_chunks` 是可重建派生缓存，不替换 `designer_records` 的完整基线/工程。初次索引解压基线一次，缓存后逐块读取；客户端默认 32 区块 LRU。
 
 公开设计接口的基线读取返回原始记录，编辑增量不在这个结果中。空记录并不把未知地形、placementMask skip 等视为平地；消费方必须使用保留的来源覆盖信息。当前 Worker 仍是完整编辑场景的权威；后端流式编辑、原始/增量合并和全局导出迁移均未完成。
+
+## 增量检查点查询镜像（已验证）
+
+`designer_chunk_workspaces` 保存不可变基线引用、当前版本/摘要和不含 overlay 的头信息，`designer_overlay_chunks` 保存增量区块。Worker 的检查点仍来源于完整 Site；SQLite 校验一致性后按变化区块更新。相同版本的相同内容可回放，不同内容/过期或 CAS 冲突会拒绝。读取 `workspaceChunks` 只合并请求区块，返回当前调色板索引并保留 NBT。撤销后新增检查点会删除不再存在的增量区块，恢复基线。
+
+这不是数据库编辑权威迁移：写入来自 Worker 查询检查点，用户逐笔操作、事务和生成仍在 Worker。镜像不是额外的独立工程格式，标准项目/版本/草稿仍用于恢复；增量镜像表是可重新同步的派生查询状态。客户端默认 32 区块缓存，版本不变时只校验轻量数据库头。

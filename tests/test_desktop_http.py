@@ -22,6 +22,8 @@ class DesktopHttpTests(unittest.TestCase):
             return json.load(urllib.request.urlopen(req))['value']
         m=call('baselineManifest',['http-chunk-fixture',raw]);self.assertEqual(m['blockCount'],2)
         r=call('baselineChunks',['http-chunk-fixture',['2,0,0']]);self.assertEqual(len(r['items']),1);blocks=json.loads(gzip.decompress(base64.b64decode(r['items'][0]['bytes']['$bytes'])));self.assertEqual(blocks,[project['blocks'][1]])
+        snap={'size':[48,4,4],'origin':[0,64,0],'palette':project['palette'],'design':{},'overlay':[{'pos':[33,1,1],'state':None}]}
+        call('workspaceCheckpoint',[{'workspaceId':'http-workspace','baseKey':'http-chunk-fixture','revision':1,'snapshot':snap},None]);current=call('workspaceChunks',['http-workspace',['2,0,0'],1]);self.assertEqual(current['items'][0]['blocks'],0)
 
     def test_unknown_library_method_is_rejected(self):
         body=json.dumps({'method':'delete_everything','args':[]}).encode();req=urllib.request.Request(self.base+'/api/desktop/library',data=body,headers={'Content-Type':'application/json','X-CraftStudio-Token':server.TOKEN})

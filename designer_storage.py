@@ -1,5 +1,5 @@
 """Portable designer snapshots in the same local SQLite database as legacy projects."""
-from chunk_storage import setup as setup_chunks, manifest as chunk_manifest, read_chunks
+from chunk_storage import setup as setup_chunks, manifest as chunk_manifest, read_chunks, checkpoint, workspace_head, workspace_chunks
 import copy
 from contextlib import contextmanager
 import json
@@ -37,7 +37,7 @@ class DesignerLibrary:
         return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
     def call(self, method, args):
         with self.connection() as conn:
-            conn.execute('BEGIN' if method=='baselineChunks' else 'BEGIN IMMEDIATE')
+            conn.execute('BEGIN' if method in ('baselineChunks','workspaceHead','workspaceChunks') else 'BEGIN IMMEDIATE')
             result = self.execute(conn, method, args)
             return result
     def execute(self, conn, method, args):
@@ -49,6 +49,12 @@ class DesignerLibrary:
                 if not old:self.put(conn,'bases',{'id':args[0],'bytes':data})
             return chunk_manifest(conn,args[0],lambda key:self.get(conn,'bases',key))
         if method == 'baselineChunks':return read_chunks(conn,args[0],args[1])
+        if method == 'workspaceHead':
+            head=workspace_head(conn,args[0])
+            if head and len(args)>1 and args[1]:head.pop('snapshot',None)
+            return head
+        if method == 'workspaceCheckpoint':return checkpoint(conn,args[0],args[1])
+        if method == 'workspaceChunks':return workspace_chunks(conn,args[0],args[1],args[2])
         if method == 'preference':
             key = 'prefs:' + str(args[0]); old = self.get(conn,'sessions',key)
             if len(args)<2: return old.get('data') if old else None

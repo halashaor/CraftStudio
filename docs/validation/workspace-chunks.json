@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-05",
+  "status": "versioned SQLite mirror of baseline plus Worker delta checkpoints implemented and browser verified; not backend-authoritative editing",
+  "implementation": [
+    "Atomic workspace checkpoints tied to immutable baseline, workspace ID, revision and snapshot digest",
+    "Overlay indexed by chunk; only changed chunk payloads replaced, removed overlay chunks restore baseline on undo",
+    "Baseline palette states merged with current palette, deletion, replacements, new extent and typed block entities",
+    "Design metadata, origin, protected ranges and title retained in checkpoint header",
+    "Readonly current chunk reads pin revision/digest; client invalidates changed/removed chunks and palette/extent changes",
+    "Unchanged Worker revision returns a reference rather than retransferring its full overlay/design",
+    "scene.chunkSnapshot and scene.readStoredChunks exposed in upgraded local service"
+  ],
+  "validation": {
+    "pythonPass": 37,
+    "pythonSkipped": 1,
+    "nodePass": 135,
+    "nodeSkipped": 5,
+    "checks": [
+      "database restart preserves merged records and design metadata",
+      "revision replay/conflict and malformed snapshots are atomic",
+      "origin/palette/baseline extent validation",
+      "undo checkpoint removes only obsolete overlay chunks",
+      "authenticated HTTP current-read contract",
+      "browser deletion/new extent/typed NBT/cache/version guard/undo and immutable baseline"
+    ],
+    "pageErrors": 0,
+    "localService": "upgraded; original designer-record digest unchanged"
+  },
+  "remaining": [
+    "Worker still holds the complete scene and performs authoritative edits and generation",
+    "Mirror is synchronized by query/checkpoint, not every pointer event",
+    "Mirror tables are derived query state; portable project/version backups remain the main recovery format",
+    "Viewport-only editable data, backend global generation/export and transactional edit authority remain pending",
+    "Lite remains file-based; original game-validation and design-learning objective remain active"
+  ]
+}
