@@ -204,3 +204,5 @@ await CraftStudio.request({
 新建偏移辅助线保存 `provenance:{kind:"offset",guideId,sourceRevision,distance,independent:true}`。`generation.links` 的对应 guide 增加 `source` 状态，包含来源 ID、名称、距离、`outdated/canRebuild/reason`；这是独立副本的来源记录，不表示源变化时自动修改副本。
 
 通过 `construction.prepare` 的 `type:"designer"`、`config.operation:"updateOffset"` 与 `config.guideId` 预览按来源重建；可传 `distance` 修改距离，默认沿用记录值，`manualStrategy` 默认 `preserve`。确认沿用 `construction.commit`，保持目标草图 ID，重建其下游几何并支持一次撤销。多级偏移先更新上一级，缺失/循环来源拒绝重建；旧记录没有 provenance 时不推断来源。
+
+`updateOffset` 可选传 `config.sourceGuideId`，显式更换偏移来源。新来源必须是已保存的闭合共面轮廓；缺失原来源时也可先选择新来源修复。更换先在候选来源图上检查自身/后代循环和上级待重建状态，再生成预览；确认后保持目标草图及下游对象 ID，并记录新来源版本，一次撤销恢复原来源与方块。空来源、未知来源、开放轮廓和循环拒绝；省略该字段仍沿用已有来源。
