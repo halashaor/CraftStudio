@@ -72,6 +72,20 @@ Explicit file verification is available:
 node local-engine/verify-controller.mjs --nbt=/path/region.nbt --database=/path/test.sqlite --vanilla=/path/client.jar --create=/path/create.jar --report=/path/report.json
 ```
 
-Inputs and reports remain local. No HTTP transport, runtime discovery, UI handoff or browser working-set eviction is enabled yet. The Python service still uses the existing designer path.
+Inputs and reports remain local. The separate HTTP service and browser adapter are available below, but runtime discovery, application UI handoff and browser working-set eviction are not enabled yet. The Python service still uses the existing designer path.
 
 中文补充：EngineController 串行处理请求，编辑检查点提交后才确认；失败恢复最后落盘状态。新文件和资源先在候选宿主处理，保存成功才替换；关闭会处理完已接受请求。它尚未接入界面或 HTTP 服务，不提供多客户端租约和自动刷新。
+
+## Authenticated transport and browser adapter
+
+`createEngineService({database, token, port, allowedOrigins})` from `service.mjs` starts a loopback-only HTTP service. Alternatively supply an existing EngineStore as `store`. A private token of at least 16 characters is required. The returned object provides `url` and async `close()`. The service validates Host, Origin and `X-CraftStudio-Token`; tokens are not returned by discovery.
+
+POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `application/x-craftstudio-engine`. The gzip envelope preserves typed binary arrays, buffer slices, undefined, large integers and special numeric values; arbitrary object keys do not collide with binary markers.
+
+- `{operation:'open', key?}` returns a lease and storage key. Leases for the same key share one controller.
+- `{operation:'call', lease, id, action, data, ack?}` invokes the shared Worker action. IDs are positive integers. Retrying an unacknowledged ID requires the identical encoded envelope and reuses its result. `ack` retires completed replies; retired IDs cannot execute again.
+- `{operation:'close', lease}` releases the lease. The last lease drains and closes its controller; SQLite state remains available to reopening the key.
+
+`RemoteEngineWorker({url, token, key?, fetcher?})` from `lite/src/remote-worker.js` exposes the Worker-like `postMessage`, `onmessage` and `terminate` boundary used by WorkerSession. Requests are sent in order; response loss retries the same envelope. Replies preserve mesh/NBT types. Termination suppresses later callbacks and releases the lease; already accepted server operations drain rather than being forcibly canceled.
+
+This adapter has been exercised in an isolated browser designer, but normal application bootstrap still constructs browser Workers. This service is not yet launched/proxied by Python, advertised in desktop capabilities or used automatically by the local edition. Runtime/process discovery, idle cleanup, large-file streaming and active import cancellation remain integration work. Keep service configuration, tokens, datasets and reports local.
