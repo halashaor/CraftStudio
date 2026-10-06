@@ -13,3 +13,5 @@ Worker beginStroke execution/queue measurements were approximately zero, while i
 See [aggregate evidence](validation/real-latency.json). Private world/blueprint data and test coordinates remain outside the public repository. Next: repeated matched camera/input paths with real resource models and a real GPU, main-thread tracing, then backend-owned editing and working-set validation. Lite remains file-oriented; local storage streaming currently does not remove the full canonical scene from the browser Worker.
 
 中文：按需诊断区分点击、Worker 往返/排队/执行、几何准备和帧提交；默认关闭，不保存文件/坐标/提示词。52 万方块真实区域三次鼠标放置与撤销已验证，不能把软件渲染样本当作用户显卡帧率，也不宣称本地后端已接管全部编辑。
+
+Follow-up: [browser process trace](browser-thread-trace.md) found the longest measured tasks in the SwiftShader GPU process, not the page main thread. The earlier main-thread suggestion was tentative; picking was measured below approximately 1 ms in this sample. No general hardware conclusion is supported.

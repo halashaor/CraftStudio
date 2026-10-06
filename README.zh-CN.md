@@ -213,3 +213,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 按需开启 `CraftStudio.diagnostics` 可记录有限的点击/Worker/场景/帧提交耗时，不记录场景内容。见[真实区域延迟样本与限制](docs/performance-trace.md)。
 
 方块编辑保留未变化的摘要、草图和来源详情，关联变化时及时更新；诊断增加界面摘要耗时。见[界面刷新范围与实测](docs/panel-refresh.md)。
+
+诊断增加鼠标拾取耗时；[浏览器线程追踪](docs/browser-thread-trace.md)区分页面、Worker 与软件渲染 GPU 进程，避免把等待全部归因于设计器。

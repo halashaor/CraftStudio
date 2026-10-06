@@ -213,3 +213,5 @@ Saved sketch rows expose context actions for extrusion and path generation, auto
 Opt-in `CraftStudio.diagnostics` records bounded input/Worker/scene/frame submission timings without scene content. See [latency measurements and limits](docs/performance-trace.md).
 
 Unchanged inspector/tree content is retained across voxel edits, with dependency-aware sketch actions and `ui-summary` timing. See [panel refresh scope and measurements](docs/panel-refresh.md).
+
+Diagnostics now include `scene-pick`; the [browser thread trace](docs/browser-thread-trace.md) distinguishes page, Worker and software-GPU scheduling instead of attributing all delays to the editor.

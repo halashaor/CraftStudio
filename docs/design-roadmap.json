@@ -2125,5 +2125,268 @@
       "real GPU repeated benchmark",
       "backend-owned editing and voxel working sets"
     ]
+  },
+  "browserThreadTrace": {
+    "status": "private CDP trace captured and thread metadata resolved; aggregate evidence published",
+    "validation": {
+      "sourceBlocks": 520227,
+      "importMs": 3390.2025000000003,
+      "importStages": [
+        {
+          "stage": "worker-call",
+          "action": "import",
+          "durationMs": 914.6000000238419
+        },
+        {
+          "stage": "worker-call",
+          "action": "assetCatalogue",
+          "durationMs": 75.5
+        },
+        {
+          "stage": "worker-call",
+          "action": "meshChunks",
+          "durationMs": 1991.4000000357628
+        },
+        {
+          "stage": "worker-call",
+          "action": "createScene",
+          "durationMs": 70.09999996423721
+        },
+        {
+          "stage": "scene-ready",
+          "durationMs": 2097.600000023842,
+          "meshMs": 1984.199999988079
+        }
+      ],
+      "samples": [
+        {
+          "inputToSceneFrameSubmitMs": 49.69999998807907,
+          "scenePrepareMs": 16.799999952316284,
+          "meshMs": 10.300000011920929,
+          "updatedChunks": 2,
+          "residentChunks": 56,
+          "frameSubmitCpuMs": 0.800000011920929,
+          "workerExecution": [
+            {
+              "action": "beginStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0.10000002384185791
+            },
+            {
+              "action": "brush",
+              "queueWaitMs": 0,
+              "executeMs": 0.9000000357627869
+            },
+            {
+              "action": "meshChunks",
+              "queueWaitMs": 0,
+              "executeMs": 10.300000011920929
+            },
+            {
+              "action": "createScene",
+              "queueWaitMs": 0,
+              "executeMs": 3.799999952316284
+            },
+            {
+              "action": "endStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0
+            }
+          ],
+          "pickMs": [
+            0.2999999523162842,
+            0.2999999523162842
+          ],
+          "summaryUiMs": [
+            0.6000000238418579
+          ],
+          "workers": [
+            {
+              "action": "beginStroke",
+              "ms": 5.199999988079071
+            },
+            {
+              "action": "brush",
+              "ms": 2
+            },
+            {
+              "action": "meshChunks",
+              "ms": 10.699999988079071
+            },
+            {
+              "action": "createScene",
+              "ms": 4.5
+            },
+            {
+              "action": "endStroke",
+              "ms": 0.30000001192092896
+            }
+          ]
+        },
+        {
+          "inputToSceneFrameSubmitMs": 59,
+          "scenePrepareMs": 13.899999976158142,
+          "meshMs": 8.100000023841858,
+          "updatedChunks": 2,
+          "residentChunks": 56,
+          "frameSubmitCpuMs": 1.199999988079071,
+          "workerExecution": [
+            {
+              "action": "beginStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0
+            },
+            {
+              "action": "brush",
+              "queueWaitMs": 0,
+              "executeMs": 0.30000001192092896
+            },
+            {
+              "action": "meshChunks",
+              "queueWaitMs": 0,
+              "executeMs": 8.100000023841858
+            },
+            {
+              "action": "createScene",
+              "queueWaitMs": 0,
+              "executeMs": 3.600000023841858
+            },
+            {
+              "action": "endStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0
+            }
+          ],
+          "pickMs": [
+            0.5,
+            0.20000004768371582
+          ],
+          "summaryUiMs": [
+            0.800000011920929
+          ],
+          "workers": [
+            {
+              "action": "beginStroke",
+              "ms": 27.600000023841858
+            },
+            {
+              "action": "brush",
+              "ms": 1.5999999642372131
+            },
+            {
+              "action": "meshChunks",
+              "ms": 8.399999976158142
+            },
+            {
+              "action": "createScene",
+              "ms": 4.300000011920929
+            },
+            {
+              "action": "endStroke",
+              "ms": 0.30000001192092896
+            }
+          ]
+        },
+        {
+          "inputToSceneFrameSubmitMs": 59.30000001192093,
+          "scenePrepareMs": 12.900000035762787,
+          "meshMs": 7.199999988079071,
+          "updatedChunks": 2,
+          "residentChunks": 56,
+          "frameSubmitCpuMs": 2,
+          "workerExecution": [
+            {
+              "action": "beginStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0
+            },
+            {
+              "action": "brush",
+              "queueWaitMs": 0,
+              "executeMs": 0.19999998807907104
+            },
+            {
+              "action": "meshChunks",
+              "queueWaitMs": 0,
+              "executeMs": 7.199999988079071
+            },
+            {
+              "action": "createScene",
+              "queueWaitMs": 0,
+              "executeMs": 3.5
+            },
+            {
+              "action": "endStroke",
+              "queueWaitMs": 0,
+              "executeMs": 0
+            }
+          ],
+          "pickMs": [
+            0.40000003576278687,
+            0.19999998807907104
+          ],
+          "summaryUiMs": [
+            1
+          ],
+          "workers": [
+            {
+              "action": "beginStroke",
+              "ms": 26.599999964237213
+            },
+            {
+              "action": "brush",
+              "ms": 1.699999988079071
+            },
+            {
+              "action": "meshChunks",
+              "ms": 7.399999976158142
+            },
+            {
+              "action": "createScene",
+              "ms": 4.300000011920929
+            },
+            {
+              "action": "endStroke",
+              "ms": 0.19999998807907104
+            }
+          ]
+        }
+      ],
+      "threePointerPlacementsVerified": true,
+      "undoRestoresAir": true,
+      "pageErrors": [],
+      "environment": "Windows Edge headless with SwiftShader software rendering; no imported resource pack; isolated SQLite storage",
+      "limits": "input-to-WebGL frame submission, not monitor presentation or hardware GPU completion; single run, three edits, not a general FPS claim",
+      "threads": [
+        {
+          "name": "CrRendererMain",
+          "taskCount": 105,
+          "maxTaskMs": 3.832
+        },
+        {
+          "name": "CrGpuMain",
+          "taskCount": 61,
+          "maxTaskMs": 34.878
+        },
+        {
+          "name": "DedicatedWorker thread",
+          "taskCount": 17,
+          "maxTaskMs": 10.493
+        },
+        {
+          "name": "Compositor",
+          "taskCount": 146,
+          "maxTaskMs": 0.46
+        }
+      ],
+      "date": "2026-10-06",
+      "conclusion": "Longest observed tasks are in CrGpuMain under SwiftShader; this run does not establish a page-main-thread or picking bottleneck",
+      "rawTracePublished": false
+    },
+    "next": [
+      "matched hardware GPU/resources repeated run",
+      "choose rendering optimization only after evidence",
+      "backend authority/working sets"
+    ]
   }
 }
