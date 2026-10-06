@@ -25,7 +25,7 @@ export function regenerateObjects(site,objects,{manualStrategy='preserve',overri
   manualRecords.set(o.id,kept);working.operations(restores,{allowExisting:true,allowTerrain:true});
  }
  for(const o of objects){
-  const config=clone(overrides[o.id]||o.recipe),type=o.generation.type,plan=type==='geometry'?geometryPlan(working,config,available):featurePlan(working,config),ops=[],conflicts=[];
+  const config=clone(overrides[o.id]||o.recipe),type=o.generation.type,plan=type==='geometry'?geometryPlan(working,config,available):featurePlan(working,{...config,available:[...available]}),ops=[],conflicts=[];
   for(const op of new Map(plan.operations.map(op=>[coordKey(...op.pos),op])).values()){
    const key=coordKey(...op.pos);touched.add(key);if(manualStrategy==='preserve'&&manual.has(key))continue;
    const current=cellSnapshot(working,op.pos),after=op.state?{state:op.state,nbt:op.nbt||null}:null;

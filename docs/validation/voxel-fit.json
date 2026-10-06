@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-05",
+  "status": "adaptive sweep boundary fitting and corrected closed membership implemented; own isolated browser verified",
+  "implementation": [
+    "Union eight half-cell occupancy samples across swept segments before choosing a state",
+    "Select full blocks, bottom/top slabs or straight stair masks for four facings and both halves",
+    "Use explicit role states or available material-family variants; no guessed absent IDs",
+    "Material-family lookup compiled once per generation, not rebuilt for every voxel",
+    "Pure block mode and cut semantics preserved; fit mode, roles and state properties retained in recipes",
+    "Closed sweep membership now evaluates corrected frames as well as corrected display rings"
+  ],
+  "validation": {
+    "unitPass": 128,
+    "unitSkipped": 5,
+    "unitCases": [
+      "all slab layers and stair facings/halves",
+      "actual half-height and stair-shaped prism sweep",
+      "typed Minecraft NBT state roundtrip",
+      "missing variant fallback report",
+      "closed membership differs from uncorrected frame where expected"
+    ],
+    "browser": [
+      "two south-facing bottom stairs",
+      "preview without mutation",
+      "NBT export/readback",
+      "one undo/redo",
+      "portable reopen",
+      "closed 3D loop and original sweep regressions"
+    ],
+    "pageErrors": 0,
+    "renderer": "isolated Edge software renderer; no hardware FPS claim"
+  },
+  "remaining": [
+    "Eight-point half-cell fitting is an approximation, not exact solid intersection",
+    "Unsupported corner masks keep center-sampled full blocks or exclude extra thin cells with reports",
+    "Complex thin walls, inner/outer corner stairs and comprehensive topology repair remain pending",
+    "General self-intersection repair, backend streaming and real Java gameplay verification remain pending"
+  ]
+}
