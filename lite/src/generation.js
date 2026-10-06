@@ -8,7 +8,7 @@ export function cellSnapshot(site,pos){const b=site.at(pos);return b?{state:clon
 const equal=(a,b)=>!a&&!b||!!a&&!!b&&stateKey(a.state)===stateKey(b.state)&&JSON.stringify(a.nbt||null)===JSON.stringify(b.nbt||null);
 const operation=(pos,value)=>({type:'set',pos:[...pos],state:value?.state||null,nbt:value?.nbt||null,reason:'关联生成更新'});
 export function captureGeneration(site,operations){return[...new Map(operations.map(o=>[coordKey(...o.pos),o.pos])).values()].map(pos=>({pos:[...pos],before:cellSnapshot(site,pos)}));}
-function sourceIds(type,config,guideId){const ids=type==='geometry'?[guideId]:(config.operation==='sweep'?[config.pathId]:(config.profileIds||[])).filter(Boolean),out=[];for(const id of ids){if(id.startsWith('loop:')){try{out.push(...JSON.parse(id.slice(5)));}catch{throw Error('闭合线框来源无效');}}else out.push(id);}return [...new Set(out)];}
+function sourceIds(type,config,guideId){const ids=type==='geometry'?[guideId]:(config.operation==='sweep'?[config.pathId,...(config.sweepMode==='profile'?(config.profileIds||[]):[])]:config.profileIds||[]).filter(Boolean),out=[];for(const id of ids){if(id.startsWith('loop:')){try{out.push(...JSON.parse(id.slice(5)));}catch{throw Error('闭合线框来源无效');}}else out.push(id);}return [...new Set(out)];}
 function bounds(records){const p=records.map(r=>r.pos);return{min:[0,1,2].map(a=>p.reduce((v,q)=>Math.min(v,q[a]),Infinity)),max:[0,1,2].map(a=>p.reduce((v,q)=>Math.max(v,q[a]),-Infinity)),cells:p.map(q=>coordKey(...q))};}
 export function generatedObject(site,captured,{type,config,guideId,id=crypto.randomUUID(),name='生成特征'}){
  if(!captured.length)return null;const records=captured.map(r=>({...r,after:cellSnapshot(site,r.pos)})),sources=sourceIds(type,config,guideId);
@@ -16,7 +16,7 @@ export function generatedObject(site,captured,{type,config,guideId,id=crypto.ran
 }
 export function detachedGeneration(object){if(!object.generation?.records)return !!object.generation?.detached;const keys=new Set(object.cells||[]);return object.generation?.detached||object.generation?.records?.some(r=>!keys.has(coordKey(...r.pos)))||keys.size!==(object.generation?.records?.length||0);}
 export function regenerateObjects(site,objects,{manualStrategy='preserve',overrides={},available=new Set()}={}){
- objects=orderedGeneration(site.design,objects);if(!['preserve','overwrite'].includes(manualStrategy))throw Error('请选择有效的手改处理方式');const working=site.fork(),touched=new Set(),generatedNow=new Set(),manual=new Set(),manualRecords=new Map(),edited=new Set(),warnings=[];
+ const planned=objects.map(o=>{if(!overrides[o.id])return o;if(!o.generation?.type||!Array.isArray(o.generation.records))throw Error('旧特征缺少生成归属快照：'+o.name+'，请保留旧对象或重新生成');const recipe=clone(overrides[o.id]),sources=sourceIds(o.generation.type,recipe,o.guideId);if(o.generation.type==='feature'&&sources.includes(o.guideId))throw Error('不能把自身输出作为建模来源');return{...o,recipe,generation:{...o.generation,sources}};}),byId=new Map(planned.map(o=>[o.id,o])),design={...site.design,objects:site.design.objects.map(o=>byId.get(o.id)||o)};objects=orderedGeneration(design,planned);if(!['preserve','overwrite'].includes(manualStrategy))throw Error('请选择有效的手改处理方式');const working=site.fork(),touched=new Set(),generatedNow=new Set(),manual=new Set(),manualRecords=new Map(),edited=new Set(),warnings=[];working.design.objects=working.design.objects.map(o=>byId.has(o.id)?clone(byId.get(o.id)):o);
  for(const o of [...objects].reverse()){
   if(o.locked)throw Error('关联对象已锁定：'+o.name);
   if(!o.generation?.records)throw Error('旧特征缺少生成归属快照：'+o.name+'。请保留旧对象，或先重新生成并建立关联');
@@ -35,7 +35,7 @@ export function regenerateObjects(site,objects,{manualStrategy='preserve',overri
   if(conflicts.length)throw Error('更新将覆盖其他内容：'+o.name+'，请调整草图。位置 '+conflicts[0].join(', '));
   const captured=captureGeneration(working,ops);if(ops.some(op=>generatedNow.has(coordKey(...op.pos))))warnings.push('关联生成对象之间存在重叠，按原对象顺序重建');for(const op of ops)generatedNow.add(coordKey(...op.pos));working.operations(ops,{allowExisting:true,allowTerrain:true});
   const records=[...captured.map(r=>({...r,after:cellSnapshot(working,r.pos)})),...(manualRecords.get(o.id)||[])];
-  const next=records.length?{...o,recipe:config,...bounds(records),generation:{...o.generation,outdated:false,records,sourceVersions:Object.fromEntries(o.generation.sources.map(id=>[id,working.design.guides.find(g=>g.id===id)?.revision||0]))}}:{...o,recipe:config,cells:[],generation:{...o.generation,records:[]}};
+  const next=records.length?{...o,recipe:config,...bounds(records),generation:{...o.generation,outdated:false,records,sourceVersions:Object.fromEntries(o.generation.sources.map(id=>[id,working.design.guides.find(g=>g.id===id)?.revision||0]))}}:{...o,recipe:config,cells:[],generation:{...o.generation,outdated:false,records:[],sourceVersions:Object.fromEntries(o.generation.sources.map(id=>[id,working.design.guides.find(g=>g.id===id)?.revision||0]))}};
   working.design.objects=working.design.objects.map(v=>v.id===o.id?next:v);
   const display=working.design.guides.find(g=>g.id===o.guideId);if(display&&type==='feature'){display.points=plan.guide;display.revision=(display.revision||0)+1;if(plan.guideGroups)display.paths=plan.guideGroups;else delete display.paths;display.recipe=config;}
   warnings.push(...plan.warnings);

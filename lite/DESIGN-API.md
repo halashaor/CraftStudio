@@ -206,3 +206,5 @@ await CraftStudio.request({
 通过 `construction.prepare` 的 `type:"designer"`、`config.operation:"updateOffset"` 与 `config.guideId` 预览按来源重建；可传 `distance` 修改距离，默认沿用记录值，`manualStrategy` 默认 `preserve`。确认沿用 `construction.commit`，保持目标草图 ID，重建其下游几何并支持一次撤销。多级偏移先更新上一级，缺失/循环来源拒绝重建；旧记录没有 provenance 时不推断来源。
 
 `updateOffset` 可选传 `config.sourceGuideId`，显式更换偏移来源。新来源必须是已保存的闭合共面轮廓；缺失原来源时也可先选择新来源修复。更换先在候选来源图上检查自身/后代循环和上级待重建状态，再生成预览；确认后保持目标草图及下游对象 ID，并记录新来源版本，一次撤销恢复原来源与方块。空来源、未知来源、开放轮廓和循环拒绝；省略该字段仍沿用已有来源。
+
+`designer` 的 `editFeature` 参数 `parameters.profileIds` / `parameters.pathId` 可显式更换生成对象的截面或路径来源。设置外部 `profileIds` 会清除旧内联 `profiles`，设置 `pathId` 会清除旧内联 `path`，避免旧缓存优先覆盖新参照。重建先在候选来源图上验证循环与缺失参照，再保留对象/输出辅助线 ID 更新下游；来源记录与版本同步更新，沿用归属快照、手改保留和一次撤销。自身/后代输出循环会拒绝，旧对象缺少归属记录时不会推断所有权。自绘截面扫掠同时记录路径和截面来源，修改截面也会触发原有下游重建。
