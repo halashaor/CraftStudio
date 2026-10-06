@@ -179,3 +179,5 @@ Optional reviewable AI proposals now expose `proposal.prepare/inspect/commit/can
 Pending modelling previews now preserve parameters and recompute after external edits in the same workspace. Late or invalid results cannot be confirmed; deleted profile/path references remain explicit instead of being silently replaced. Workspace switching ends the old operation. See [recompute workflow](docs/draft-recompute.md).
 
 Press F3 or 查找工具 to search design tools by Chinese labels, English aliases or category. Results show shortcuts and unavailable reasons; Up/Down and Enter open the existing tool. Escape returns to the previous sketch/transform, and recent tool IDs persist in the local library. See [tool finder](docs/command-search.md).
+
+Small edits now use chunked copy-on-write overlays and incremental summary counts, preserving undo/candidate isolation and portable formats. A 204800-edit browser import/brush/SQLite/export/reopen workflow passed. Local microbenchmark improvements cover only the editing-data phase, not overall rendering latency. See [overlay performance](docs/overlay-performance.md).

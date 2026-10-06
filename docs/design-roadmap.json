@@ -939,5 +939,61 @@
       "broader tool coverage and user-configurable keymaps",
       "backend streaming authority and live game validation"
     ]
+  },
+  "overlayPerformanceMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented; Node regression, microbenchmark and large browser functional workflow verified",
+    "implementation": [
+      "chunked copy-on-write voxel overlay and forked index",
+      "unchanged chunks shared with undo/candidate snapshots",
+      "incremental changed-key summary counts",
+      "portable format unchanged"
+    ],
+    "validation": {
+      "syntheticEditedBlocks": 204800,
+      "browserImport": true,
+      "brushEdit": true,
+      "versionedChunkRead": true,
+      "portableExportAndReopen": true,
+      "undoRestoresOriginalEditState": true,
+      "pageErrors": [],
+      "scope": "functional browser/Worker/SQLite/rendering integration; no end-to-end latency or GPU frame-rate claim",
+      "benchmark": {
+        "baselineCommit": "ca5f773",
+        "before": {
+          "checksum": 20480000,
+          "blocks": 204840,
+          "summary100Ms": 329.948,
+          "brush40BatchesMs": 725.769,
+          "undoSteps": 2
+        },
+        "after": {
+          "checksum": 20480000,
+          "blocks": 204840,
+          "summary100Ms": 0.105,
+          "brush40BatchesMs": 4.992,
+          "undoSteps": 2
+        },
+        "scope": "local Node editing-data microbenchmark; excludes renderer, browser event loop, file decode and SQLite/HTTP",
+        "parameters": "204800 existing overlay voxels; 100 summary reads with consumed checksum; 40 one-cell batches in a single stroke"
+      },
+      "unitChecks": [
+        "independent full-scan counts through randomized edits and restore",
+        "fork and undo snapshots isolated",
+        "failed batches atomic",
+        "copy-on-write chunk sharing and deletion/clear",
+        "unchanged voxel content on component uniqueness"
+      ],
+      "remaining": [
+        "Worker retains full canonical data",
+        "chunk-root copies and remaining metadata/render work",
+        "backend authority and viewport-only editing"
+      ]
+    },
+    "remaining": [
+      "Worker retains full canonical data",
+      "chunk-root copies and remaining metadata/render work",
+      "backend authority and viewport-only editing"
+    ]
   }
 }
