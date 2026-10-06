@@ -205,3 +205,5 @@ Recorded generated-output dependencies now propagate source and upstream-feature
 Saved views now capture the current camera including projection, zoom, up direction and orthographic extent. The fixed panel/F3 entry supports metadata save/update/delete/undo and portable restore, with legacy compatibility; restoration preserves pending sketches and does not edit voxels. See [saved views](docs/saved-views.md).
 
 Saved views optionally include the cut layer, comparison mode and vegetation/terrain/existing-building display switches. Camera-only bookmarks preserve current display settings. See [display snapshot evidence](docs/validation/display-snapshot.json).
+
+Brush presets support search, rename, delete/undo and portable JSON import/export with conflict copies and atomic validation. See [brush presets](docs/brush-presets.md).

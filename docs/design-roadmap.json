@@ -1607,5 +1607,36 @@
       "isolation/object visibility/lighting not captured",
       "backend editing authority and live game validation"
     ]
+  },
+  "brushPresetManagement": {
+    "status": "implemented and isolated browser validated",
+    "reference": "https://axiomdocs.moulberry.com/editor/toolpresets.html",
+    "scope": [
+      "search/rename/delete undo",
+      "JSON validated merge and export",
+      "local and Lite reusable preference storage"
+    ],
+    "validation": {
+      "searchRenameLoad": true,
+      "deleteUndo": true,
+      "jsonRoundtripAndConflictCopies": true,
+      "malformedImportAtomic": true,
+      "reloadPersists": true,
+      "permissionsUnchanged": true,
+      "pageErrors": [],
+      "date": "2026-10-06",
+      "reference": "https://axiomdocs.moulberry.com/editor/toolpresets.html",
+      "referenceStudy": "official documentation body read; no hands-on Axiom claim",
+      "unitChecks": [
+        "import conflicts preserve existing",
+        "invalid file atomic",
+        "height validation",
+        "no material or permissions in presets"
+      ]
+    },
+    "remaining": [
+      "path and terrain presets",
+      "Axiom hands-on observation"
+    ]
   }
 }

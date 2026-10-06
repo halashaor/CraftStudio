@@ -1,0 +1,18 @@
+{
+  "searchRenameLoad": true,
+  "deleteUndo": true,
+  "jsonRoundtripAndConflictCopies": true,
+  "malformedImportAtomic": true,
+  "reloadPersists": true,
+  "permissionsUnchanged": true,
+  "pageErrors": [],
+  "date": "2026-10-06",
+  "reference": "https://axiomdocs.moulberry.com/editor/toolpresets.html",
+  "referenceStudy": "official documentation body read; no hands-on Axiom claim",
+  "unitChecks": [
+    "import conflicts preserve existing",
+    "invalid file atomic",
+    "height validation",
+    "no material or permissions in presets"
+  ]
+}
