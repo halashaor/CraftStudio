@@ -49,3 +49,5 @@
 #sketch-snap-feedback{color:#76e1dc;font-size:12px;margin:4px 0!important}#sketch-snap-feedback:empty{display:none}
 
 #sketch-snap-feedback{flex:0 0 100%}
+
+#import-cancel{margin-top:16px;pointer-events:auto}#import-cancel[hidden]{display:none}

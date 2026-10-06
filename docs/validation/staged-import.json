@@ -1,0 +1,63 @@
+{
+  "replacementImportCancellation": true,
+  "originalWorkspaceAndVoxelsPreserved": true,
+  "writesRejectedDuringImport": true,
+  "invalidFileDoesNotReplace": true,
+  "successSwapsScene": true,
+  "phaseAndCancelControlVisible": true,
+  "pageErrors": [],
+  "scope": "isolated browser with controlled candidate-import delay; actual large-file import checked separately",
+  "realNbtRegression": {
+    "originalBlocks": 520227,
+    "originalEntities": 169,
+    "browserRealNbtImport": true,
+    "exactSampleLookups": true,
+    "baselineManifestCount": true,
+    "backendFullExportAllRecords": true,
+    "entitiesAndNativeMetadataPreserved": true,
+    "pageErrors": [],
+    "scope": "isolated browser/Worker/SQLite functional import/read/export; no GPU/frame-rate or live game placement claim"
+  },
+  "draftReloadRegression": {
+    "syntheticEditedBlocks": 204800,
+    "checkpointAutosave": true,
+    "immutableSavedDraftAfterLiveSync": true,
+    "typedLongNbtAndGuidePreserved": true,
+    "assetsReusedOnLaterSave": true,
+    "reloadResumesLatestDraft": true,
+    "noWholeDeltaPayloadInAutosave": true,
+    "packets": [
+      {
+        "revision": 1,
+        "bytes": 789,
+        "assetBytesIncluded": true,
+        "hasWholeDeltaPayload": false
+      },
+      {
+        "revision": 2,
+        "bytes": 298,
+        "assetBytesIncluded": false,
+        "hasWholeDeltaPayload": false
+      }
+    ],
+    "pageErrors": [],
+    "scope": "isolated browser/SQLite autosave and reload; packet sizes exclude preceding checkpoint and initial asset transfer"
+  },
+  "savedModelAndMeasurementRegression": {
+    "surfacePickingOnHalfHeightBlocks": true,
+    "liveDistancePreview": true,
+    "fractionalLevelsAndWorldCoordinates": true,
+    "noVoxelChanges": true,
+    "saveDeleteUndo": true,
+    "portableExportReopen": true,
+    "commandSearchPreservesMeasurement": true,
+    "escapeEndsPicking": true,
+    "pageErrors": []
+  },
+  "limits": [
+    "controlled candidate delay is not throughput measurement",
+    "old/candidate Workers temporarily coexist",
+    "HTML references remain current-project proposals",
+    "initial file read/save/final mesh stages are separate"
+  ]
+}

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {emptyProject} from '../src/codec.js';
 const replies=new Map();let sequence=0;
-globalThis.self={crypto:globalThis.crypto,postMessage:r=>{const next=replies.get(r.id);replies.delete(r.id);r.error?next.reject(Error(r.error)):next.resolve(r.value);}};
+globalThis.self={crypto:globalThis.crypto,postMessage:r=>{if(r.progress)return;const next=replies.get(r.id);replies.delete(r.id);r.error?next.reject(Error(r.error)):next.resolve(r.value);}};
 await import('../src/worker.js');
 const call=(action,data={})=>new Promise((resolve,reject)=>{const id=++sequence;replies.set(id,{resolve,reject});self.onmessage({data:{id,action,data}});});
 const rpc=(method,params={})=>call('api',{method,params});
