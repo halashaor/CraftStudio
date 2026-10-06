@@ -175,3 +175,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 快捷键按上下文工作：输入框保留文本粘贴、删除和撤销；移动/粘贴、草图及排列预览中的撤销先取消预览，Delete 不再穿透预览删除原选区。场景重做支持 Ctrl+Y 和 Ctrl+Shift+Z。见[验证记录](docs/validation/keyboard-context.json)。
 
 可选 AI 审核提案已提供 `proposal.prepare/inspect/commit/cancel` 并接入 3D 预览；采用校验提案编号和场景版本，保留真正的删除与类型化 NBT，成功后可一次撤销。外部接口改动会取消旧的直接变换预览。见[提案接口说明](docs/proposal-api.md)。
+
+待确认的建模预览会在同一工程的外部改动后保留参数并重新校准；迟到或失效的结果不能确认，删除的轮廓/路径参照明确保留为失效项，不静默替换。切换工程会结束旧操作。见[重新校准流程](docs/draft-recompute.md)。

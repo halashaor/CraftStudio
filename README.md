@@ -175,3 +175,5 @@ Clipboard placement: Ctrl+C copies the selection; Ctrl+V starts a cursor-followi
 Shortcut context: text fields retain native clipboard/deletion/undo. Undo during a transform, sketch or designer preview cancels that preview before affecting committed scene history; Delete does not delete the original selection behind a preview. Scene redo supports Ctrl+Y and Ctrl+Shift+Z. See [validation](docs/validation/keyboard-context.json).
 
 Optional reviewable AI proposals now expose `proposal.prepare/inspect/commit/cancel`, connected to the 3D preview. Proposal ID and scene revision guard adoption, true deletions and typed NBT survive, and accepted edits undo as one step. External API edits invalidate old direct-transform previews. See [proposal API](docs/proposal-api.md).
+
+Pending modelling previews now preserve parameters and recompute after external edits in the same workspace. Late or invalid results cannot be confirmed; deleted profile/path references remain explicit instead of being silently replaced. Workspace switching ends the old operation. See [recompute workflow](docs/draft-recompute.md).
