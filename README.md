@@ -221,3 +221,5 @@ Brush drawing supports automatic grazing-face fallback and explicit surface/view
 Measure supports three-point spatial angles and accumulated polyline lengths with live preview, step-back, XYZ edits and portable metadata. See [measurement modes](docs/measurement.md).
 
 Measurement reuses sketch endpoint/midpoint/center snaps with visible feedback, exact fractional coordinates and Ctrl/layer suspension. See [measurement snapping](docs/measurement.md).
+
+A [local engine host prototype](local-engine/README.md) executes the shared editing engine in Node with revision/transaction/typed-data parity tests and private real-fixture verification. It is not enabled in the UI; durable authority, transport and browser working sets remain pending.
