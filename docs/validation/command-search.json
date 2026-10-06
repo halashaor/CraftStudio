@@ -1,0 +1,16 @@
+{
+  "f3AndKeyboardSearch": true,
+  "chineseAndEnglishAliases": true,
+  "unavailableCommandExplained": true,
+  "searchDoesNotEditScene": true,
+  "fixedDockDoesNotChangeViewport": true,
+  "escapePreservesSketchAndTransform": true,
+  "focusModeRestored": true,
+  "designerAndTerrainCommandRouting": true,
+  "specificLoftCommandAndRequirements": true,
+  "recentCommandsPersist": true,
+  "pageErrors": [],
+  "visualInspection": true,
+  "scope": "fresh isolated browser and database; viewport bounds compared before/after search",
+  "referenceStudy": "official Blender Menu Search indexed excerpt; direct body unavailable; no Blender hands-on claim"
+}

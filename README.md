@@ -177,3 +177,5 @@ Shortcut context: text fields retain native clipboard/deletion/undo. Undo during
 Optional reviewable AI proposals now expose `proposal.prepare/inspect/commit/cancel`, connected to the 3D preview. Proposal ID and scene revision guard adoption, true deletions and typed NBT survive, and accepted edits undo as one step. External API edits invalidate old direct-transform previews. See [proposal API](docs/proposal-api.md).
 
 Pending modelling previews now preserve parameters and recompute after external edits in the same workspace. Late or invalid results cannot be confirmed; deleted profile/path references remain explicit instead of being silently replaced. Workspace switching ends the old operation. See [recompute workflow](docs/draft-recompute.md).
+
+Press F3 or 查找工具 to search design tools by Chinese labels, English aliases or category. Results show shortcuts and unavailable reasons; Up/Down and Enter open the existing tool. Escape returns to the previous sketch/transform, and recent tool IDs persist in the local library. See [tool finder](docs/command-search.md).

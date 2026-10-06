@@ -45,12 +45,15 @@
     },
     {
       "name": "Blender",
-      "status": "找到官方变换文档；正文访问受限，需补查",
+      "status": "变换与菜单搜索官方摘要已核对；正文读取受限；本项目工具搜索已验证；Blender 上机待完成",
       "url": "https://docs.blender.org/manual/en/5.1/modeling/transform/modal_map.html",
       "learn": "操作中确认/取消、轴与平面约束、吸附、上下文属性",
       "adapt": "一套明确的操作状态机，鼠标反馈与后台计算分开；可选约束不锁死自由设计",
       "avoid": "不强制照搬依赖中键或小键盘的所有手势",
-      "next": "记录移动、旋转、复制、取消各一个真实操作流程"
+      "next": "补查官方正文并实际观察变换/搜索工作流；继续研究用户快捷键配置",
+      "sources": [
+        "https://docs.blender.org/manual/en/3.6/interface/controls/templates/operator_search.html"
+      ]
     },
     {
       "name": "SOLIDWORKS",
@@ -909,6 +912,32 @@
     "remaining": [
       "complete dependency graph and topology repair remain pending",
       "backend streaming editing and live game validation remain pending"
+    ]
+  },
+  "commandSearchMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented and isolated browser verified",
+    "workflow": "F3/name search -> category/shortcut/reason -> Up/Down -> Enter existing tool; Escape resumes previous operation",
+    "reference": "Blender Menu Search official indexed excerpt; body fetch failed",
+    "validation": {
+      "f3AndKeyboardSearch": true,
+      "chineseAndEnglishAliases": true,
+      "unavailableCommandExplained": true,
+      "searchDoesNotEditScene": true,
+      "fixedDockDoesNotChangeViewport": true,
+      "escapePreservesSketchAndTransform": true,
+      "focusModeRestored": true,
+      "designerAndTerrainCommandRouting": true,
+      "specificLoftCommandAndRequirements": true,
+      "recentCommandsPersist": true,
+      "pageErrors": [],
+      "visualInspection": true,
+      "scope": "fresh isolated browser and database; viewport bounds compared before/after search",
+      "referenceStudy": "official Blender Menu Search indexed excerpt; direct body unavailable; no Blender hands-on claim"
+    },
+    "remaining": [
+      "broader tool coverage and user-configurable keymaps",
+      "backend streaming authority and live game validation"
     ]
   }
 }

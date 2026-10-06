@@ -14,6 +14,8 @@ Compare the complete publish tree with the remote branch, including local commit
 
 On Windows, use the normal signed-in user's permissions for Git credential access if sandboxed HTTPS helpers crash or cannot access credentials. For a Codex-created checkout, a per-command safe.directory entry for that exact checkout is sufficient; do not change global trust settings. Reuse an existing reachable proxy when required and keep TLS certificate verification enabled.
 
+If the configured manager fails to load .NET components, a verified fallback is a command-local empty credential.helper followed by credential.helper=wincred, with GIT_TERMINAL_PROMPT=0. Reuse existing Windows credentials; do not print credential values or change global helper settings. The connected GitHub integration may be read-only, so do not assume it can publish commits.
+
 ## Ongoing design learning
 
 Maintain docs/design-roadmap.json and docs/design-roadmap.html as the learning and implementation ledger. Study primary references around a complete human workflow, record observed behavior and applicability, then implement and validate the chosen improvement. Distinguish documented patterns, hands-on observations, prototypes, completed code, performance benchmarks, and live game validation. Do not mark candidate references or planned capabilities as studied or implemented.
