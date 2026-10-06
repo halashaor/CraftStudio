@@ -211,3 +211,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 草图树提供拉伸和沿路径生成，自动选中来源；多段闭合线框也可直接拉伸，无法生成时显示原因。见[草图上下文操作](docs/guide-actions.md)。
 
 按需开启 `CraftStudio.diagnostics` 可记录有限的点击/Worker/场景/帧提交耗时，不记录场景内容。见[真实区域延迟样本与限制](docs/performance-trace.md)。
+
+方块编辑保留未变化的摘要、草图和来源详情，关联变化时及时更新；诊断增加界面摘要耗时。见[界面刷新范围与实测](docs/panel-refresh.md)。

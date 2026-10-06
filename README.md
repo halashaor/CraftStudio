@@ -211,3 +211,5 @@ Brush presets support search, rename, delete/undo and portable JSON import/expor
 Saved sketch rows expose context actions for extrusion and path generation, automatically selecting the source, including joined closed line loops. See [source sketch actions](docs/guide-actions.md).
 
 Opt-in `CraftStudio.diagnostics` records bounded input/Worker/scene/frame submission timings without scene content. See [latency measurements and limits](docs/performance-trace.md).
+
+Unchanged inspector/tree content is retained across voxel edits, with dependency-aware sketch actions and `ui-summary` timing. See [panel refresh scope and measurements](docs/panel-refresh.md).
