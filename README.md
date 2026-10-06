@@ -199,3 +199,5 @@ Replacement imports and draft resume now parse in a candidate Worker with phase 
 Embedded partial geometry/textures now survive portable re-export before visual demand, with namespace-correct selected resource precedence. Captured assembly original-view controller NBT is separated from current edits and undo restores supported speeds. See [Create resource fidelity](docs/create-resource-fidelity.md).
 
 Generated result rows expose named source sketches; saved guides show dependant counts. Source editing explains linked vs source-only scope and preview update/manual-preservation counts, with one-step undo. Read-only `generation.links` exposes existing provenance. See [generation navigation](docs/generation-navigation.md).
+
+Recorded generated-output dependencies now propagate source and upstream-feature updates in dependency order, with cycle/missing-reference rejection, manual preservation and one undo. The edit panel includes indirect affected results; ordinary snaps remain snapshots. See [generation propagation](docs/generation-propagation.md).

@@ -1500,5 +1500,41 @@
       "persistent snap-source following",
       "backend streaming authority and live game validation"
     ]
+  },
+  "generationPropagationMilestone": {
+    "date": "2026-10-06",
+    "status": "implemented; dependency/geometry and isolated two-stage browser workflow verified",
+    "implementation": [
+      "transitive recorded output-guide consumers",
+      "reverse restoration then topological rebuilding",
+      "display-guide and source-version advancement",
+      "cycle/missing/ambiguous output failure before write",
+      "detached stop and whole-chain outdated status",
+      "transitive update names and parameter propagation"
+    ],
+    "validation": {
+      "transitiveNamesVisible": true,
+      "twoStagePreviewAndCommit": true,
+      "manualOverridePreserved": true,
+      "dependencyOrderCorrect": true,
+      "singleUndoRestoresChain": true,
+      "pageErrors": [],
+      "unitChecks": [
+        "three-level reversed order sorted topologically",
+        "cycle/missing source reject",
+        "same-source independent layer order",
+        "detached producer stops propagation",
+        "actual two-stage sweep outputs and manual preservation",
+        "display/source revision consistency",
+        "source-only transitive outdated marking",
+        "upstream feature parameter propagation"
+      ],
+      "scope": "recorded generation/output-guide relationships; no inferred snap constraints or automatic topology repair"
+    },
+    "remaining": [
+      "persistent snap constraints and dependency editor",
+      "broader generated profile inputs and topology repair",
+      "backend authority/working sets and live game validation"
+    ]
   }
 }

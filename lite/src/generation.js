@@ -1,3 +1,4 @@
+import {affectedGeneration,orderedGeneration} from './generation-order.js';
 import {coordKey,coords} from './site.js';
 import {stateKey} from './codec.js';
 import {geometryPlan} from './construction.js';
@@ -13,13 +14,13 @@ export function generatedObject(site,captured,{type,config,guideId,id=crypto.ran
  if(!captured.length)return null;const records=captured.map(r=>({...r,after:cellSnapshot(site,r.pos)})),sources=sourceIds(type,config,guideId);
  return{id,name,kind:type==='geometry'?'geometry':'feature',guideId,recipe:clone(config),...bounds(records),generation:{schema:1,type,records,sources,sourceVersions:Object.fromEntries(sources.map(id=>[id,site.design.guides.find(g=>g.id===id)?.revision||0]))}};
 }
-function detached(object){if(!object.generation?.records)return !!object.generation?.detached;const keys=new Set(object.cells||[]);return object.generation?.detached||object.generation?.records?.some(r=>!keys.has(coordKey(...r.pos)))||keys.size!==(object.generation?.records?.length||0);}
+export function detachedGeneration(object){if(!object.generation?.records)return !!object.generation?.detached;const keys=new Set(object.cells||[]);return object.generation?.detached||object.generation?.records?.some(r=>!keys.has(coordKey(...r.pos)))||keys.size!==(object.generation?.records?.length||0);}
 export function regenerateObjects(site,objects,{manualStrategy='preserve',overrides={},available=new Set()}={}){
- if(!['preserve','overwrite'].includes(manualStrategy))throw Error('请选择有效的手改处理方式');const working=site.fork(),touched=new Set(),generatedNow=new Set(),manual=new Set(),manualRecords=new Map(),edited=new Set(),warnings=[];
+ objects=orderedGeneration(site.design,objects);if(!['preserve','overwrite'].includes(manualStrategy))throw Error('请选择有效的手改处理方式');const working=site.fork(),touched=new Set(),generatedNow=new Set(),manual=new Set(),manualRecords=new Map(),edited=new Set(),warnings=[];
  for(const o of [...objects].reverse()){
   if(o.locked)throw Error('关联对象已锁定：'+o.name);
   if(!o.generation?.records)throw Error('旧特征缺少生成归属快照：'+o.name+'。请保留旧对象，或先重新生成并建立关联');
-  if(detached(o))throw Error('对象已被直接变换或改变成员：'+o.name+'，请先断开生成关联');
+  if(detachedGeneration(o))throw Error('对象已被直接变换或改变成员：'+o.name+'，请先断开生成关联');
   const restores=[],kept=[];
   for(const r of o.generation.records){const key=coordKey(...r.pos);touched.add(key);const live=cellSnapshot(working,r.pos);if(r.manual||!equal(live,r.after))edited.add(key);if(manualStrategy==='preserve'&&(r.manual||manual.has(key)||!equal(live,r.after))){manual.add(key);kept.push({...clone(r),after:live,manual:true});}else restores.push(operation(r.pos,r.before));}
   manualRecords.set(o.id,kept);working.operations(restores,{allowExisting:true,allowTerrain:true});
@@ -36,7 +37,7 @@ export function regenerateObjects(site,objects,{manualStrategy='preserve',overri
   const records=[...captured.map(r=>({...r,after:cellSnapshot(working,r.pos)})),...(manualRecords.get(o.id)||[])];
   const next=records.length?{...o,recipe:config,...bounds(records),generation:{...o.generation,outdated:false,records,sourceVersions:Object.fromEntries(o.generation.sources.map(id=>[id,working.design.guides.find(g=>g.id===id)?.revision||0]))}}:{...o,recipe:config,cells:[],generation:{...o.generation,records:[]}};
   working.design.objects=working.design.objects.map(v=>v.id===o.id?next:v);
-  const display=working.design.guides.find(g=>g.id===o.guideId);if(display&&type==='feature'){display.points=plan.guide;if(plan.guideGroups)display.paths=plan.guideGroups;else delete display.paths;display.recipe=config;}
+  const display=working.design.guides.find(g=>g.id===o.guideId);if(display&&type==='feature'){display.points=plan.guide;display.revision=(display.revision||0)+1;if(plan.guideGroups)display.paths=plan.guideGroups;else delete display.paths;display.recipe=config;}
   warnings.push(...plan.warnings);
  }
  const operations=[];for(const key of touched){const pos=coords(key),before=cellSnapshot(site,pos),after=cellSnapshot(working,pos);if(!equal(before,after))operations.push(operation(pos,after));}
@@ -47,8 +48,7 @@ export function editSketchPlan(site,config,available){
  const source=site.design.guides.find(g=>g.id===config.editGuideId);if(!source?.recipe?.kind)throw Error('请选择可编辑的已保存草图');
  const recipe={...clone(source.recipe),...clone(config)};delete recipe.editGuideId;delete recipe.updateDependents;delete recipe.manualStrategy;
  const sketch=geometryPlan(site,{...recipe,guidesOnly:true},available),working=site.fork();working.design.guides=working.design.guides.map(g=>g.id===source.id?{...g,recipe,points:sketch.guide,revision:(g.revision||0)+1}:g);
- const depends=(o)=>o.generation?.sources?.includes(source.id)||o.recipe?.profileIds?.some(id=>id===source.id||id.startsWith('loop:')&&JSON.parse(id.slice(5)).includes(source.id))||o.recipe?.operation==='sweep'&&o.recipe?.pathId===source.id;
- const detachedObjects=working.design.objects.filter(o=>depends(o)&&detached(o)),objects=working.design.objects.filter(o=>depends(o)&&!detached(o)),overrides=Object.fromEntries(objects.filter(o=>o.generation?.type==='geometry').map(o=>[o.id,recipe]));
+ const affected=affectedGeneration(working.design,source.id,detachedGeneration),detachedObjects=affected.detached,objects=affected.objects,overrides=Object.fromEntries(objects.filter(o=>o.generation?.type==='geometry'&&o.generation.sources?.includes(source.id)).map(o=>[o.id,recipe]));
  working.design.objects=working.design.objects.map(o=>detachedObjects.some(v=>v.id===o.id)?{...o,kind:'voxel',generation:{...o.generation,detached:true}}:o);
  let result={operations:[],design:working.design,guide:sketch.guide,warnings:[],usedRoles:{},regeneration:{objects:0,manual:0}};
  if(config.updateDependents!==false&&objects.length){result=regenerateObjects(working,objects,{manualStrategy:config.manualStrategy||'preserve',overrides,available});result.guide=sketch.guide;}
