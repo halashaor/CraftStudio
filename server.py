@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
             route, query = parsed.path, urllib.parse.parse_qs(parsed.query)
             arg = lambda name, default='': query.get(name, [default])[0]
             if route == '/api/desktop/info':
-                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','checkpoint-export/1'],'instances':instances(),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
+                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','workspace-delta/1','checkpoint-export/1'],'instances':instances(),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
             elif route == '/api/desktop/files':
                 self.respond(list_files(arg('instance')))
             elif route == '/api/desktop/file':
