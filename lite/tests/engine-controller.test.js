@@ -47,3 +47,12 @@ test('recovery allocation failure fails closed instead of exposing an uncommitte
  try{const d=await read(c);fail=true;await assert.rejects(c.call('api',request(d)),/Cannot recover/);await assert.rejects(read(c),/closed/);assert.equal(store.load('p').head.revision,d.revision);}finally{await c.close();store.close();}
 });
 test('timing observers cannot interrupt durable editing',async()=>{const store=new EngineStore(':memory:'),c=await EngineController.open({store,key:'p'});try{const d=await read(c),result=await c.call('api',request(d),{onTiming:()=>{throw Error('observer failed');}});assert.ok(result.ok);assert.equal(store.load('p').head.revision,result.revision);}finally{await c.close();store.close();}});
+test('canceling an unconfirmed replacement breaks a blocked preparation and preserves the committed scene',{timeout:5000},async()=>{
+ const store=new EngineStore(':memory:');let block=false,entered;const signal=new Promise(r=>entered=r),c=await EngineController.open({store,key:'p',beforeCommit:()=>{if(block){entered();return new Promise(()=>{});}}});let reopened;
+ try{const d=await read(c);assert.ok((await c.call('api',request(d))).ok);const committed=store.load('p').head;block=true;const pending=c.call('import',fixture()),rejected=assert.rejects(pending,/cancel|closed/i);await signal;assert.equal(c.cancelReplacement(),true);assert.equal(c.cancelReplacement(),false);await rejected;assert.equal((await read(c)).workspaceId,committed.workspaceId);assert.equal((await cell(c)).value[0].state.Name,'minecraft:bricks');assert.equal(store.load('p').head.revision,committed.revision);
+ }finally{await c.close({cancelReplacements:true});if(reopened)await reopened.close();store.close();}
+});
+test('close with replacement cancellation still drains an accepted canonical write',{timeout:5000},async()=>{
+ const store=new EngineStore(':memory:');let gate=false,entered,release;const signal=new Promise(r=>entered=r),c=await EngineController.open({store,key:'p',beforeCommit:()=>{if(gate){entered();return new Promise(r=>release=r);}}});
+ try{const d=await read(c);gate=true;const pending=c.call('api',request(d));await signal;let closed=false;const closing=c.close({cancelReplacements:true}).then(()=>closed=true);await new Promise(setImmediate);assert.equal(closed,false);release();assert.ok((await pending).ok);await closing;assert.equal(store.load('p').head.revision,d.revision+1);}finally{await c.close();store.close();}
+});

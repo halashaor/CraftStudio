@@ -62,7 +62,7 @@ try {
 
 Calls are serialized. Canonical edits are acknowledged after their checkpoint transaction succeeds; queued reads wait. Storage failure restores the committed checkpoint or fails closed if recovery is impossible. An uncertain acknowledgement after COMMIT is recovered from storage; retrying a still-cached request ID retains the shared engine's bounded idempotence semantics.
 
-Imports and resource changes run in a candidate workspace and swap only after storage succeeds. Invalid imports keep the live scene and uncommitted transactions. Pending strokes/proposals block replacement; pending transactions/construction also block resource replacement. A successful scene import ends old transient operations. `engineCapture`/`engineRestore` cannot bypass the controller. `close()` stops accepting requests and drains already accepted calls.
+Imports and resource changes run in a candidate workspace and swap only after storage succeeds. Invalid imports keep the live scene and uncommitted transactions. Pending strokes/proposals block replacement; pending transactions/construction also block resource replacement. A successful scene import ends old transient operations. `engineCapture`/`engineRestore` cannot bypass the controller. `close()` stops accepting requests and drains already accepted calls. `close({cancelReplacements:true})` also cancels unconfirmed replacement work; confirmed canonical writes still drain. `cancelReplacement()` cancels only the active uncommitted import/resource candidate and keeps the live scene available.
 
 `sequence` is the storage checkpoint sequence. Independent controllers retain their own in-memory snapshots; SQLite version checks prevent overwriting another committed writer. This is not a collaborative owner/lease service or automatic cross-client refresh.
 
@@ -84,11 +84,11 @@ POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `
 
 - `{operation:'open', key?}` returns a lease and storage key. Leases for the same key share one controller.
 - `{operation:'call', lease, id, action, data, ack?}` invokes the shared Worker action. IDs are positive integers. Retrying an unacknowledged ID requires the identical encoded envelope and reuses its result. `ack` retires completed replies; retired IDs cannot execute again.
-- `{operation:'close', lease}` releases the lease. The last lease drains and closes its controller; SQLite state remains available to reopening the key.
+- `{operation:'close', lease, cancelReplacements?}` releases the lease. The last lease drains and closes its controller; SQLite state remains available to reopening the key.
 
-`RemoteEngineWorker({url, token, key?, fetcher?})` from `lite/src/remote-worker.js` exposes the Worker-like `postMessage`, `onmessage` and `terminate` boundary used by WorkerSession. Requests are sent in order; response loss retries the same envelope. Replies preserve mesh/NBT types. Termination suppresses later callbacks and releases the lease; already accepted server operations drain rather than being forcibly canceled.
+`RemoteEngineWorker({url, token, key?, fetcher?})` from `lite/src/remote-worker.js` exposes the Worker-like `postMessage`, `onmessage` and `terminate` boundary used by WorkerSession. Requests are sent in order; response loss retries the same envelope. Replies preserve mesh/NBT types. Termination suppresses later callbacks and releases the lease with replacement cancellation. The last lease stops an unconfirmed candidate worker; accepted canonical edits still finish their durable commit. With other clients on the same key, releasing one lease does not cancel their shared controller.
 
-This adapter has been exercised in an isolated browser designer, but normal bootstrap selects the remote adapter when the optional Python gateway advertises local-engine/1. The Python gateway launches the service with a private process token and proxies binary messages through its existing authentication. Runtime/process discovery, idle cleanup, large-file streaming and active import cancellation remain integration work. Keep service configuration, tokens, datasets and reports local.
+This adapter has been exercised in an isolated browser designer, but normal bootstrap selects the remote adapter when the optional Python gateway advertises local-engine/1. The Python gateway launches the service with a private process token and proxies binary messages through its existing authentication. Idle cleanup and large-file streaming remain integration work. Keep service configuration, tokens, datasets and reports local.
 
 ## Python gateway configuration
 
@@ -105,3 +105,5 @@ The optional Python gateway uses `data/craftstudio-engine.sqlite3` for committed
 Opt-in traced requests return execute/capture/SQLite stage timings through the Worker-like adapter. SQLite timing distinguishes writer-lock acquisition, data writes and COMMIT. Observers cannot change editing success. The normal path does not record these metrics.
 
 This separation does not weaken commit-before-acknowledgement or replace SQLite durability settings. Both databases, process logs and measurement reports remain local. The backend still requires explicit activation while overall remote-path latency and lifecycle work continue.
+
+Cancellation is checked before candidate checkpoint/commit and can interrupt the pre-commit preparation wait. A candidate is marked committed immediately after successful SQLite save; canceling afterwards does not undo that confirmed scene. Default service shutdown remains a drain. Cancellation/close do not delete persisted engine heads or project data.
