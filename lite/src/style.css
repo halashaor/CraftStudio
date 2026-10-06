@@ -63,3 +63,5 @@
 #saved-views .saved-view-display-option{display:flex;align-items:center;gap:8px;margin:8px 0}#saved-views .saved-view-display-option input{width:auto;margin:0;flex:none}
 
 #cad-sketch-list>.row{flex-wrap:wrap;gap:4px;padding:6px 0;border-bottom:1px solid #3b4859}#cad-sketch-list>.row>button:first-child{flex-basis:100%;text-align:left}#cad-sketch-list [data-guide-action]{font-size:11px;padding:5px 8px}
+
+#construction-panel input[aria-invalid="true"]{border-color:#ee7168}#construction-panel input[data-expression-pending="true"]:not([aria-invalid="true"]){border-color:#e3bd72}

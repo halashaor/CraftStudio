@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {dimensionExpression as calc} from '../src/dimension-expression.js';
+test('block dimension calculations respect precedence, parentheses, signs and half blocks',()=>{for(const [text,value]of [['12/2',6],['3*5+1',16],['(12+4)/2',8],['-(3+2)/2',-2.5],['2×3−1÷2',5.5],['=7/2',3.5],['1e2 + .5',100.5],['2+-3',-1]])assert.equal(calc(text),value);});
+test('incomplete, invalid, nonfinite and out-of-range dimensions cannot silently become zero',()=>{for(const text of ['', '3*','(3+2','1 2','Math.random()','1/0','0/0','1e309','1;alert(1)','2**3'])assert.throws(()=>calc(text));assert.throws(()=>calc('1/4',{min:.5}));assert.throws(()=>calc('8*9',{max:64}));assert.equal(calc('1/2',{min:.5,max:64}),.5);});
