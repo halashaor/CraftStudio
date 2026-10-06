@@ -80,7 +80,7 @@ Inputs and reports remain local. The separate HTTP service and browser adapter a
 
 `createEngineService({database, token, port, allowedOrigins})` from `service.mjs` starts a loopback-only HTTP service. Alternatively supply an existing EngineStore as `store`. A private token of at least 16 characters is required. The returned object provides `url` and async `close()`. The service validates Host, Origin and `X-CraftStudio-Token`; tokens are not returned by discovery.
 
-POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `application/x-craftstudio-engine`. The gzip envelope preserves typed binary arrays, buffer slices, undefined, large integers and special numeric values; arbitrary object keys do not collide with binary markers.
+POST `/rpc` uses `encodeWire`/`decodeWire` from `lite/src/engine-wire.js` with `application/x-craftstudio-engine`. Version 2 uses a CSENGW2 frame: an eight-byte magic, a little-endian metadata length, gzip JSON metadata and raw binary payloads. Typed mesh/file bytes are not Base64 encoded or recompressed. Buffer slices, undefined, large integers and special numeric values remain lossless; object keys cannot collide with binary markers. The decoder accepts version 1 and the service replies in the request version for legacy clients. Raw framing trades compression ratio for less local serialization work.
 
 - `{operation:'open', key?}` returns a lease and storage key. Leases for the same key share one controller.
 - `{operation:'call', lease, id, action, data, ack?}` invokes the shared Worker action. IDs are positive integers. Retrying an unacknowledged ID requires the identical encoded envelope and reuses its result. `ack` retires completed replies; retired IDs cannot execute again.
