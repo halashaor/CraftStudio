@@ -785,5 +785,28 @@
       "Compressed output and resources buffered",
       "Backend editing authority and global generation still pending"
     ]
+  },
+  "pasteCursorMilestone": {
+    "date": "2026-10-05",
+    "workflow": "Ctrl+C -> Ctrl+V -> mouse-following ghost -> click lock -> gizmo/numeric adjustment -> Enter or Ctrl+V confirm; Escape cancel",
+    "status": "implemented and isolated browser workflow verified",
+    "validation": {
+      "cursorInitialAnchor": true,
+      "liveCursorGhost": true,
+      "previewDoesNotEdit": true,
+      "clickLocksPlacement": true,
+      "enterCommitsAtPreview": true,
+      "undoAndEscape": true,
+      "spaceDoesNotLock": true,
+      "ctrlVConfirms": true,
+      "pageErrors": [],
+      "source": "https://axiomdocs.moulberry.com/editor/windows/clipboard.html",
+      "referenceStudy": "official documentation; no hands-on Axiom session",
+      "scope": "fresh isolated browser and SQLite database; human mouse/keyboard flow plus scene revision and chunk checks"
+    },
+    "remaining": [
+      "Axiom hands-on comparison still pending",
+      "Further unify sketch, terrain and transform operation feedback"
+    ]
   }
 }

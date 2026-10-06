@@ -1,0 +1,14 @@
+{
+  "cursorInitialAnchor": true,
+  "liveCursorGhost": true,
+  "previewDoesNotEdit": true,
+  "clickLocksPlacement": true,
+  "enterCommitsAtPreview": true,
+  "undoAndEscape": true,
+  "spaceDoesNotLock": true,
+  "ctrlVConfirms": true,
+  "pageErrors": [],
+  "source": "https://axiomdocs.moulberry.com/editor/windows/clipboard.html",
+  "referenceStudy": "official documentation; no hands-on Axiom session",
+  "scope": "fresh isolated browser and SQLite database; human mouse/keyboard flow plus scene revision and chunk checks"
+}
