@@ -189,3 +189,5 @@ Local autosave now captures immutable checkpoint chunk references (`checkpoint-d
 Measure actual scene surfaces with the left-side 测量 tool or F3: fractional spacing, rise and slope appear in the fixed inspector and 3D ruler. Saved metadata annotations support edit/delete/undo, world-coordinate API and portable persistence without placing blocks. See [measurement](docs/measurement.md).
 
 Sketch picking now identifies saved-guide endpoints, midpoints and centers near the cursor, with a cyan marker and fixed source badge. Workplane filtering, optional Ctrl bypass and exact numeric/reference coordinate preservation support connected design without mandatory constraints. See [object snaps](docs/object-snaps.md).
+
+Private provided-file regressions can be run locally with `node lite/verify-fixtures.mjs` and explicit paths. The latest local run passed 165 tests with zero skips; the supplied V3 change blueprint matched its reference exactly. Public CI still excludes private files and licensed assets. See [fixture verification scope](docs/private-fixture-validation.md).

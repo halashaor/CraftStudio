@@ -1,0 +1,42 @@
+{
+  "fixtureChecks": {
+    "originalNbt": true,
+    "reference": true,
+    "createJar": true
+  },
+  "nodeTests": {
+    "total": 165,
+    "passed": 165,
+    "failed": 0,
+    "skipped": 0
+  },
+  "scope": "local file/parser/resource/export verification; no live game placement or aesthetic approval",
+  "result": {
+    "blocks": 33179,
+    "palette": 49,
+    "entities": 0,
+    "blockEntities": 0,
+    "dataVersion": 3955,
+    "skipCount": 331107,
+    "eraseCount": 1414,
+    "losslessRoundTrip": true,
+    "capturedStructures": 0,
+    "unsupportedStructures": 0,
+    "exactReferencePatchMatch": true
+  },
+  "privateInputsNotPublished": true,
+  "originalFixtureChecks": [
+    "original region and entities imported",
+    "reference before-states verified",
+    "source NBT block/entity/native-extra roundtrip",
+    "two windmill assembly/controller data restored",
+    "Create partial JSON/OBJ models and resource bundle verified"
+  ],
+  "resultInterpretation": "cropped change blueprint with solid changes, erasures and skip mask; not a full world region",
+  "notVerified": [
+    "live game placement",
+    "aesthetic approval",
+    "all Minecraft/Create versions",
+    "backend streaming editing"
+  ]
+}
