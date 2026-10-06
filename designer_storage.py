@@ -1,4 +1,5 @@
 """Portable designer snapshots in the same local SQLite database as legacy projects."""
+from chunk_storage import setup as setup_chunks, manifest as chunk_manifest, read_chunks
 import copy
 from contextlib import contextmanager
 import json
@@ -13,7 +14,7 @@ class DesignerLibrary:
     def __init__(self, path):
         self.path = Path(path)
         with self.connection() as conn:
-            conn.execute('CREATE TABLE IF NOT EXISTS designer_records (store TEXT NOT NULL, key TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(store,key))')
+            conn.execute('CREATE TABLE IF NOT EXISTS designer_records (store TEXT NOT NULL, key TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(store,key))');setup_chunks(conn)
     @contextmanager
     def connection(self):
         conn = sqlite3.connect(self.path, timeout=15)
@@ -36,10 +37,18 @@ class DesignerLibrary:
         return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
     def call(self, method, args):
         with self.connection() as conn:
-            conn.execute('BEGIN IMMEDIATE')
+            conn.execute('BEGIN' if method=='baselineChunks' else 'BEGIN IMMEDIATE')
             result = self.execute(conn, method, args)
             return result
     def execute(self, conn, method, args):
+        if method == 'baselineManifest':
+            if len(args)>1 and args[1] is not None:
+                old=self.get(conn,'bases',args[0]);data=args[1]
+                if not isinstance(data,dict) or not isinstance(data.get('$bytes'),str):raise ValueError('基线需要便携二进制数据')
+                if old and old.get('bytes')!=data:raise ValueError('基线键已存在且内容不同')
+                if not old:self.put(conn,'bases',{'id':args[0],'bytes':data})
+            return chunk_manifest(conn,args[0],lambda key:self.get(conn,'bases',key))
+        if method == 'baselineChunks':return read_chunks(conn,args[0],args[1])
         if method == 'preference':
             key = 'prefs:' + str(args[0]); old = self.get(conn,'sessions',key)
             if len(args)<2: return old.get('data') if old else None

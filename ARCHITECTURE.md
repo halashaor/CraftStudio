@@ -119,3 +119,9 @@ Python 后端（工程操作 / 格式转换 / AI 规划）
 Designer snapshots are stored in namespaced `designer_records` tables in the existing SQLite database. Legacy projects and APIs remain available for import/compatibility. Public builds embed no personal data unless fixture environment variables are explicitly supplied. CI tests both layers and synchronizes committed build outputs on main.
 
 Viewport mesh requests include world-space frustum planes for large scenes. ChunkMesher keeps canonical Site data independent of resident geometry, tracks off-view dirty chunks, and returns explicit evictions. Resource-model conservative radius protects geometry extending across chunk boundaries. Render application is serialized; camera changes are coalesced. Voxel data and textures remain resident: backend-authoritative chunk storage/streaming is still pending.
+
+## 本地不可变基线区块缓存（已验证）
+
+Worker 的 `baselineReference` 提供原始压缩基线和不可变 baseKey；相同查询源后续只传引用。`BaselineChunkSource` 通过 UnifiedLibrary → 认证 `/api/desktop/library` 查询 `baselineManifest` / `baselineChunks`。SQLite 的 `designer_chunk_manifests` 与 `designer_baseline_chunks` 是可重建派生缓存，不替换 `designer_records` 的完整基线/工程。初次索引解压基线一次，缓存后逐块读取；客户端默认 32 区块 LRU。
+
+公开设计接口的基线读取返回原始记录，编辑增量不在这个结果中。空记录并不把未知地形、placementMask skip 等视为平地；消费方必须使用保留的来源覆盖信息。当前 Worker 仍是完整编辑场景的权威；后端流式编辑、原始/增量合并和全局导出迁移均未完成。

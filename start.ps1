@@ -1,7 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
 $taskStream = New-Object IO.MemoryStream
-foreach ($taskName in @('server.py','assets.py','designer_storage.py','desktop_files.py')) {
+foreach ($taskName in @('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py')) {
     $taskBytes = [IO.File]::ReadAllBytes((Join-Path $taskRoot $taskName))
     $taskStream.Write($taskBytes,0,$taskBytes.Length)
 }
