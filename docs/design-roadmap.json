@@ -1,6 +1,6 @@
 {
   "schema": "craftstudio-design-roadmap/1",
-  "date": "2026-10-05",
+  "date": "2026-10-06",
   "goal": "做好规划，持续学习其他成熟设计软件，并把合适的设计逐步落实到 CraftStudio",
   "goalStatus": "active",
   "baselineCommit": "4d0d607",
@@ -1574,6 +1574,38 @@
       "complete display/clipping/isolation snapshots",
       "thumbnails/transitions/keymaps",
       "backend authority/working sets and live game validation"
+    ]
+  },
+  "displaySnapshots": {
+    "status": "implemented and isolated browser validated",
+    "scope": [
+      "optional cut/mode/plants/ground/existing saved-view display settings",
+      "camera-only preserves current display",
+      "restore does not edit voxels or revision"
+    ],
+    "validation": {
+      "displayRestored": true,
+      "cameraOnlyPreservesDisplay": true,
+      "currentCameraCapturedAfterProjectionSwitch": true,
+      "projectionZoomUpExtentRestored": true,
+      "restorationDoesNotEditVoxelsOrRevision": true,
+      "portableReopenRetains": true,
+      "deleteUndo": true,
+      "savedViewsAccessibleDuringSketch": true,
+      "restorePreservesPendingSketch": true,
+      "pageErrors": [],
+      "date": "2026-10-06",
+      "reference": "https://docs.mcneel.com/rhino/8/help/en-us/commands/snapshots.htm",
+      "referenceStudy": "official body read; no hands-on Rhino claim",
+      "unitChecks": [
+        "display validation atomicity",
+        "portable metadata and undo",
+        "all layers and clamp"
+      ]
+    },
+    "remaining": [
+      "isolation/object visibility/lighting not captured",
+      "backend editing authority and live game validation"
     ]
   }
 }
