@@ -143,7 +143,7 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 
 接口说明：[设计 API](lite/DESIGN-API.md)。
 
-后端开发可使用 [local-engine](local-engine/README.md) 的共享 Node 宿主、SQLite 检查点与逐笔落盘确认控制器；当前界面和 Python 服务尚未启用。
+后端开发可使用 [local-engine](local-engine/README.md) 的共享 Node 宿主、SQLite 检查点与逐笔落盘确认控制器；Python 服务和设计器可按下面的方式选择启用。
 
 ## 可选的后端编辑路径
 
@@ -151,4 +151,4 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 
 启动前设置 `CRAFTSTUDIO_ENGINE=1`；找不到 Node 时可用 `CRAFTSTUDIO_NODE` 指定可执行文件。服务启动成功才声明 `local-engine/1`，界面随后使用后端并恢复最后确认场景与撤销/重做。独立 Lite 继续使用浏览器 Worker 和 IndexedDB。设置 `CRAFTSTUDIO_ENGINE=0` 可禁用。
 
-大文件流式传输和远端路径延迟尚未完成优化。开发接口见 [local-engine](local-engine/README.md)。
+启用后端后，所选文件按 4 MiB 分片读取、校验和传输，并支持取消，避免浏览器整文件缓冲。后端解析仍会在内存中组装完整输入；独立 Lite 保留浏览器解析。远端路径延迟尚未完成优化。开发接口见 [local-engine](local-engine/README.md)。

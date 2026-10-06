@@ -124,4 +124,12 @@ Upload operations are lease-bound: `uploadStart` declares ID/size/SHA-256, `uplo
 
 `RemoteEngineWorker` accepts `uploadThreshold` and `uploadChunkBytes` for embedding/tests and emits upload progress through the existing Worker message channel. Lite's ordinary browser Worker path is unaffected.
 
-This is bounded-request transport, not end-to-end low-memory file parsing. The browser currently materializes the original call envelope, and the server assembles it before handing it to the shared parser/controller. Full streaming input, parser working sets and cleanup after abrupt process termination remain incomplete. Do not treat a large transport test as unlimited world-size support.
+This is bounded-request transport, not end-to-end low-memory file parsing. Byte-array calls still materialize the original browser envelope. Selected-file imports use the separate path below. The server assembles either input before handing it to the shared parser/controller. Full streaming input, parser working sets and cleanup after abrupt process termination remain incomplete. Do not treat a large transport test as unlimited world-size support.
+
+## Selected-file imports
+
+When the opt-in local backend is active, the designer passes the selected File/Blob to the adapter. The adapter reads only successive `slice().arrayBuffer()` ranges (4 MiB by default); it does not call the selected file's whole-file `arrayBuffer()` or embed it in a wire envelope. Standalone Lite continues to parse in its browser Worker.
+
+`uploadStart` with `kind: "file"` declares the size. Each `uploadChunk` includes its own SHA-256; the service verifies bytes before writing and rechecks the recorded slices after assembly. `uploadedFileCall` carries the import name/options, original RPC ID and upload ID. The service fingerprints the completed file plus import descriptor; lost replies reuse the same result. Conflicting completion descriptors are rejected. Cancellation discards the staged scene and temporary upload while preserving the current confirmed scene.
+
+This bounds browser input-read memory, not backend parsing memory. Resource-library byte arrays and standalone Lite still use their existing paths. The backend remains opt-in.
