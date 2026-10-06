@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-06",
+  "issue": "real short-grass crossed planes caused grazing-ray stroke plane and only first stamp",
+  "fix": "automatic axis-plane fallback for grazing hits; explicit surface/view/xz/xy/yz modes; single placement and existing-material painting unchanged",
+  "runs": [
+    {
+      "mode": "local",
+      "hardwareRendererVerified": true,
+      "baseResourcesReady": true,
+      "sourceBlocks": 520227,
+      "continuousPointerSteps": 24,
+      "verifiedOccupiedCells": 29,
+      "oneStrokeOneUndo": true,
+      "exportReopenMatchesExactStates": true,
+      "navigationDoesNotEdit": true,
+      "preciseUpdates": 8,
+      "submittedFrames": 35,
+      "maxScenePrepareMs": 15.800000011920929,
+      "maxSummaryMs": 0.699999988079071,
+      "errors": [],
+      "limits": "hardware-rendered headless sample with supplied vanilla/Create JARs; not all mods/resources or sustained FPS; timestamps are CPU/frame submission"
+    },
+    {
+      "mode": "lite",
+      "hardwareRendererVerified": true,
+      "baseResourcesReady": true,
+      "sourceBlocks": 520227,
+      "continuousPointerSteps": 24,
+      "verifiedOccupiedCells": 29,
+      "oneStrokeOneUndo": true,
+      "exportReopenMatchesExactStates": true,
+      "navigationDoesNotEdit": true,
+      "preciseUpdates": 9,
+      "submittedFrames": 35,
+      "maxScenePrepareMs": 16.69999998807907,
+      "maxSummaryMs": 0.800000011920929,
+      "errors": [],
+      "limits": "hardware-rendered headless sample with supplied vanilla/Create JARs; not all mods/resources or sustained FPS; timestamps are CPU/frame submission"
+    }
+  ],
+  "presetRegression": {
+    "searchRenameLoad": true,
+    "deleteUndo": true,
+    "jsonRoundtripAndConflictCopies": true,
+    "malformedImportAtomic": true,
+    "reloadPersists": true,
+    "permissionsUnchanged": true,
+    "pageErrors": []
+  },
+  "visualInspection": true,
+  "unitChecks": [
+    "grazing cross-plane fallback",
+    "ordinary face axis unchanged",
+    "manual surface retains selected face",
+    "explicit axis planes"
+  ],
+  "privateAssetsPublished": false
+}

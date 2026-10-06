@@ -215,3 +215,5 @@ Opt-in `CraftStudio.diagnostics` records bounded input/Worker/scene/frame submis
 Unchanged inspector/tree content is retained across voxel edits, with dependency-aware sketch actions and `ui-summary` timing. See [panel refresh scope and measurements](docs/panel-refresh.md).
 
 Diagnostics now include `scene-pick`; the [browser thread trace](docs/browser-thread-trace.md) distinguishes page, Worker and software-GPU scheduling instead of attributing all delays to the editor.
+
+Brush drawing supports automatic grazing-face fallback and explicit surface/view/axis planes; real vanilla/Create resources were used to verify continuous drag, undo and portable reopen in both storage modes. See [drawing planes](docs/brush-plane.md).

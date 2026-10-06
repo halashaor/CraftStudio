@@ -9,3 +9,5 @@ The official [Axiom Tool Presets documentation](https://axiomdocs.moulberry.com/
 Validation: search, rename, load, delete/undo, JSON export/import, conflicting names, malformed-import atomicity, reload persistence and unchanged terrain permission passed in an isolated browser/backend. See [evidence](validation/brush-presets.json). This release manages brush presets; path/terrain presets and cross-device synchronization remain future work.
 
 中文：画笔属性面板支持查找、保存、载入、重命名、删除及本次会话撤销删除；JSON 导入导出可在本地版与 Lite 间迁移，同名另存副本。预设不包含材料、方块、选区内容或场地保护授权。已有工程库备份仍包含这些偏好设置。
+
+Brush presets now also include the drawing plane. Legacy records default to Automatic. See [stroke plane behavior](brush-plane.md).

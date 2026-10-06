@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {brushPlaneAxis} from '../src/brush-plane.js';
+test('grazing cross-plane vegetation uses a usable view plane while normal faces stay unchanged',()=>{assert.equal(brushPlaneAxis(2,[0,-1,.0001]),1);assert.equal(brushPlaneAxis(1,[0,-1,0]),1);assert.equal(brushPlaneAxis(0,[-1,.2,0]),0);assert.equal(brushPlaneAxis(2,[0,-1,.0001],'surface'),2);});
+test('explicit horizontal/vertical planes and view-facing planes are deterministic',()=>{assert.equal(brushPlaneAxis(2,[0,-1,0],'xz'),1);assert.equal(brushPlaneAxis(1,[0,-1,0],'xy'),2);assert.equal(brushPlaneAxis(1,[0,-1,0],'yz'),0);assert.equal(brushPlaneAxis(1,[-.9,-.1,.2],'view'),0);});
