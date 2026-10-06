@@ -1270,5 +1270,77 @@
       "continue local authoritative data and working-set architecture"
     ],
     "limits": "provided-fixture coverage is not an all-version compatibility claim"
+  },
+  "baselineIndexMilestone": {
+    "date": "2026-10-05",
+    "status": "implemented; 167 real-file tests and isolated browser/backend full export verified",
+    "implementation": [
+      "point lookup and chunk index share immutable baseline maps",
+      "avoid full global Map entry duplication and intermediate record array",
+      "36-bit coordinate bucket calculation tested"
+    ],
+    "validation": {
+      "before": {
+        "blocks": 520227,
+        "chunks": 223,
+        "indexMilliseconds": 213.377,
+        "retainedHeapDeltaBytes": 30886704,
+        "lookupPasses": 5,
+        "lookupMilliseconds": 162.597,
+        "checksum": 78724065,
+        "scope": "Node constructor/index retained heap and full-record lookup only; original parsed project already resident; not whole browser/GPU memory"
+      },
+      "after": {
+        "blocks": 520227,
+        "chunks": 223,
+        "indexMilliseconds": 102.075,
+        "retainedHeapDeltaBytes": 16228448,
+        "lookupPasses": 5,
+        "lookupMilliseconds": 170.866,
+        "checksum": 78724065,
+        "scope": "Node constructor/index retained heap and full-record lookup only; original parsed project already resident; not whole browser/GPU memory"
+      },
+      "browser": {
+        "originalBlocks": 520227,
+        "originalEntities": 169,
+        "browserRealNbtImport": true,
+        "exactSampleLookups": true,
+        "baselineManifestCount": true,
+        "backendFullExportAllRecords": true,
+        "entitiesAndNativeMetadataPreserved": true,
+        "pageErrors": [],
+        "scope": "isolated browser/Worker/SQLite functional import/read/export; no GPU/frame-rate or live game placement claim"
+      },
+      "actualFixtureTests": {
+        "total": 167,
+        "passed": 167,
+        "failed": 0,
+        "skipped": 0
+      },
+      "environment": {
+        "runningJavaGameObserved": false,
+        "bridgeListenerObserved": false,
+        "bridgeJarPresent": true
+      },
+      "unitChecks": [
+        "maximum 36-bit coordinate keys",
+        "chunk axis decoding",
+        "lookup and chunk iteration share records",
+        "original baseline preserved through fork/edit/undo"
+      ],
+      "limits": [
+        "single local timing/retained heap sample",
+        "parsed source already resident",
+        "lookup sample did not improve",
+        "Worker still retains full baseline",
+        "no live game placement claim"
+      ],
+      "privateInputsNotPublished": true
+    },
+    "remaining": [
+      "initial full decode and Worker baseline still present",
+      "backend authority and viewport-only working sets",
+      "live game validation requires a running test world/bridge"
+    ]
   }
 }

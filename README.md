@@ -191,3 +191,5 @@ Measure actual scene surfaces with the left-side 测量 tool or F3: fractional s
 Sketch picking now identifies saved-guide endpoints, midpoints and centers near the cursor, with a cyan marker and fixed source badge. Workplane filtering, optional Ctrl bypass and exact numeric/reference coordinate preservation support connected design without mandatory constraints. See [object snaps](docs/object-snaps.md).
 
 Private provided-file regressions can be run locally with `node lite/verify-fixtures.mjs` and explicit paths. The latest local run passed 165 tests with zero skips; the supplied V3 change blueprint matched its reference exactly. Public CI still excludes private files and licensed assets. See [fixture verification scope](docs/private-fixture-validation.md).
+
+Original point lookup and chunk indexing now share immutable baseline maps. A supplied-region Node sample reduced retained index heap from about 31 MB to 16 MB; timing/lookup scope and tradeoffs are documented. Real-file tests and an isolated browser/backend full NBT export matched all original records. This is not viewport-only streaming. See [baseline indexing](docs/baseline-index.md).

@@ -1,5 +1,5 @@
 // Map-shaped, chunked copy-on-write storage. Each branch owns only touched chunks.
-const bucket=key=>Math.floor((key%4096)/16)+256*(Math.floor((Math.floor(key/4096)%4096)/16)+256*Math.floor(Math.floor(key/16777216)/16));
+const bucket=key=>((key>>>4)&255)|(((key>>>16)&255)<<8)|(Math.floor(key/268435456)<<16);
 export class VoxelOverlayMap{
  constructor(source){this.chunks=new Map();this.owned=new Set();this.count=0;if(source instanceof VoxelOverlayMap){this.chunks=new Map(source.chunks);this.count=source.count;source.owned.clear();}else if(source)for(const [key,value]of source)this.set(key,value);}
  get size(){return this.count;}
