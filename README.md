@@ -173,3 +173,5 @@ The full local service now mirrors versioned Worker checkpoints as chunk-indexed
 Clipboard placement: Ctrl+C copies the selection; Ctrl+V starts a cursor-following preview. Click to lock its anchor, then adjust with the gizmo or numeric offsets. Enter or Ctrl+V confirms; Escape cancels without editing. Fast copy/paste waits for the clipboard data. See [workflow evidence](docs/validation/paste-cursor.json).
 
 Shortcut context: text fields retain native clipboard/deletion/undo. Undo during a transform, sketch or designer preview cancels that preview before affecting committed scene history; Delete does not delete the original selection behind a preview. Scene redo supports Ctrl+Y and Ctrl+Shift+Z. See [validation](docs/validation/keyboard-context.json).
+
+Optional reviewable AI proposals now expose `proposal.prepare/inspect/commit/cancel`, connected to the 3D preview. Proposal ID and scene revision guard adoption, true deletions and typed NBT survive, and accepted edits undo as one step. External API edits invalidate old direct-transform previews. See [proposal API](docs/proposal-api.md).

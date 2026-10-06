@@ -1,0 +1,21 @@
+{
+  "proposalApiToVisiblePreview": true,
+  "escapeCancelsWithoutRevisionChange": true,
+  "undoCancelsProposalFirst": true,
+  "deleteDoesNotMutate": true,
+  "enterAdopts": true,
+  "oneUndoRestores": true,
+  "apiEditInvalidatesManualTransform": true,
+  "pageErrors": [],
+  "unitAndWorkerChecks": [
+    "deletion remains null",
+    "typed long NBT diff",
+    "atomic policy rejection",
+    "single undo with design restoration",
+    "proposal identity/revision guards",
+    "brush write blocked during proposal",
+    "reference HTML import revision pinning",
+    "stale transform rejected by Worker"
+  ],
+  "referenceStudy": "extends previously documented Axiom confirm/cancel and preview semantics; no new hands-on Axiom claim"
+}

@@ -173,3 +173,5 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 剪贴板放置：Ctrl+C 复制选区，Ctrl+V 开始跟随鼠标的预览；单击锁定后用操纵器或数字微调，Enter / Ctrl+V 确认，Esc 取消且不写入方块。快速复制粘贴会等待复制数据完成。见[工作流验证](docs/validation/paste-cursor.json)。
 
 快捷键按上下文工作：输入框保留文本粘贴、删除和撤销；移动/粘贴、草图及排列预览中的撤销先取消预览，Delete 不再穿透预览删除原选区。场景重做支持 Ctrl+Y 和 Ctrl+Shift+Z。见[验证记录](docs/validation/keyboard-context.json)。
+
+可选 AI 审核提案已提供 `proposal.prepare/inspect/commit/cancel` 并接入 3D 预览；采用校验提案编号和场景版本，保留真正的删除与类型化 NBT，成功后可一次撤销。外部接口改动会取消旧的直接变换预览。见[提案接口说明](docs/proposal-api.md)。
