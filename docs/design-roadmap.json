@@ -1422,5 +1422,45 @@
       "HTML reference proposal path separate",
       "backend authority and viewport-only working sets"
     ]
+  },
+  "createResourceFidelityMilestone": {
+    "date": "2026-10-06",
+    "status": "implemented; reproduced failures fixed, resource/controller and browser regressions verified",
+    "implementation": [
+      "retain valid saved partial models/textures before preview demand",
+      "namespace-correct selected resource precedence",
+      "restored partial version marker updates",
+      "original view reads baseline controller NBT; after view reads edits"
+    ],
+    "validation": {
+      "savedPartialRetainedWithoutPreviewDemand": true,
+      "textureReferenceAndImageRetained": true,
+      "portableSecondReopenRetains": true,
+      "pageErrors": [],
+      "scope": "synthetic embedded JSON partial/image-reference roundtrip; actual Create JSON/OBJ resources verified separately",
+      "unitChecks": [
+        "saved partial retained before visual demand",
+        "saved partial content-version advances once",
+        "selected model/texture resources override embedded snapshots",
+        "non-Create namespace overrides",
+        "original/after controller NBT separation and undo"
+      ],
+      "providedFileTests": {
+        "total": 175,
+        "passed": 175,
+        "failed": 0,
+        "skipped": 0
+      },
+      "scopeLimits": [
+        "no native entity editing",
+        "no live reconstruction/simulation",
+        "no all-version support claim"
+      ]
+    },
+    "remaining": [
+      "native entity editing/reconstruction and live game validation",
+      "broader loader/version rendering adapters",
+      "backend streaming authority and working sets"
+    ]
   }
 }
