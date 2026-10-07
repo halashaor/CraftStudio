@@ -8,6 +8,7 @@ import mimetypes
 import os
 import secrets
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -138,6 +139,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(raw)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-CraftStudio-Version','0.3.0')
+        if hasattr(self,'engine_forward_ms'):self.send_header('Server-Timing','engine-forward;dur='+format(self.engine_forward_ms,'.3f'))
         origin=self.headers.get('Origin')
         if origin in self.allowed_origins():
             self.send_header('Access-Control-Allow-Origin',origin)
@@ -178,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
             route, query = parsed.path, urllib.parse.parse_qs(parsed.query)
             arg = lambda name, default='': query.get(name, [default])[0]
             if route == '/api/desktop/info':
-                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','workspace-delta/1','checkpoint-export/1','checkpoint-draft/1']+(['local-engine/1'] if ENGINE.ensure() else []),'instances':instances(),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
+                self.respond({'protocol':'craftstudio-desktop/1','token':TOKEN,'version':'0.3.0','storage':'sqlite','capabilities':['baseline-chunks/1','workspace-chunks/1','workspace-delta/1','checkpoint-export/1','checkpoint-draft/1']+(['local-engine/1'] if ENGINE.ensure() else []),'instances':instances(),'engineEndpoint':(ENGINE.url+'/rpc' if ENGINE.url and ENGINE.allowed_origins else None),'backendBuild':BACKEND_BUILD,'sourceRoot':str(ROOT)})
             elif route == '/api/desktop/files':
                 self.respond(list_files(arg('instance')))
             elif route == '/api/desktop/file':
@@ -235,7 +237,7 @@ class Handler(BaseHTTPRequestHandler):
             if length > 64 * 1024 * 1024:
                 raise ValueError('请求过大，请分区操作')
             if urllib.parse.urlparse(self.path).path == '/api/desktop/engine':
-                status,raw=ENGINE.forward(self.rfile.read(length))
+                started=time.perf_counter();status,raw=ENGINE.forward(self.rfile.read(length));self.engine_forward_ms=(time.perf_counter()-started)*1000
                 self.respond(raw,status,content_type='application/x-craftstudio-engine')
                 return
             body = json.loads(self.rfile.read(length))
@@ -447,6 +449,9 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=18767)
     args = parser.parse_args()
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+    ports={server.server_port}
+    if server.server_port==18767:ports.add(18765)
+    ENGINE.allowed_origins=[f'http://{host}:{port}' for host in ('127.0.0.1','localhost') for port in sorted(ports)]
     print(f'CraftStudio 0.3.0 http://127.0.0.1:{server.server_port} | source={ROOT} | desktop={"/api/desktop/info" in Handler.do_GET.__code__.co_consts}', flush=True)
     try:
         server.serve_forever()

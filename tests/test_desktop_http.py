@@ -36,6 +36,7 @@ class DesktopHttpTests(unittest.TestCase):
             response=urllib.request.urlopen(request)
             self.assertEqual(response.read(),payload)
             self.assertEqual(response.headers['Content-Type'],'application/x-craftstudio-engine')
+            self.assertRegex(response.headers['Server-Timing'],r'^engine-forward;dur=[0-9]+\.[0-9]{3}$')
             forward.assert_called_once_with(payload)
 
     def test_unknown_library_method_is_rejected(self):

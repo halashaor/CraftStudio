@@ -133,3 +133,9 @@ When the opt-in local backend is active, the designer passes the selected File/B
 `uploadStart` with `kind: "file"` declares the size. Each `uploadChunk` includes its own SHA-256; the service verifies bytes before writing and rechecks the recorded slices after assembly. `uploadedFileCall` carries the import name/options, original RPC ID and upload ID. The service fingerprints the completed file plus import descriptor; lost replies reuse the same result. Conflicting completion descriptors are rejected. Cancellation discards the staged scene and temporary upload while preserving the current confirmed scene.
 
 This bounds browser input-read memory, not backend parsing memory. Resource-library byte arrays and standalone Lite still use their existing paths. The backend remains opt-in.
+
+## Direct interactive transport
+
+The optional launcher-owned Node service receives an explicit loopback origin list through `CRAFTSTUDIO_ENGINE_ORIGINS`. The launcher advertises its validated `engineEndpoint` after successful startup; the designer uses that endpoint with the same private token instead of forwarding each interactive RPC through Python. The Python endpoint remains a compatibility path. Service Host/Origin/token checks, serialized controllers and persist-before-acknowledgement are unchanged. Standalone Lite stays independent; this backend remains opt-in.
+
+Opt-in traces include controller describe/execute/capture/SQLite stages and browser queue/encode/response-header wait/read/decode timings. The compatibility proxy adds a numeric `Server-Timing` forwarding duration. Same-origin resource timing is included only when a matching entry is available. These figures omit files, coordinates, prompts and tokens; they are diagnostics, not GPU presentation or sustained-FPS measurements.

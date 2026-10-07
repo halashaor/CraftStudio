@@ -5,7 +5,7 @@ from contextlib import closing
 
 class EngineGateway:
     def __init__(self, root, database, token, legacy_database=None):
-        self.root=Path(root);self.database=Path(database);self.legacy_database=Path(legacy_database) if legacy_database else None;self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False
+        self.root=Path(root);self.database=Path(database);self.legacy_database=Path(legacy_database) if legacy_database else None;self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False;self.allowed_origins=[]
         candidates=[os.environ.get('CRAFTSTUDIO_NODE'),shutil.which('node')]
         profile=os.environ.get('USERPROFILE')
         if profile:candidates.append(str(Path(profile)/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe'))
@@ -38,7 +38,7 @@ class EngineGateway:
             if self.closed or not self.node:return False
             if self.process and self.process.poll() is None:return True
             self.migrate()
-            env=os.environ.copy();env['CRAFTSTUDIO_ENGINE_TOKEN']=self.token
+            env=os.environ.copy();env['CRAFTSTUDIO_ENGINE_TOKEN']=self.token;env['CRAFTSTUDIO_ENGINE_ORIGINS']=json.dumps(self.allowed_origins)
             logs=self.database.parent/'engine-process.log';logs.parent.mkdir(parents=True,exist_ok=True)
             with logs.open('ab') as error_log:
                 self.process=subprocess.Popen([self.node,str(self.root/'local-engine/run-service.mjs'),str(self.database)],cwd=self.root,env=env,stdout=subprocess.PIPE,stderr=error_log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)

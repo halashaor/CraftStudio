@@ -38,11 +38,11 @@ export class EngineController{
   if(this.#engine.closed)await this.#recover();
   if(resourceChanges.has(action))return this.#replace(action,data,true);
   if(['load','resume'].includes(action)||action==='import'&&!/\.html?$/i.test(data.name||''))return this.#replace(action,data);
-  const before=await this.#engine.call('api',{method:'workspace.describe'});let result;const started=performance.now();
+  const inspectStart=performance.now(),before=await this.#engine.call('api',{method:'workspace.describe'});onTiming?.({stage:'describe-before',ms:performance.now()-inspectStart});let result;const started=performance.now();
   try{result=await this.#engine.call(action,data);}catch(error){if(action==='api'||directChanges.has(action)||this.#engine.closed)await this.#recover();throw error;}
   onTiming?.({stage:'execute',ms:performance.now()-started});if(action==='api'&&!result.ok)return result;
   this.#track(action,data,result);
-  const after=await this.#engine.call('api',{method:'workspace.describe'});
+  const inspectAfter=performance.now(),after=await this.#engine.call('api',{method:'workspace.describe'});onTiming?.({stage:'describe-after',ms:performance.now()-inspectAfter});
   const dirty=before.revision!==after.revision||before.workspaceId!==after.workspaceId||directChanges.has(action)||action==='api'&&canonical.has(data.method)||['package','compressed','draft'].includes(action)&&!!data.title;
   if(dirty)try{await this.#save(this.#engine,onTiming);}catch(error){await this.#recover();throw Error('Edit was not acknowledged; restored the committed workspace',{cause:error});}
   return result;
