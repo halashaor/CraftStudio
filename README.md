@@ -178,3 +178,5 @@ Construction tools can now pause unconfirmed work in the current project session
 Linear arrays and linked instances now offer **Gap spacing** alongside free XYZ offsets. Gap mode adds the selected occupied span to the requested gap on the chosen axis, supports reverse direction, and reports resolved integer-grid spacing before confirmation. Slabs/stairs use occupied block bounds, not exact rendered surface separation.
 
 Path arrays can use fixed spacing or distribute a requested number over the full path. Open paths include their endpoints; closed guides include the closing segment without repeating the seam. Preview reports actual count and theoretical spacing; duplicate anchors after voxel snapping are skipped explicitly.
+
+Object collections organize voxel objects by building or area. In the scene collection panel, create a named collection, assign selected objects, filter its members, select all members, or hide/show it. Removing a collection only removes membership. Individual hidden states remain independent, and confirmed collection edits support undo and project save/reopen. This release uses single-level collections with one collection per object.

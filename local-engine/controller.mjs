@@ -1,5 +1,5 @@
 import {EngineWorkspace} from './workspace.mjs';
-const canonical=new Set(['edit.apply','edit.brush','selection.transform','objects.put','workplanes.put','workplanes.remove','views.put','views.remove','measurements.put','measurements.remove','history.undo','history.redo','transaction.commit','proposal.commit','construction.commit']);
+const canonical=new Set(['edit.apply','edit.brush','selection.transform','objects.put','collections.put','collections.remove','workplanes.put','workplanes.remove','views.put','views.remove','measurements.put','measurements.remove','history.undo','history.redo','transaction.commit','proposal.commit','construction.commit']);
 const resourceChanges=new Set(['resourceLibrary','resources','assets']);
 const directChanges=new Set(['edit','brush','undo','redo','origin','protect','unprotect','studio','rename','accept','commitConstruction','detachGeneration']);
 export class EngineController{
