@@ -164,3 +164,5 @@ The optional local engine now stores immutable source blocks in independently ve
 Large scenes now show nearby geometry in batches while the view remains navigable. Placement waits for the current view to finish loading; after a loading error, rotate the view to retry. Explicit view changes clear residual orbit inertia.
 
 Sketch/model numeric fields support dragging their labels or Alt-dragging the value. Shift gives finer control, Ctrl snaps to the field step, and Esc cancels the drag. These gestures adjust the preview; block placement still requires confirmation. Existing coordinate/depth preview undo remains available.
+
+Before confirming construction, numeric sketch/model settings (including sweep width/height and hollow thickness) use local preview undo/redo. Focus the viewport and press Ctrl+Z / Ctrl+Y; numeric changes do not undo the saved scene. Changing tools or source selections resets this temporary history.
