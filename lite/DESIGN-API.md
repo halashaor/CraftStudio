@@ -216,3 +216,5 @@ await CraftStudio.request({
 贝塞尔几何可选 `config.sampleCount` 指定 24–8192 的整数采样段数，省略/null 使用原控制多边形长度估计。前端“增阶保持形状”采用贝塞尔精确增阶公式并保留当前采样数，避免仅因控制多边形变化而改变落格采样。真正编辑控制点时前端清除固定采样；来源重编辑传新 points 且未显式给 sampleCount 时也清除旧采样设置。现有单段贝塞尔仍支持 3–8 控制点。
 
 Viewport captures now include `scene.geometryLoading`, `scene.pendingChunks` and `scene.geometryFailed`. A capture during progressive loading may show only part of the viewport; inspect these fields before treating an empty-looking area as absent. Canonical region queries remain independent of viewport completeness.
+
+Unconfirmed tool intents are stored separately as local library preferences and are never automatically committed. Their matching key fingerprints the immutable baseline identity plus canonical title/origin/palette/design/size and sorted overlays; it excludes transient rendering and tool previews. Different confirmed content does not silently receive a saved tool intent. Stored intents are schema checked before restoration.
