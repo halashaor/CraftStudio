@@ -17,6 +17,21 @@ test('sparse hidden objects do not hide decorations in holes of their bounding b
  assert.equal(hiddenObjectContains(design,object,[2,1,1]),false);
  assert.equal(hiddenObjectContains(design,object,[4,1,1]),false);
 });
+test('moving selected members out preserves geometry, other collections and undo',()=>{
+ const{site,api,call}=setup();
+ call('collections.put',{collection:{id:'g',name:'Group'},objectIds:['a']});
+ call('collections.put',{collection:{id:'other',name:'Other'},objectIds:['b']});
+ const revision=api.revision;
+ assert.equal(call('collections.put',{collection:{id:'g',name:'Group'},removeObjectIds:['a','missing']}).ok,false);
+ assert.equal(api.revision,revision);
+ assert.equal(call('collections.put',{collection:{id:'g',name:'Group'},objectIds:['a'],removeObjectIds:['a']}).ok,false);
+ assert.equal(call('collections.put',{collection:{id:'g',name:'Group'},removeObjectIds:['a','b']}).ok,true);
+ assert.equal(site.design.objects[0].collectionId,undefined);
+ assert.equal(site.design.objects[1].collectionId,'other');
+ assert.equal(site.at([1,1,1]).state,0);
+ assert.equal(call('history.undo').ok,true);
+ assert.equal(site.design.objects[0].collectionId,'g');
+});
 test('collection visibility preserves individual visibility and undo restores membership',()=>{
  const{site,call}=setup();
  assert.equal(call('collections.put',{collection:{id:'house',name:' House '},objectIds:['a','b']}).ok,true);
