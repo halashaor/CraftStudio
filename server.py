@@ -23,7 +23,7 @@ from engine_gateway import EngineGateway
 from desktop_files import list_files, read_file, home_for
 
 ROOT = Path(__file__).resolve().parent
-BACKEND_BUILD = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py','engine_gateway.py','local-engine/run-service.mjs','local-engine/service.mjs','local-engine/controller.mjs','local-engine/workspace.mjs','local-engine/worker.mjs','local-engine/checkpoint.mjs','local-engine/store.mjs','local-engine/uploads.mjs','lite/src/engine-wire.js','lite/dist/worker.bundle.js'))).hexdigest().upper()
+BACKEND_BUILD = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in ('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py','engine_gateway.py','local-engine/run-service.mjs','local-engine/service.mjs','local-engine/controller.mjs','local-engine/workspace.mjs','local-engine/worker.mjs','local-engine/checkpoint.mjs','local-engine/lazy-baseline.mjs','local-engine/store.mjs','local-engine/uploads.mjs','lite/src/engine-wire.js','lite/dist/worker.bundle.js'))).hexdigest().upper()
 STORAGE_ROOT = Path(os.environ.get('CRAFTSTUDIO_STORAGE_DIR', str(ROOT))).resolve()
 DATA_DIR, PROJECTS_DIR, EXPORTS_DIR = (STORAGE_ROOT / name for name in ('data', 'projects', 'exports'))
 for directory in (DATA_DIR, PROJECTS_DIR, EXPORTS_DIR):
