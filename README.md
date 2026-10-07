@@ -195,3 +195,5 @@ Autosaved drafts preserve confirmed undo/redo history in browser-compute local m
 
 Direct move/copy/paste offsets support arithmetic and label dragging. Enter in an offset field updates the preview; Escape restores that field. Enter on a focused button keeps its native action, including Cancel. Enter in the viewport confirms. Invalid or unfinished expressions block confirmation, and confirmed transforms remain one undoable edit.
 Interrupted direct gizmo drags now release their drag state and pointer capture. Escape cancels the operation; window blur, pointer cancellation or lost capture restores the current drag start while keeping the operation preview available. A normal mouse release keeps the adjusted preview.
+
+While a direct move/copy/rotate/paste preview is active, Undo/Redo step through completed preview adjustments instead of cancelling the whole operation. Numeric edits, gizmo drags, quarter turns, paste position locking and overlap changes are separate steps; new edits discard the old redo branch. No confirmed voxels change until confirmation, which remains one scene undo. Preview history lasts for that operation session.
