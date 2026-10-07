@@ -91,12 +91,14 @@ public class BridgeRuntime {
         exchange.sendResponseHeaders(status, data.length); exchange.getResponseBody().write(data);
     }
 
+    private static JsonObject jobStatus(Job job){JsonObject report=job.report.deepCopy();report.addProperty("placed",job.cursor);report.addProperty("total",job.entries.size());report.addProperty("restoring",job.restoring);return report;}
+
     private JsonObject dispatch(String route, JsonObject body) throws Exception {
         return switch (route) {
-            case "/health" -> { JsonObject result = obj("status", "connected"); result.addProperty("minecraft", SharedConstants.getCurrentVersion().getName()); result.addProperty("busy", active != null);result.addProperty("protocol","craftstudio-bridge/1");result.addProperty("edition","java");result.addProperty("dedicated",server.isDedicatedServer());result.addProperty("writeEnabled",server.isDedicatedServer()?allowDedicatedServer:!server.getPlayerList().getPlayers().isEmpty()&&server.getPlayerList().getPlayers().stream().allMatch(p->p.getAbilities().instabuild));result.addProperty("loader",loader);result.addProperty("dataVersion",SharedConstants.getCurrentVersion().getDataVersion().getVersion());JsonArray capabilities=new JsonArray();for(String c:List.of("read","validate","apply","job","cancel","undo"))capabilities.add(c);result.add("capabilities",capabilities);JsonArray dimensions=new JsonArray();for(ServerLevel level:server.getAllLevels())dimensions.add(level.dimension().location().toString());result.add("dimensions",dimensions);yield result; }
+            case "/health" -> { JsonObject result = obj("status", "connected"); result.addProperty("minecraft", SharedConstants.getCurrentVersion().getName()); result.addProperty("busy", active != null);result.addProperty("protocol","craftstudio-bridge/1");result.addProperty("edition","java");result.addProperty("dedicated",server.isDedicatedServer());result.addProperty("writeEnabled",server.isDedicatedServer()?allowDedicatedServer:!server.getPlayerList().getPlayers().isEmpty()&&server.getPlayerList().getPlayers().stream().allMatch(p->p.getAbilities().instabuild));result.addProperty("loader",loader);result.addProperty("dataVersion",SharedConstants.getCurrentVersion().getDataVersion().getVersion());JsonArray capabilities=new JsonArray();for(String c:List.of("read","validate","apply","job","cancel","undo"))capabilities.add(c);result.add("capabilities",capabilities);JsonArray dimensions=new JsonArray();for(ServerLevel level:server.getAllLevels())dimensions.add(level.dimension().location().toString());result.add("dimensions",dimensions);if(active!=null)result.add("activeJob",jobStatus(active));if(previous!=null)result.add("lastJob",jobStatus(previous));yield result; }
             case "/read" -> { ServerLevel level = level(body); BlockPos origin = pos(body.getAsJsonArray("origin")); int[] size = ints(body.getAsJsonArray("size")); yield obj("project", read(level, origin, size)); }
             case "/validate" -> validateProject(body.getAsJsonObject("project"));
-            case "/cancel" -> {if(active==null)throw new IllegalArgumentException("No active job");if(!body.has("id")||!active.id.equals(body.get("id").getAsString()))throw new IllegalArgumentException("Job ID does not match active job");Job job=active;snapshotAfter(job);job.report.addProperty("status","cancelled");job.report.addProperty("placed",job.cursor);if(!job.restoring)previous=job;active=null;yield job.report.deepCopy();}
+            case "/cancel" -> {if(active==null)throw new IllegalArgumentException("No active job");if(!body.has("id")||!active.id.equals(body.get("id").getAsString()))throw new IllegalArgumentException("Job ID does not match active job");Job job=active;snapshotAfter(job);job.report.addProperty("status","cancelled");job.report.addProperty("placed",job.cursor);if(!job.restoring)previous=job;active=null;yield jobStatus(job);}
             case "/apply" -> build(body);
             case "/job" -> { String id = body.get("id").getAsString(); if (!jobs.containsKey(id)) throw new IllegalArgumentException("Unknown job"); yield jobs.get(id).deepCopy(); }
             case "/undo" -> undo();
@@ -180,7 +182,7 @@ public class BridgeRuntime {
             BlockEntity entity=level.getBlockEntity(at); CompoundTag oldNbt=entity==null?null:entity.saveWithFullMetadata(level.registryAccess());
             job.entries.add(new Entry(at,target,nbt,old,oldNbt));
         }
-        persist(job); active=job; job.report.addProperty("status","queued"); jobs.put(job.id,job.report);
+        job.report.addProperty("total",job.entries.size());job.report.addProperty("restoring",job.restoring);persist(job); active=job; job.report.addProperty("status","queued"); jobs.put(job.id,job.report);
         while(jobs.size()>20) jobs.remove(jobs.keySet().iterator().next());
         return job.report.deepCopy();
     }
@@ -202,7 +204,7 @@ public class BridgeRuntime {
         }
         Job job=new Job(previous.level,previous.origin);job.restoring=true;
         for(Entry e:changed)job.entries.add(new Entry(e.pos,e.old,e.oldNbt,e.target,e.nbt));
-        active=job;jobs.put(job.id,job.report);return job.report.deepCopy();
+        job.report.addProperty("total",job.entries.size());job.report.addProperty("restoring",true);active=job;jobs.put(job.id,job.report);return jobStatus(job);
     }
 
     public void tick(){

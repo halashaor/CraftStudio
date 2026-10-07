@@ -43,3 +43,5 @@ All routes use authenticated POSTs: `/health`, `/read`, `/validate`, `/apply`, `
 Builds never run automatically when connecting. Native entity placement, unloaded chunks, world bounds and state errors are reported before game writes. A JSON backup is written under `craftstudio-backups` before applying a job.
 
 Build references: [Fabric mappings](https://wiki.fabricmc.net/tutorial:mappings), [Fabric Loom](https://docs.fabricmc.net/develop/loom/), [ForgeGradle](https://docs.minecraftforge.net/en/fg-6.x/configuration/).
+
+Health optionally includes `activeJob` and `lastJob` summaries with `id`, `status`, `placed`, `total` and `restoring`. This supports UI reconnection within the same running game session. Task states `queued` and `building` remain busy; terminal tasks cannot be cancelled. Legacy health responses without task summaries remain supported.
