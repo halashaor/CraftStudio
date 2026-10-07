@@ -1,5 +1,23 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';import {captureDraftHistory} from '../src/draft-history.js';import {DesignAPI} from '../src/foundation.js';
+import {EngineWorkspace} from '../../local-engine/workspace.mjs';
+test('draft resume keeps state-table ordering and tool-intent binding after unused states and redo',async()=>{
+ const e=new EngineWorkspace(),other=new EngineWorkspace();
+ try{
+  await e.call('import',{name:'order.json',bytes:new TextEncoder().encode(JSON.stringify({...emptyProject('Order'),size:[8,8,8]})).buffer});
+  const call=async(method,params={})=>{const d=await e.call('api',{method:'workspace.describe'});return e.call('api',{method,params:{expectedRevision:d.revision,...params}});};
+  for(const [pos,state] of [[[2,1,1],{Name:'minecraft:glass'}],[[3,1,1],{Name:'minecraft:bricks'}],[[2,1,1],null]])assert.ok((await call('edit.apply',{operations:[{type:'set',pos,state}]})).ok);
+  assert.ok((await call('history.undo')).ok);
+  assert.ok((await call('history.undo')).ok);
+  const before=await e.call('toolContext'),palette=(await e.call('summary')).palette,draft=await e.call('draft');
+  await other.call('resume',{baseline:draft.baseline,bytes:draft.payload,assetBytes:draft.assetBytes});
+  assert.deepEqual((await other.call('summary')).palette,palette);
+  assert.equal((await other.call('toolContext')).key,before.key);
+  assert.deepEqual((await other.call('api',{method:'workspace.describe'})).value.history,{undo:1,redo:2});
+  const d=await other.call('api',{method:'workspace.describe'});assert.ok((await other.call('api',{method:'history.redo',params:{expectedRevision:d.revision}})).ok);
+  assert.equal((await other.call('api',{method:'scene.getBlocks',params:{positions:[[3,1,1]]}})).value[0].state.Name,'minecraft:bricks');
+ }finally{await e.close();await other.close();}
+});
 test('draft history restores voxel/NBT and metadata edits, undo/redo and independent chunk ownership',()=>{
  const site=new Site({...emptyProject(),size:[64,8,8],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,1,1],state:0}]});
  site.operations([{type:'set',pos:[2,1,1],state:{Name:'minecraft:chest'},nbt:{t:10,v:{CustomName:{t:8,v:'Chest'}}}}]);
