@@ -197,7 +197,7 @@ await CraftStudio.request({
 
 `view.isolate` 保留原有 `objectIds/selection/clear`，新增 `push:true` 保存上一层隔离，`pop:true` 返回上一层。`includeNew:true` 为所选对象／区域保留邻近新编辑内容，基础 UI 画笔采用此范围并跳过隐藏对象成员。普通显示隔离不改变场景数据或原场地。
 
-`workspace.describe().value.view` 返回 `isolated`、`depth` 和可用的 `editBounds`。隔离不是公共 `edit.apply` 的写入权限限制；AI 可按明确请求继续自由编辑，若需要范围条件可使用 `edit.brush.mask`。当前相机可用 `CraftStudio.viewState()` 读取，不需要截图；`setView` 支持正交／透视与 `zoom`。UI 的隔离进入／退出协调相机恢复，协议本身不替远程调用者保存相机。
+`CraftStudio.captureView().scene.view` 返回 `isolated`、`depth` 和可用的 `editBounds`。隔离不是公共 `edit.apply` 的写入权限限制；AI 可按明确请求继续自由编辑，若需要范围条件可使用 `edit.brush.mask`。当前相机可用 `CraftStudio.viewState()` 读取，不需要截图；`setView` 支持正交／透视与 `zoom`。UI 的隔离进入／退出协调相机恢复，协议本身不替远程调用者保存相机。
 
 `construction.prepare` 的 `type:"geometry"` 支持 `config.kind:"polyline"`。`points` 保存连续顶点，`closed:true` 显式闭合，默认保持开放，不添加末点到起点的隐含线段。开放折线不能填充；闭合共面的采样辅助线可作为拉伸截面。保存后的路径可通过 `pathId` 用于扫掠，沿用源草图重编辑、关联重建和一次撤销。半砖/楼梯仍由现有落格与素材变体规则决定。轮廓偏移支持可识别的单个闭合共面路径，沿轮廓自身平面计算，也支持倾斜工作平面；正距离向外、负距离向内。结果保存自身工作平面与拐角，且是独立辅助轮廓。向内偏移导致边界消失或反向会拒绝；复杂凹轮廓的拓扑分裂/自交修复尚未自动实现。
 
@@ -237,3 +237,5 @@ Recorded producer/output-guide relationships add `UPSTREAM_ERROR` / `UPSTREAM_OU
 Portable scheme files use `{schema: "craftstudio-material-palette/1", palette: {name, states}}`. Export omits project scheme IDs; import validates/deduplicates full states and creates a fresh ID through `palettes.put`. UI reading is a preview, not a mutation, and conflicting names require the user to choose another name. Browser draft reload preserves schemes and its saved undo journal; old drafts without history and formal portable imports have no carried journal. The optional durable local engine retains its own undo journal.
 
 Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-history/1`, deduplicated changed chunks/designs and undo/redo frame references. Old drafts omit it. Restore validates the history before publishing the new Site; malformed history reports recovery from a formal version. The working draft journal survives browser-compute/Lite reload; formal portable project export still omits it. Palette/collection mutations now follow the existing active-proposal preview guard.
+
+`view.isolate` 的 `{contextVisible:true|false}` 在现有隔离层中显示／隐藏周围参照，保留 `editBounds`；未隔离时返回错误。`push` 新层默认隐藏参照，`pop` 恢复上一层的参照状态。`captureView().scene.view.contextVisible` 表示当前状态。显式隐藏的对象仍遵循原有可见规则；公共自由编辑接口不受此显示开关限制。
