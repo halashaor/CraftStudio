@@ -91,7 +91,7 @@ export function cadShell({THREE,$,call,library,prepareIntentPersistence,notice,d
  const sketchTree=document.createElement('details');sketchTree.open=true;sketchTree.innerHTML='<summary>草图与辅助轮廓</summary><div id="cad-sketch-list"></div>';$('dock-objects').append(sketchTree);
  $('cad-selection-focus').onclick=()=>{if(!zoomSelection())notice('请先选择对象或区域');};
  const isolation=isolationUI({$,call,refresh,render,task,getView:()=>window.CraftStudio.viewState(),setView:v=>window.CraftStudio.setView(v),getSelection:()=>studio.getSelection(),getObjectIds:()=>[...selectedObjects],hasSelection:()=>selectionActive,notice,frameSelection:zoomSelection});
- workspace=workspaceUI({$,construction,designer,direct,measurement,dock,chooseTool});
+ workspace=workspaceUI({$,construction,designer,direct,measurement,dock,chooseTool,library,notice});
  const commands=[],busyReason=()=>direct.isBusy()||construction.isBusy()||designer.isBusy()||measurement.isBusy()?'正在提交当前操作，请稍候':getSummary()?.preview?'请先采用或取消 AI 提案预览':'',selectionReason=()=>busyReason()||(!selectionActive?'请先选择方块、对象或区域':''),invoke=(id,category)=>()=>{if(category)workspace.selectCategory(category);$(id).click();};
  const add=(id,label,category,run,aliases='',unavailable=busyReason,shortcut='')=>commands.push({id,label,category,run,aliases,unavailable,shortcut});
  for(const [id,label,aliases]of [['inspect','选择','select selection'],['place','放置方块','place block'],['paint','画笔','brush paint draw'],['erase','擦除','erase delete'],['sample','取材','eyedropper sample']])add(id,label,'编辑',()=>chooseTool(id),aliases);

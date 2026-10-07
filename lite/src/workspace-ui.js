@@ -1,4 +1,5 @@
-export function workspaceUI({$,construction,designer,direct,measurement,dock,chooseTool}){
+import {workspaceLayout} from './workspace-layout.js';
+export function workspaceUI({$,construction,designer,direct,measurement,dock,chooseTool,library,notice}){
  document.body.classList.add('studio-workspace');const left=$('cad-browser'),right=$('cad-inspector'),viewport=$('viewport');
  const tree=document.createElement('section');tree.id='workspace-tree';tree.innerHTML='<div class="workspace-caption">场景集合 <span>对象与构件</span></div>';tree.append($('dock-objects'));
  const defaults=document.createElement('div');defaults.id='workspace-properties';for(const child of [...right.children])defaults.append(child);
@@ -12,7 +13,7 @@ export function workspaceUI({$,construction,designer,direct,measurement,dock,cho
  for(const[k,ids]of Object.entries(commandIds))for(const id of ids)if($(id)){groups[k].push($(id));allCommands.append($(id));}
  const quick=document.createElement('div');quick.className='workspace-quick';for(const id of ['undo','redo','cad-assets-open','cad-ai-open','cad-material-chip'])if($(id))quick.append($(id));
  const tabs=document.createElement('div');tabs.className='workspace-modes';for(const[key,label]of [['edit','编辑'],['draw','草图'],['model','建模'],['site','场地']]){const b=document.createElement('button');b.dataset.workspace=key;b.textContent=label;b.onclick=()=>selectCategory(key);tabs.append(b);}
- const focus=document.createElement('button');focus.id='workspace-focus';focus.textContent='专注视图';focus.title='最大化视口 / 恢复布局';focus.onclick=()=>{document.body.classList.toggle('viewport-focus');focus.textContent=document.body.classList.contains('viewport-focus')?'恢复布局':'专注视图';};quick.append(focus);
+ const focus=document.createElement('button');focus.id='workspace-focus';focus.textContent='专注视图';focus.title='最大化视口 / 恢复布局';focus.onclick=()=>{document.body.classList.toggle('viewport-focus');focus.textContent=document.body.classList.contains('viewport-focus')?'恢复布局':'专注视图';if(!document.body.classList.contains('viewport-focus'))layout.apply();};quick.append(focus);
  bar.replaceChildren(tabs,allCommands,quick,$('cad-active-tool'));function selectCategory(key){for(const b of tabs.children)b.classList.toggle('active',b.dataset.workspace===key);for(const[k,buttons]of Object.entries(groups))for(const b of buttons)b.hidden=k!==key;}selectCategory('edit');
  const panels=[{node:$('construction-panel'),close:construction.close},{node:$('designer-panel'),close:designer.close},{node:$('direct-edit-bar'),close:direct.cancel},{node:$('measurement-panel'),close:measurement.close}];
  for(const p of panels){p.node.classList.add('workspace-task-panel');tasks.append(p.node);}
@@ -26,5 +27,6 @@ export function workspaceUI({$,construction,designer,direct,measurement,dock,cho
  for(const [panel,id]of [[$('construction-panel'),'construction-apply'],[$('designer-panel'),'designer-apply']]){const row=$(id).parentElement;row.classList.add('workspace-confirm');if(id==='construction-apply'){const report=$('construction-report');report.classList.add('workspace-result');row.prepend($('sketch-snap-feedback'),report);}panel.append(row);}
  $('construction-preview').textContent='重新校准';$('construction-preview').title='参数会自动更新预览';$('construction-close').textContent='取消';$('designer-close').textContent='取消';$('direct-cancel').textContent='取消';
  $('workspace-shelf-close').onclick=()=>dock('objects');
- return{showDock(name){$('dock-objects').hidden=false;shelf.hidden=name==='objects';$('workspace-shelf-preview').hidden=name!=='assets';if(name==='assets')$('asset-detail').hidden=false;},openDialog(dialog){if(!dialog.classList.contains('workspace-dialog'))return false;construction.close();designer.close();direct.cancel();dialog.setAttribute('open','');return true;},selectCategory};
+ const layout=workspaceLayout({$,library,notice});
+ return{showDock(name){$('dock-objects').hidden=false;shelf.hidden=name==='objects';$('workspace-shelf-preview').hidden=name!=='assets';if(name==='assets')$('asset-detail').hidden=false;layout.apply();},openDialog(dialog){if(!dialog.classList.contains('workspace-dialog'))return false;construction.close();designer.close();direct.cancel();dialog.setAttribute('open','');return true;},selectCategory};
 }
