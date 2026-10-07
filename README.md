@@ -88,7 +88,7 @@ Viewport controls: **left click / drag** selects or box-selects, **right drag** 
 | Resource-pack ZIPs and mod/game JARs | Read supported model and texture assets from selected files |
 | `.craftlite` | Portable editable designer project |
 
-Resource files can be added as needed. Missing resources may use fallback geometry or materials until the appropriate files are supplied. Custom mod renderers and behaviors are not universally supported.
+The material library includes Recent items and Favorites. Using a material remembers its full block state; selecting it again keeps supported facing, slab/stair half and other properties, and dragging uses the current selected state. Preferences and library backups retain these choices. Resource files can be added as needed. Missing resources may use fallback geometry or materials until the appropriate files are supplied. Custom mod renderers and behaviors are not universally supported.
 
 Sponge and Litematica conversions do not preserve every entity, biome, scheduled tick, or multi-region detail. MCA import reads the selected portion of one file and does not convert entities, lighting, or scheduled ticks. Blueprint export is not a complete Minecraft world save exporter.
 
