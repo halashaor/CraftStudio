@@ -1,4 +1,5 @@
 // Text fields own their native clipboard, deletion and undo shortcuts.
+export function dialogOwnsKeyboard(document=globalThis.document){return !!document?.querySelector?.('dialog:modal');}
 export function textEditing(element){
  if(!element)return false;
  if(element.isContentEditable)return true;

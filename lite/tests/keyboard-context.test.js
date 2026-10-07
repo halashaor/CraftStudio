@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {textEditing,historyShortcut,nativeSpaceTarget} from '../src/keyboard-context.js';
+import {textEditing,historyShortcut,nativeSpaceTarget,dialogOwnsKeyboard} from '../src/keyboard-context.js';
+test('modal dialogs own keyboard context while docked panels do not',()=>{
+ assert.equal(dialogOwnsKeyboard({querySelector:selector=>selector==='dialog:modal'?{}:null}),true);
+ assert.equal(dialogOwnsKeyboard({querySelector:()=>null}),false);
+ assert.equal(dialogOwnsKeyboard({}),false);
+});
 test('text editors retain clipboard, deletion and undo while non-text controls allow shortcuts',()=>{
  for(const e of [{tagName:'INPUT',type:'number'},{tagName:'INPUT',type:'search'},{tagName:'TEXTAREA'},{tagName:'SELECT'},{isContentEditable:true},{closest:()=>({getAttribute:()=> 'true'})}])assert.equal(textEditing(e),true);
  for(const e of [{tagName:'BUTTON'},{tagName:'CANVAS'},{tagName:'INPUT',type:'checkbox'},{tagName:'DIV',closest:()=>({getAttribute:()=> 'false'})},null])assert.equal(textEditing(e),false);
