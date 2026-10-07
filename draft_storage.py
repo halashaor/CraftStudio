@@ -26,6 +26,10 @@ def capture(conn,data):
   if hashlib.sha256(payload).hexdigest()!=digest:raise ValueError('草稿区块摘要不一致')
   conn.execute('INSERT OR IGNORE INTO designer_draft_blobs VALUES (?,?)',(digest,payload));chunks.append([key,digest])
  snapshot=dict(head['snapshot'])
+ if data.get('saveForm') is not None:
+  form=data['saveForm']
+  if not isinstance(form,dict) or form.get('schema')!='craftstudio-save-form/1' or any(not isinstance(form.get(k),str) for k in ('title','tags','kind','note')):raise ValueError('草稿保存表单格式无效')
+  snapshot['saveForm']={k:form[k] for k in ('schema','title','tags','kind','note')}
  if 'history' in data:
   history=data['history']
   if not isinstance(history,dict) or history.get('schema')!='craftstudio-draft-history/1' or any(not isinstance(history.get(k),list) for k in ('chunks','designs','undo','redo')):raise ValueError('草稿撤销历史格式无效')

@@ -6,6 +6,11 @@ class CheckpointDraftTests(unittest.TestCase):
  setUp=fixtures.WorkspaceChunkTests.setUp
  tearDown=fixtures.WorkspaceChunkTests.tearDown
  save=fixtures.WorkspaceChunkTests.save
+ def test_pending_save_form_is_draft_only_and_replaced_on_next_capture(self):
+  self.save(1);data=self.packet();form={'schema':'craftstudio-save-form/1','title':'Draft title','tags':'roof, timber','kind':'project','note':'Next note'};data['saveForm']=form
+  self.lib.call('draftCheckpoint',[data,None]);self.assertEqual(self.payload()['site']['saveForm'],form)
+  self.assertNotIn('saveForm',self.lib.call('workspaceHead',['ws'])['snapshot'])
+  self.lib.call('draftCheckpoint',[dict(data,saveForm=dict(form,note='')),None]);self.assertEqual(self.payload()['site']['saveForm']['note'],'')
  def test_history_is_draft_only_and_immutable(self):
   self.save(1);data=self.packet();history={'schema':'craftstudio-draft-history/1','chunks':[],'designs':[{'materialPalettes':[]}],'undo':[{'chunks':[],'size':[8,8,8],'design':0}],'redo':[]};data['history']=history
   self.lib.call('draftCheckpoint',[data,None]);self.assertEqual(self.payload()['site']['history'],history)
