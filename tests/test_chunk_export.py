@@ -18,6 +18,14 @@ class CheckpointExportTests(unittest.TestCase):
   self.assertEqual(package['site']['overlay'],self.snapshot['overlay'])
   self.assertEqual(package['assets'],assets)
   self.assertLessEqual(result['stats']['maxChunkRecords'],4096)
+ def test_chunk_batch_serialization_preserves_unicode_escaping_and_typed_nbt(self):
+  self.snapshot['design']={'objects':[],'name':'屋顶\n"形态"'}
+  self.snapshot['overlay'][1]['nbt']={'t':10,'v':{'Text':{'t':8,'v':'半砖 · "朝向"\n第二行'}}}
+  self.save(1)
+  package=json.loads(gzip.decompress(base64.b64decode(self.export()['bytes']['$bytes'])))
+  self.assertEqual(package['site']['base'],self.base)
+  self.assertEqual(package['site']['overlay'],self.snapshot['overlay'])
+  self.assertEqual(package['site']['design'],self.snapshot['design'])
  def test_nbt_merges_changes_preserves_long_nbt_and_size(self):
   self.save(1)
   root=loads(base64.b64decode(self.export('nbt')['bytes']['$bytes'])).value

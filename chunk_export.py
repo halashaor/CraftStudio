@@ -32,15 +32,15 @@ def export_workspace(conn,identifier,revision,format='craftlite',assets=None,tit
    stream.write(b'{"liteSchema":1,"site":{"base":');stream.write(text(header)[:-1]+b',"blocks":[');first=True
    for payload_blob, in conn.execute('SELECT payload FROM designer_baseline_chunks WHERE base_key=? ORDER BY chunk_key',(head['baseKey'],)):
     blocks=decode(payload_blob);stats['baselineChunks']+=1;stats['blocks']+=len(blocks);stats['maxChunkRecords']=max(stats['maxChunkRecords'],len(blocks))
-    for b in blocks:
+    if blocks:
      if not first:stream.write(b',')
-     first=False;stream.write(text(b))
+     first=False;stream.write(text(blocks)[1:-1])
    stream.write(b']},');stream.write(text(snapshot)[1:-1]);stream.write(b',"overlay":[');first=True
    for payload_blob, in conn.execute('SELECT payload FROM designer_overlay_chunks WHERE workspace_id=? ORDER BY chunk_key',(identifier,)):
     blocks=decode(payload_blob);stats['overlayChunks']+=1;stats['maxChunkRecords']=max(stats['maxChunkRecords'],len(blocks))
-    for b in blocks:
+    if blocks:
      if not first:stream.write(b',')
-     first=False;stream.write(text(b))
+     first=False;stream.write(text(blocks)[1:-1])
    stream.write(b']},"assets":');stream.write(text(assets or {}));stream.write(b'}')
   else:
    palette=list(snapshot['palette']);indices={json.dumps(s,sort_keys=True,separators=(',',':')):i for i,s in enumerate(palette)};size=snapshot['size'];mask=header.get('metadata',{}).get('placementMask');mask=mask if mask and mask.get('size')==size else None
