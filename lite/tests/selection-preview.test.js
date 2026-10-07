@@ -1,4 +1,17 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {EngineWorkspace} from '../../local-engine/workspace.mjs';import {emptyProject} from '../src/codec.js';
+import {Site,coordKey} from '../src/site.js';import {selection} from '../src/studio.js';import {selectionPreviewSite} from '../src/selection-preview.js';import {Resources} from '../src/resources.js';import {buildMesh} from '../src/mesh.js';
+test('read-only selection preview matches portable selection geometry and exact masks without cloning state records',()=>{
+ const site=new Site({...emptyProject(),size:[16,8,8],palette:[{Name:'minecraft:stone'},{Name:'minecraft:oak_stairs',Properties:{facing:'east',half:'top',shape:'outer_left',waterlogged:'false'}},{Name:'minecraft:oak_slab',Properties:{type:'top',waterlogged:'false'}}],blocks:[{pos:[1,1,1],state:0},{pos:[2,1,1],state:1},{pos:[3,1,1],state:2}]});
+ site.operations([{type:'set',pos:[4,1,1],state:{Name:'future_mod:custom'}},{type:'set',pos:[1,1,1],state:null}],{allowTerrain:true});
+ const min=[0,0,0],max=[6,4,4],before=structuredClone(site.pack());
+ for(const options of [{},{keys:[[2,1,1],[4,1,1]]},{regions:[{min,max,operation:'replace'},{min:[3,1,1],max:[3,1,1],operation:'subtract'}]}]){
+  const prefab=selection(site,min,max,options),old=new Site({...emptyProject(),size:prefab.size,palette:[],blocks:[]});for(const b of prefab.blocks)old.cells.set(coordKey(...b.pos),{pos:b.pos,state:old.state(b.state)});
+  const view=selectionPreviewSite(site,min,max,options);assert.equal(view.site.palette,site.palette);assert.equal(view.count,prefab.blocks.length);assert.deepEqual(view.members,prefab.blocks.map(b=>b.pos));
+  assert.deepEqual(buildMesh(view.site,new Resources()),buildMesh(old,new Resources()));
+ }
+ assert.deepEqual(site.pack(),before);
+ const copied=selection(site,min,max);copied.blocks[0].state.Properties.facing='west';assert.equal(site.palette[1].Properties.facing,'east');
+});
 test('selection preview and clipboard reads reject changed revision or workspace before returning geometry',async()=>{
  const engine=new EngineWorkspace();try{
   await engine.call('import',{name:'selection.json',bytes:new TextEncoder().encode(JSON.stringify({...emptyProject(),size:[8,8,8],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,1,1],state:0}]})).buffer});
