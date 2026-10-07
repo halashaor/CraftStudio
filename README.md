@@ -172,3 +172,5 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 Construction preview history also covers common sketch/model checkboxes and option lists, including fill, hollow/end caps and voxel fitting. Tool kind, workplane and source-selection changes remain context switches that reset this temporary history.
 
 The construction tool’s Frame button preserves the current camera orientation, projection and zoom, fits the guide and available preview geometry, and includes both sides of symmetric extrusion. It keeps the tool and its current settings open.
+
+Construction tools can now pause unconfirmed work in the current project session. Use **Pause** and the fixed inspector’s **Continue** actions to restore points, scope, materials, settings and preview history; current scene data is recalibrated before confirmation. Each tool kind retains its latest intent. Explicit Close/Esc discards the active intent; switching tools can retain it. Changing projects clears paused intents. This state is not saved across page/application reload.
