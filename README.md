@@ -209,3 +209,5 @@ Pending save-form text (name, raw tags, type and next-version note) follows the 
 A native modal dialog owns keyboard input before the viewport tools. Escape closes the dialog without cancelling a background preview; Enter keeps the focused dialog button action, and Undo does not change the underlying transform. Closing the dialog restores viewport shortcuts. Docked design panels retain their existing tool rules.
 
 Enter on a focused design-panel button, checkbox, selector or other control stays with that control; it cannot confirm a background operation. Pointer-down in the viewport explicitly focuses the canvas, preserving viewport Enter for drawing/confirmation even when a tool captures the pointer. This rule covers construction, arrangement, direct transforms and measurement.
+
+Arrangement and feature-edit numeric fields share arithmetic input and label scrubbing with sketch/direct tools. Enter or blur resolves a calculation and updates preview; Escape restores the field. Visible unfinished/invalid expressions block confirmation without changing the scene. Existing generator integer/range/source validation still applies.
