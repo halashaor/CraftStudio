@@ -46,7 +46,7 @@ export function regenerateObjects(site,objects,{manualStrategy='preserve',overri
 }
 export function editSketchPlan(site,config,available){
  const source=site.design.guides.find(g=>g.id===config.editGuideId);if(!source?.recipe?.kind)throw Error('请选择可编辑的已保存草图');
- const recipe={...clone(source.recipe),...clone(config)};delete recipe.editGuideId;delete recipe.updateDependents;delete recipe.manualStrategy;
+ const recipe={...clone(source.recipe),...clone(config)};delete recipe.editGuideId;delete recipe.updateDependents;delete recipe.manualStrategy;if(config.points&&config.sampleCount===undefined&&JSON.stringify(config.points)!==JSON.stringify(source.recipe.points))delete recipe.sampleCount;
  const sketch=geometryPlan(site,{...recipe,guidesOnly:true},available),working=site.fork();working.design.guides=working.design.guides.map(g=>g.id===source.id?{...g,recipe,points:sketch.guide,revision:(g.revision||0)+1}:g);
  const affected=affectedGeneration(working.design,source.id,detachedGeneration),detachedObjects=affected.detached,objects=affected.objects,overrides=Object.fromEntries(objects.filter(o=>o.generation?.type==='geometry'&&o.generation.sources?.includes(source.id)).map(o=>[o.id,recipe]));
  working.design.objects=working.design.objects.map(o=>detachedObjects.some(v=>v.id===o.id)?{...o,kind:'voxel',generation:{...o.generation,detached:true}}:o);

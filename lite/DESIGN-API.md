@@ -212,3 +212,5 @@ await CraftStudio.request({
 几何的 `terrain:"surface"` 与 `terrain:"grade"` 是保留真实场地的自动模式：缺失地面、水面以及冲突建筑/植被候选会被排除，挖填保留列不会继续放置道路，斜线补格也独立检查。该模式规则不因更宽松的 placement policy 而覆盖；`terrain:"none"` 的自由设计与显式编辑接口保持原有语义。预览 warnings 说明略过列，材料角色数量按最终候选计算。
 
 `terrain:"supports"` 的 prepare 结果包含 `supports`：`requested/grounded/blocked/missing/buried/clipped` 与最多 256 个诊断 `records`（含 x/z、地面/设计面高度、planned/accepted、status），超出时 `truncated:true`。支柱先检查整个区间，障碍或缺失地面不生成半根柱；范围过滤后缺少候选柱格标为 clipped，不计为完整落地。报告仅表示候选方块几何，不判定承载力。
+
+贝塞尔几何可选 `config.sampleCount` 指定 24–8192 的整数采样段数，省略/null 使用原控制多边形长度估计。前端“增阶保持形状”采用贝塞尔精确增阶公式并保留当前采样数，避免仅因控制多边形变化而改变落格采样。真正编辑控制点时前端清除固定采样；来源重编辑传新 points 且未显式给 sampleCount 时也清除旧采样设置。现有单段贝塞尔仍支持 3–8 控制点。
