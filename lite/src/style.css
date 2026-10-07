@@ -72,3 +72,5 @@
 body.progressive-render #busy{display:none}
 
 .dimension-scrub-label{cursor:ew-resize}.dimension-scrub-label input{cursor:text}input.dimension-scrubbing{cursor:ew-resize;caret-color:transparent;user-select:none}
+
+.asset-card.selected{border-color:#85b9eb;background:#3d536c;box-shadow:inset 0 0 0 1px #85b9eb}.asset-card:focus-visible{outline:2px solid #d4e8ff;outline-offset:2px}
