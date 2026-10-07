@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {textEditing,historyShortcut,nativeSpaceTarget,dialogOwnsKeyboard} from '../src/keyboard-context.js';
+import {textEditing,historyShortcut,nativeSpaceTarget,dialogOwnsKeyboard,nativeEnterTarget} from '../src/keyboard-context.js';
+test('Enter on focused controls belongs to the control instead of viewport confirmation',()=>{
+ for(const target of [{tagName:'BUTTON'},{tagName:'INPUT',type:'checkbox'},{tagName:'SELECT'},{tagName:'A'}])assert.equal(nativeEnterTarget(target),true);
+ assert.equal(nativeEnterTarget({tagName:'CANVAS'}),false);
+});
 test('modal dialogs own keyboard context while docked panels do not',()=>{
  assert.equal(dialogOwnsKeyboard({querySelector:selector=>selector==='dialog:modal'?{}:null}),true);
  assert.equal(dialogOwnsKeyboard({querySelector:()=>null}),false);
