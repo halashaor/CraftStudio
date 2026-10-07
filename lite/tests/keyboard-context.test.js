@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {textEditing,historyShortcut,nativeSpaceTarget,dialogOwnsKeyboard,nativeEnterTarget} from '../src/keyboard-context.js';
+import {textEditing,historyShortcut,nativeSpaceTarget,dialogOwnsKeyboard,nativeEnterTarget,sceneShortcutBlocked} from '../src/keyboard-context.js';
 test('Enter on focused controls belongs to the control instead of viewport confirmation',()=>{
  for(const target of [{tagName:'BUTTON'},{tagName:'INPUT',type:'checkbox'},{tagName:'SELECT'},{tagName:'A'}])assert.equal(nativeEnterTarget(target),true);
  assert.equal(nativeEnterTarget({tagName:'CANVAS'}),false);
@@ -19,3 +19,10 @@ test('undo and redo use conventional modifier combinations without plain-key fal
 });
 
 test('Space activates focused controls while the viewport retains its navigation shortcut',()=>{for(const element of [{tagName:'BUTTON'},{tagName:'INPUT',type:'checkbox'},{tagName:'INPUT',type:'range'},{tagName:'A'},{isContentEditable:true},{tagName:'SPAN',closest:selector=>selector==='[contenteditable]'?null:{tagName:'BUTTON'}}])assert.equal(nativeSpaceTarget(element),true);for(const element of [{tagName:'CANVAS'},{tagName:'DIV',closest:()=>null},null])assert.equal(nativeSpaceTarget(element),false);});
+
+test('panel controls retain keys while selected scene-object controls support scene shortcuts',()=>{
+ for(const element of [{tagName:'BUTTON'},{tagName:'INPUT',type:'checkbox'},{tagName:'SELECT'},{tagName:'A'}])assert.equal(sceneShortcutBlocked(element),true);
+ const object={tagName:'BUTTON',closest:selector=>selector==='[data-scene-shortcuts="true"]'?{}:null};
+ assert.equal(nativeEnterTarget(object),true);assert.equal(sceneShortcutBlocked(object),false);
+ assert.equal(sceneShortcutBlocked({tagName:'CANVAS'}),false);
+});

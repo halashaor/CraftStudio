@@ -18,3 +18,8 @@ export function historyShortcut(event){
 // Space remains the native activation key for focused controls.
 export function nativeSpaceTarget(element){if(textEditing(element))return true;const tag=element?.tagName?.toUpperCase();if(['BUTTON','INPUT','SELECT','TEXTAREA','A'].includes(tag))return true;return !!element?.closest?.('button,input,textarea,select,a[href],[role="button"],[role="checkbox"],[role="radio"],[role="slider"]');}
 export const nativeEnterTarget=nativeSpaceTarget;
+
+// Viewport tool/deletion keys must not hijack focused panel controls.
+export const nativeControlTarget=nativeSpaceTarget;
+
+export function sceneShortcutBlocked(element){return nativeControlTarget(element)&&!element?.closest?.('[data-scene-shortcuts="true"]');}
