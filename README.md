@@ -168,3 +168,5 @@ Sketch/model numeric fields support dragging their labels or Alt-dragging the va
 Before confirming construction, numeric sketch/model settings (including sweep width/height and hollow thickness) use local preview undo/redo. Focus the viewport and press Ctrl+Z / Ctrl+Y; numeric changes do not undo the saved scene. Changing tools or source selections resets this temporary history.
 
 Terrain numeric preview history now includes target elevation, smoothing radius, slope coefficients and endpoint heights. Ramp endpoints and their derived slope are restored together. Before confirmation, these edits leave the original terrain unchanged; confirmed construction still uses scene undo. Valid plain-number edits can be confirmed directly without a redundant blur-triggered recalculation.
+
+Construction preview history also covers common sketch/model checkboxes and option lists, including fill, hollow/end caps and voxel fitting. Tool kind, workplane and source-selection changes remain context switches that reset this temporary history.
