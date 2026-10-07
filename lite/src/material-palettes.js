@@ -1,4 +1,13 @@
 import {stateKey} from './codec.js';
+export function readPaletteDocument(value){
+ if(value?.schema!=='craftstudio-material-palette/1')throw Error('配色方案文件格式无效');
+ const p=value.palette,record=paletteMutation({design:{}},'palettes.put',{palette:{name:p?.name,states:p?.states}});
+ return{name:record.name,states:record.states};
+}
+export function paletteDocument(palette){
+ const value={schema:'craftstudio-material-palette/1',palette:{name:palette.name,states:palette.states}};
+ return{schema:value.schema,palette:readPaletteDocument(value)};
+}
 export function paletteMutation(site,method,p){
  const list=site.design.materialPalettes||(site.design.materialPalettes=[]);
  if(method==='palettes.remove'){

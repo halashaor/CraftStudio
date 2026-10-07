@@ -1,6 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {DesignAPI} from '../src/foundation.js';import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';
 import {EngineStore} from '../../local-engine/store.mjs';import {EngineController} from '../../local-engine/controller.mjs';import {EngineWorkspace} from '../../local-engine/workspace.mjs';
+import {readPaletteDocument,paletteDocument} from '../src/material-palettes.js';
+test('portable material scheme carries only reviewed name and full states, never identity or archives',()=>{
+ const state={Name:'future_mod:stairs',Properties:{facing:'east',half:'top',shape:'outer_left'}};
+ const doc=paletteDocument({id:'source-project-id',name:'Roof',states:[state],resources:'private',origin:[1,2,3]});
+ assert.deepEqual(doc,{schema:'craftstudio-material-palette/1',palette:{name:'Roof',states:[state]}});
+ const imported=readPaletteDocument({...doc,palette:{...doc.palette,id:'overwrite-id'}});
+ assert.equal(imported.id,undefined);assert.deepEqual(imported.states,[state]);
+ assert.throws(()=>readPaletteDocument({...doc,schema:'wrong'}),/格式/);
+ assert.throws(()=>readPaletteDocument({...doc,palette:{name:'Invalid',states:[{Name:'bad'}]}}),/标识/);
+});
 const setup=()=>{const site=new Site({...emptyProject(),size:[8,8,8],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,1,1],state:0}]});const api=new DesignAPI({getSite:()=>site});const call=(method,params={})=>api.execute({method,params:{expectedRevision:api.revision,...params}});return{site,api,call};};
 test('material schemes preserve exact variants, deduplicate states and undo without editing blocks',()=>{
  const{site,call}=setup(),bottom={Name:'minecraft:oak_slab',Properties:{type:'bottom',waterlogged:'false'}},top={...bottom,Properties:{type:'top',waterlogged:'false'}};
