@@ -89,3 +89,5 @@ body.progressive-render #busy{display:none}
 #cad-context-menu{max-height:calc(100vh - 8px);max-width:calc(100vw - 8px);overflow:auto}
 
 #cad-selection-info .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#cad-selection-info .row button{white-space:nowrap}
+
+#view-navigation{flex:0 0 auto;gap:3px}#view-navigation button{width:28px;flex:none;padding:3px}
