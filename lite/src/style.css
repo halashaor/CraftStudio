@@ -70,3 +70,5 @@
 
 /* Geometry loading reports progress in the fixed viewport status instead of covering it. */
 body.progressive-render #busy{display:none}
+
+.dimension-scrub-label{cursor:ew-resize}.dimension-scrub-label input{cursor:text}input.dimension-scrubbing{cursor:ew-resize;caret-color:transparent;user-select:none}
