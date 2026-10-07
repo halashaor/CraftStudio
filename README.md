@@ -154,3 +154,5 @@ On Windows, double-click `启动本地计算版.cmd` for local computing or `启
 Selected-file imports on this backend read successive 4 MiB slices with checksums and cancellation; they avoid a whole-file browser buffer. Backend parsing still assembles the input in memory. Standalone Lite retains browser parsing. Remote-path latency is not fully optimized. See [local engine API](local-engine/README.md) for developer usage.
 
 Reconnecting to the Java bridge recovers an active build/undo task and its progress; completed tasks retain progress lookup while Stop is disabled. Tokens are never saved. This does not resume tasks across a Minecraft restart.
+
+Use **Focus selection** in the selection inspector or F3 search to frame selected objects/regions while retaining camera direction, perspective/orthographic mode and zoom. F3 also exposes isolate, exit one isolation level and restore the full scene.
