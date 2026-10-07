@@ -149,6 +149,6 @@ CraftStudio 仍在开发中。目前的限制包括自定义渲染器支持不�
 
 本地服务可通过现有 Python 鉴权入口调用 Node 编辑引擎。这条路径暂时需要显式启用，完整资源下的性能仍在优化。需要已有 Node 22.13+ 及 `lite` 依赖，不自动安装运行时。
 
-启动前设置 `CRAFTSTUDIO_ENGINE=1`；找不到 Node 时可用 `CRAFTSTUDIO_NODE` 指定可执行文件。服务启动成功才声明 `local-engine/1`，界面随后直接使用带私有令牌的回环后端接口，并恢复最后确认场景与撤销/重做。直连只允许启动器的明确本地来源；没有直连接口的客户端仍可使用 Python 代理。独立 Lite 继续使用浏览器 Worker 和 IndexedDB。设置 `CRAFTSTUDIO_ENGINE=0` 可禁用。
+Windows 可双击 `启动本地计算版.cmd` 或 `启动浏览器计算版.cmd`，原启动器继续使用默认/环境设置。也可运行 `start.ps1 -Computation Local` 或 `Browser`。切换正在运行的模式前先保存正式工程版本：启动器在重启前会询问，直接回车保留当前服务。两种模式共享工程库，但恢复各自工作状态，切换后从库打开保存的版本。页脚显示实际计算方式；缺少本地依赖时明确回退，不自动安装。也可启动前设置 `CRAFTSTUDIO_ENGINE=1`；找不到 Node 时可用 `CRAFTSTUDIO_NODE` 指定可执行文件。服务启动成功才声明 `local-engine/1`，界面随后直接使用带私有令牌的回环后端接口，并恢复最后确认场景与撤销/重做。直连只允许启动器的明确本地来源；没有直连接口的客户端仍可使用 Python 代理。独立 Lite 继续使用浏览器 Worker 和 IndexedDB。设置 `CRAFTSTUDIO_ENGINE=0` 可禁用。
 
 启用后端后，所选文件按 4 MiB 分片读取、校验和传输，并支持取消，避免浏览器整文件缓冲。后端解析仍会在内存中组装完整输入；独立 Lite 保留浏览器解析。远端路径延迟尚未完成优化。开发接口见 [local-engine](local-engine/README.md)。

@@ -8,6 +8,10 @@ class EngineGatewayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'CRAFTSTUDIO_ENGINE':'0'}):
             gateway=EngineGateway(Path(__file__).resolve().parents[1],Path(folder)/'test.sqlite','synthetic-token-123456')
             self.assertFalse(gateway.ensure());self.assertIsNone(gateway.process);gateway.close()
+    def test_requested_local_mode_is_visible_even_when_dependencies_are_missing(self):
+        with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'CRAFTSTUDIO_ENGINE':'1'}):
+            gateway=EngineGateway(folder,Path(folder)/'test.sqlite','synthetic-token-123456');self.assertTrue(gateway.requested);self.assertFalse(gateway.ensure());gateway.close()
+
     def test_missing_dependencies_fall_back_without_installing(self):
         with tempfile.TemporaryDirectory() as folder:
             gateway=EngineGateway(folder,Path(folder)/'test.sqlite','synthetic-token-123456')

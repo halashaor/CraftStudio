@@ -5,13 +5,13 @@ from contextlib import closing
 
 class EngineGateway:
     def __init__(self, root, database, token, legacy_database=None):
-        self.root=Path(root);self.database=Path(database);self.legacy_database=Path(legacy_database) if legacy_database else None;self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False;self.allowed_origins=[]
+        self.root=Path(root);self.database=Path(database);self.legacy_database=Path(legacy_database) if legacy_database else None;self.token=token;self.lock=threading.RLock();self.process=None;self.url=None;self.reason=None;self.closed=False;self.allowed_origins=[];self.requested=os.environ.get('CRAFTSTUDIO_ENGINE','0')=='1'
         candidates=[os.environ.get('CRAFTSTUDIO_NODE'),shutil.which('node')]
         profile=os.environ.get('USERPROFILE')
         if profile:candidates.append(str(Path(profile)/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe'))
         self.opener=urllib.request.OpenerDirector();self.opener.add_handler(urllib.request.HTTPHandler());self.opener.add_handler(urllib.request.HTTPDefaultErrorHandler());self.opener.add_handler(urllib.request.HTTPErrorProcessor())
         self.node=None
-        if os.environ.get('CRAFTSTUDIO_ENGINE','0')=='1' and (self.root/'lite/node_modules/fflate/package.json').is_file():
+        if self.requested and (self.root/'lite/node_modules/fflate/package.json').is_file():
             for candidate in dict.fromkeys(p for p in candidates if p):
                 try:
                     version=subprocess.check_output([candidate,'--version'],timeout=3,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0).decode().strip()
