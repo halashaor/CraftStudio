@@ -81,3 +81,5 @@ body.progressive-render #busy{display:none}
 #isolation-bar{flex-wrap:wrap}#isolation-bar .check{margin:0;font-size:11px}#isolation-label{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#isolation-context-status{min-width:120px}
 
 #component-context .row{margin-top:7px}#component-context-instances{display:flex;flex-direction:column;gap:4px;margin-top:7px}#component-context-instances button{text-align:left;white-space:normal}#component-context-instances [aria-pressed="true"]{border-color:#85b9eb;background:#3d536c}
+
+#figure-points .construction-point.selected{background:#35485c;border-radius:4px}#figure-points .construction-point [aria-pressed="true"]{border-color:#a3d2ff;background:#466b93}
