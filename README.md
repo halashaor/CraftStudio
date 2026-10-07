@@ -170,3 +170,5 @@ Before confirming construction, numeric sketch/model settings (including sweep w
 Terrain numeric preview history now includes target elevation, smoothing radius, slope coefficients and endpoint heights. Ramp endpoints and their derived slope are restored together. Before confirmation, these edits leave the original terrain unchanged; confirmed construction still uses scene undo. Valid plain-number edits can be confirmed directly without a redundant blur-triggered recalculation.
 
 Construction preview history also covers common sketch/model checkboxes and option lists, including fill, hollow/end caps and voxel fitting. Tool kind, workplane and source-selection changes remain context switches that reset this temporary history.
+
+The construction tool’s Frame button preserves the current camera orientation, projection and zoom, fits the guide and available preview geometry, and includes both sides of symmetric extrusion. It keeps the tool and its current settings open.
