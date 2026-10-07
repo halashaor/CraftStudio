@@ -210,3 +210,5 @@ await CraftStudio.request({
 `designer` 的 `editFeature` 参数 `parameters.profileIds` / `parameters.pathId` 可显式更换生成对象的截面或路径来源。设置外部 `profileIds` 会清除旧内联 `profiles`，设置 `pathId` 会清除旧内联 `path`，避免旧缓存优先覆盖新参照。重建先在候选来源图上验证循环与缺失参照，再保留对象/输出辅助线 ID 更新下游；来源记录与版本同步更新，沿用归属快照、手改保留和一次撤销。自身/后代输出循环会拒绝，旧对象缺少归属记录时不会推断所有权。自绘截面扫掠同时记录路径和截面来源，修改截面也会触发原有下游重建。
 
 几何的 `terrain:"surface"` 与 `terrain:"grade"` 是保留真实场地的自动模式：缺失地面、水面以及冲突建筑/植被候选会被排除，挖填保留列不会继续放置道路，斜线补格也独立检查。该模式规则不因更宽松的 placement policy 而覆盖；`terrain:"none"` 的自由设计与显式编辑接口保持原有语义。预览 warnings 说明略过列，材料角色数量按最终候选计算。
+
+`terrain:"supports"` 的 prepare 结果包含 `supports`：`requested/grounded/blocked/missing/buried/clipped` 与最多 256 个诊断 `records`（含 x/z、地面/设计面高度、planned/accepted、status），超出时 `truncated:true`。支柱先检查整个区间，障碍或缺失地面不生成半根柱；范围过滤后缺少候选柱格标为 clipped，不计为完整落地。报告仅表示候选方块几何，不判定承载力。
