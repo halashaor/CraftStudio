@@ -1,4 +1,23 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {generationLinks} from '../src/generation-links.js';import {DesignAPI} from '../src/foundation.js';import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';
+test('offset ancestry distinguishes missing or cyclic sources from rebuild warnings',()=>{
+ const design={guides:[
+ {id:'base',revision:2},
+ {id:'stale',name:'Stale outline',provenance:{kind:'offset',guideId:'base',sourceRevision:1}},
+ {id:'nested',name:'Nested outline',provenance:{kind:'offset',guideId:'stale',sourceRevision:0}},
+ {id:'missing',name:'Broken outline',provenance:{kind:'offset',guideId:'absent'}},
+ {id:'nested-missing',provenance:{kind:'offset',guideId:'missing'}},
+ {id:'cycle',provenance:{kind:'offset',guideId:'cycle'}}],objects:
+ ['stale','nested','missing','nested-missing','cycle'].map(id=>({id,generation:{sources:[id]}}))};
+ const before=structuredClone(design),objects=generationLinks(design).objects;
+ assert.deepEqual(objects.map(o=>o.status),['warning','warning','error','error','error']);
+ assert.equal(objects[1].issues[0].code,'OFFSET_OUTDATED');
+ assert.match(objects[1].issues[0].message,/上一级/);
+ assert.equal(objects[3].issues[0].code,'OFFSET_SOURCE_MISSING');
+ assert.equal(objects[4].issues[0].code,'OFFSET_CYCLE');
+ assert.deepEqual(design,before);
+ design.guides[0].revision=1;
+ assert.equal(generationLinks(design).objects[0].status,'ready');
+});
 test('recorded output dependencies propagate problems and stop at detached outputs',()=>{
  const design={guides:[{id:'a'},{id:'b'},{id:'c'}],objects:[
  {id:'first',name:'Roof',guideId:'a',generation:{type:'feature',sources:['missing']}},
