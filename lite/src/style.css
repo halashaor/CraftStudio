@@ -67,3 +67,6 @@
 #construction-panel input[aria-invalid="true"]{border-color:#ee7168}#construction-panel input[data-expression-pending="true"]:not([aria-invalid="true"]){border-color:#e3bd72}
 
 #cad-sketch-list .generation-sources{flex-basis:100%;width:100%}#cad-sketch-list .generation-sources small{display:block}
+
+/* Geometry loading reports progress in the fixed viewport status instead of covering it. */
+body.progressive-render #busy{display:none}
