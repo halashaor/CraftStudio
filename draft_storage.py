@@ -26,6 +26,10 @@ def capture(conn,data):
   if hashlib.sha256(payload).hexdigest()!=digest:raise ValueError('草稿区块摘要不一致')
   conn.execute('INSERT OR IGNORE INTO designer_draft_blobs VALUES (?,?)',(digest,payload));chunks.append([key,digest])
  snapshot=dict(head['snapshot'])
+ if 'history' in data:
+  history=data['history']
+  if not isinstance(history,dict) or history.get('schema')!='craftstudio-draft-history/1' or any(not isinstance(history.get(k),list) for k in ('chunks','designs','undo','redo')):raise ValueError('草稿撤销历史格式无效')
+  snapshot['history']=history
  if data.get('title'):
   if not isinstance(data['title'],str):raise ValueError('草稿名称无效')
   snapshot['title']=data['title']

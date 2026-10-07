@@ -6,6 +6,14 @@ class CheckpointDraftTests(unittest.TestCase):
  setUp=fixtures.WorkspaceChunkTests.setUp
  tearDown=fixtures.WorkspaceChunkTests.tearDown
  save=fixtures.WorkspaceChunkTests.save
+ def test_history_is_draft_only_and_immutable(self):
+  self.save(1);data=self.packet();history={'schema':'craftstudio-draft-history/1','chunks':[],'designs':[{'materialPalettes':[]}],'undo':[{'chunks':[],'size':[8,8,8],'design':0}],'redo':[]};data['history']=history
+  self.lib.call('draftCheckpoint',[data,None]);self.assertEqual(self.payload()['site']['history'],history)
+  self.assertNotIn('history',self.lib.call('workspaceHead',['ws'])['snapshot'])
+  history['undo'].clear();self.assertEqual(len(self.payload()['site']['history']['undo']),1)
+  bad=dict(data,history={'schema':'unknown'})
+  with self.assertRaises(ValueError):self.lib.call('draftCheckpoint',[bad,None])
+  self.assertEqual(len(self.payload()['site']['history']['undo']),1)
  def packet(self,revision=1,asset=True):
   head=self.lib.call('workspaceHead',['ws']);data={'workspaceId':'ws','revision':revision,'digest':head['digest'],'assetKey':'assets:test','title':'Autosaved'}
   if asset:data['assetBytes']={'$bytes':base64.b64encode(gzip.compress(json.dumps({'models':{},'images':{'fixture':'data:image/png;base64,AA=='},'textures':{}}).encode(),mtime=0)).decode()}
