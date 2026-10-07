@@ -158,3 +158,5 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 Use **Focus selection** in the selection inspector or F3 search to frame selected objects/regions while retaining camera direction, perspective/orthographic mode and zoom. F3 also exposes isolate, exit one isolation level and restore the full scene.
 
 Viewport geometry, pooled materials and textures release unused graphics resources as you move through large scenes. Returning reloads needed textures; cached Create models retain their referenced textures. Temporary image URLs are revoked after decoding. Canonical voxel data still resides in memory; this is not full world-data streaming.
+
+The optional local engine now stores immutable source blocks in independently verified chunks. Stored baseline queries read requested chunks without loading unrelated source blobs, with checkpoint sequence checks; legacy checkpoints restore and upgrade on the next successful save. Canonical editing/startup still loads the complete source, so this is storage groundwork for regional working sets.

@@ -35,6 +35,8 @@ export class EngineController{
   if(action==='api'&&result.ok){if(data.method==='transaction.begin')this.#transactions.add(result.value.transactionId);if(['transaction.abort','transaction.commit'].includes(data.method))this.#transactions.delete(data.params.transactionId);}
  }
  async #run(action,data,onTiming){
+  if(action==='storedBaselineChunks'&&!Array.isArray(data.chunks))throw Error('Baseline chunk buckets required');
+  if(['storedBaselineManifest','storedBaselineChunks'].includes(action))return this.store.baseline(this.key,action==='storedBaselineManifest'?{expectedSequence:data.expectedSequence}:{chunks:data.chunks,expectedSequence:data.expectedSequence});
   if(this.#engine.closed)await this.#recover();
   if(resourceChanges.has(action))return this.#replace(action,data,true);
   if(['load','resume'].includes(action)||action==='import'&&!/\.html?$/i.test(data.name||''))return this.#replace(action,data);
