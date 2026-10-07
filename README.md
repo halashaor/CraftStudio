@@ -181,3 +181,5 @@ Path arrays can use fixed spacing or distribute a requested number over the full
 
 Object collections organize voxel objects by building or area. In the scene collection panel, create a named collection, assign selected objects, filter its members, select all members, or hide/show it. Removing a collection only removes membership. Individual hidden states remain independent, and confirmed collection edits support undo and project save/reopen. This release uses single-level collections with one collection per object.
 Collection members can also be moved out individually; object rows display their current collection name. Removing membership preserves blocks and supports undo.
+
+The scene list offers a needs-attention filter for generated objects. Missing recorded sketch sources are errors; explicitly outdated outputs are warnings. Badges explain the reason, and existing source details provide editing/repair actions. Inspection does not change blocks or lock unrelated editing; detached objects are excluded. These statuses describe recorded direct sources, not a complete validation of every possible generation failure.
