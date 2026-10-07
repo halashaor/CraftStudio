@@ -1,3 +1,4 @@
+import {SourceReader} from './source-reader.mjs';
 import {LazyBaseline} from './lazy-baseline.mjs';
 import {createHash} from 'node:crypto';
 import {gzipSync,gunzipSync} from 'node:zlib';
@@ -14,7 +15,7 @@ export function references(head){
  if(ids.some(id=>typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id)))throw Error('Invalid checkpoint blob reference');return[...new Set(ids)];
 }
 export class EngineCheckpoint{
- constructor(){this.baseMemo=new WeakMap();this.memo=new WeakMap();this.resourceStamp=null;this.resourceRecord=null;}
+ constructor(){this.sourceReader=null;this.baseMemo=new WeakMap();this.memo=new WeakMap();this.resourceStamp=null;this.resourceRecord=null;}
  capture({site,api,resources,libraryResources,baseKey},data={}){
   const known=new Set(data.known||[]),blobs=new Map();
   const blob=bytes=>{const id=digest(bytes);if(!known.has(id))blobs.set(id,{id,bytes});return id;};
@@ -26,18 +27,19 @@ export class EngineCheckpoint{
   if(stamp!==this.resourceStamp||this.resourceRecord?.owner!==resources){this.resourceStamp=stamp;this.resourceRecord={owner:resources,bytes:encode(covered?resources.saved:resources.bundle(site.palette))};this.resourceRecord.id=digest(this.resourceRecord.bytes);}
   const assets=blob(this.resourceRecord.bytes),archives=libraryResources.map(file=>({name:file.name,id:memo(file.bytes,()=>Buffer.from(new Uint8Array(file.bytes)))}));
   const receipts=[...api.receipts].filter(([,record])=>{const method=JSON.parse(record.fingerprint).method;return!method.startsWith('transaction.')||method==='transaction.commit';});
-  let baseline=this.baseMemo.get(site.base);if(!baseline){baseline=splitBaseline(site.base);this.baseMemo.set(site.base,baseline);}const base=blob(baseline.header.bytes),baseChunks=baseline.chunks.map(c=>[c.bucket,blob(c.bytes),c.count,c.nbtCount]);if(!site.baseline){lazySource(baseline).attach(site);this.baseMemo.set(site.base,baseline);}
+  let baseline=this.baseMemo.get(site.base);if(!baseline){baseline=splitBaseline(site.base);this.baseMemo.set(site.base,baseline);}const base=blob(baseline.header.bytes),baseChunks=baseline.chunks.map(c=>{if(!c.id||!known.has(c.id))c.id=blob(c.bytes);return[c.bucket,c.id,c.count,c.nbtCount];});if(!site.baseline){lazySource(baseline).attach(site);this.baseMemo.set(site.base,baseline);}
   const head={schema:'craftstudio-engine-checkpoint/2',base,baseChunks,baseKey,workspaceId:api.workspaceId,revision:api.revision,site:{...site.packHeader(),size:[...site.size]},overlay:overlay(site.overlay),undo:site.undo.map(frame),redo:site.redo.map(frame),assets,archives,receipts};
   references(head);return{head,blobs:[...blobs.values()]};
  }
- restore({head,blobs}){
-  const records=new Map(blobs.map(b=>[b.id,b.bytes]));for(const id of references(head))if(!records.has(id)||digest(records.get(id))!==id)throw Error('Missing or corrupt engine blob');
-  const baseline=head.schema==='craftstudio-engine-checkpoint/2'?{header:{bytes:records.get(head.base)},chunks:head.baseChunks.map(([bucket,id,count,nbtCount])=>({bucket,count,nbtCount,bytes:records.get(id)}))}:null;const site=baseline?lazySource(baseline).attach():new Site(restoreBaseline(head,records)),header=head.site;
+ mountSource({site}, {database}){const baseline=this.baseMemo.get(site.base);if(!baseline||!site.baseline)throw Error('No checkpointed source to mount');const ids=baseline.chunks.map(c=>c.id);if(ids.some(id=>!id))throw Error('Source blobs not checkpointed');let reader=this.sourceReader;if(reader?.path===database)reader.ids=new Set(ids);else{reader?.close();reader=this.sourceReader=new SourceReader(database,ids);}if(site.baseline.diskSource===reader)return site.baseline.stats();for(const row of baseline.chunks){row.byteLength=reader.size(row.id);delete row.bytes;Object.defineProperty(row,'bytes',{configurable:true,enumerable:true,get:()=>reader.read(row.id)});}site.baseline.diskSource=reader;return site.baseline.stats();}
+ restore({head,blobs,sourceDatabase,sourceSizes=[]}){
+  const records=new Map(blobs.map(b=>[b.id,b.bytes])),diskIds=new Set(sourceDatabase&&head.schema==='craftstudio-engine-checkpoint/2'?head.baseChunks.map(c=>c[1]):[]);for(const id of references(head)){if(records.has(id)){if(digest(records.get(id))!==id)throw Error('Missing or corrupt engine blob');}else if(!diskIds.has(id))throw Error('Missing or corrupt engine blob');}const sizes=new Map(sourceSizes);if(diskIds.size){this.sourceReader?.close();this.sourceReader=new SourceReader(sourceDatabase,diskIds);}
+  const reader=this.sourceReader;const baseline=head.schema==='craftstudio-engine-checkpoint/2'?{header:{bytes:records.get(head.base)},chunks:head.baseChunks.map(([bucket,id,count,nbtCount])=>{const row={bucket,id,count,nbtCount};if(diskIds.has(id)){row.byteLength=sizes.get(id)??reader.size(id);Object.defineProperty(row,'bytes',{configurable:true,enumerable:true,get:()=>reader.read(id)});}else{row.bytes=records.get(id);row.byteLength=row.bytes.length;}return row;})}:null;const site=baseline?lazySource(baseline).attach():new Site(restoreBaseline(head,records)),header=head.site;
   site.palette=structuredClone(header.palette);site.states=new Map(site.palette.map((s,i)=>[stateKey(s),i]));
   const roots=new Map(),overlay=refs=>{const value=new VoxelOverlayMap();for(const [bucket,id]of refs){let cached=roots.get(id),root=cached?.root;if(cached&&cached.bucket!==bucket)throw Error('Invalid chunk grouping');if(!root){const entries=decode(records.get(id)),checked=new VoxelOverlayMap();for(const [key,b]of entries){if(!Array.isArray(b.pos)||b.pos.length!==3||b.pos.some(n=>!Number.isInteger(n)||n<0||n>=4096)||coordKey(...b.pos)!==key||!Number.isInteger(b.state)||b.state< -1||b.state>=site.palette.length)throw Error('Invalid checkpoint cell');checked.set(key,b);}if(checked.chunks.size!==1||!checked.chunks.has(bucket))throw Error('Invalid chunk grouping');root=checked.chunks.get(bucket);roots.set(id,{root,bucket});this.memo.set(root,{id,bytes:records.get(id)});}if(value.chunks.has(bucket))throw Error('Duplicate chunk grouping');value.chunks.set(bucket,root);value.count+=root.size;}return value;};
   Object.assign(site,{title:header.title,origin:structuredClone(header.origin),originConfirmed:header.originConfirmed,protected:structuredClone(header.protected),sourceHash:header.sourceHash,design:structuredClone(header.design),size:[...header.size]});
   site.overlay=overlay(head.overlay);site.track(new VoxelOverlayMap(),site.overlay);site.undo=head.undo.map(v=>({...v,overlay:overlay(v.overlay),design:structuredClone(v.design)}));site.redo=head.redo.map(v=>({...v,overlay:overlay(v.overlay),design:structuredClone(v.design)}));site.endStroke();
-  if(baseline)this.baseMemo.set(site.base,baseline);
+  if(baseline){this.baseMemo.set(site.base,baseline);if(diskIds.size)site.baseline.diskSource=reader;}
   return{site,workspaceId:head.workspaceId,revision:head.revision,baseKey:head.baseKey,receipts:structuredClone(head.receipts),assets:decode(records.get(head.assets)),files:head.archives.map(file=>({name:file.name,bytes:new Uint8Array(records.get(file.id)).buffer}))};
  }
 }

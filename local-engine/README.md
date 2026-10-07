@@ -156,4 +156,14 @@ The optional local engine switches the immutable source to a lazy compressed-chu
 
 Edits remain in the persistent overlay and are independent of source cache eviction. Canonical forks share the immutable source reader. Original block order and typed NBT remain available for complete package/export operations. Authenticated engine action `sourceResidency` reports decoded cache counts and cumulative decode reads; it does not change the scene.
 
-Limits: all compressed baseline blobs are still fetched/verified and retained; this is decoded working-set management, not lazy disk fetch. Native import parsing, complete export/package creation and broad algorithms can temporarily allocate complete data. Create classification can scan all original chunks and keeps its own derived kinetic records; terrain construction still has broad derived caches. Cache size is not a total memory limit and this change does not establish a frame-rate improvement. Lite retains its normal in-browser file workspace.
+File-backed controllers now use disk-backed source reads described below; in-memory stores retain compressed source chunks. Native import parsing, complete export/package creation and broad algorithms can temporarily allocate complete data. Create classification can scan all original chunks and keeps its own derived kinetic records; terrain construction still has broad derived caches. Cache size is not a total memory limit and this change does not establish a frame-rate improvement. Lite retains its normal in-browser file workspace.
+
+## Disk-backed source reads
+
+File-backed controllers now restore version 2 source manifests without transferring their original chunk payloads into the worker. The worker reads immutable blob IDs through a separate read-only SQLite connection and verifies each payload SHA-256 before decoding. Decoded roots retain the existing 64-chunk LRU. After an initial import commits, its compressed source buffers are replaced by database-backed accessors. Canonical checkpoint capture reuses known source digests without reading their payloads again.
+
+`sourceResidency` reports `mode: "disk-chunks"`, `residentCompressedBytes`, `diskReads` and `diskBytesRead`. The compressed byte total describes persisted payloads, not total RAM use. Disk counters count successful verified payload reads. SQLite itself maintains native page caches. Source mounting is reported separately from SQLite commit timing in traces.
+
+Metadata, assets, overlays and undo/redo still restore eagerly; version 1 checkpoints and old manifests without block-entity counts can require full transient migration reads. Missing blobs are checked during checkpoint loading; corrupt source payloads are rejected when first accessed, and complete exports inspect all source chunks. Reopening is not a full database integrity scan. Native parsing, broad algorithms, derived kinetic/terrain caches and complete exports still need further memory and latency work. This is not a total memory cap or a measured frame-rate improvement.
+
+Read-only connection API: [Node.js SQLite documentation](https://nodejs.org/download/release/v22.13.1/docs/api/sqlite.html).

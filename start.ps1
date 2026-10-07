@@ -5,7 +5,7 @@ if ($Computation -eq 'Local') { $env:CRAFTSTUDIO_ENGINE='1' }
 if ($Computation -eq 'Browser') { $env:CRAFTSTUDIO_ENGINE='0' }
 $taskWantedMode = if ($env:CRAFTSTUDIO_ENGINE -eq '1') {'local'} else {'browser'}
 $taskStream = New-Object IO.MemoryStream
-foreach ($taskName in @('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py','engine_gateway.py','local-engine/run-service.mjs','local-engine/service.mjs','local-engine/controller.mjs','local-engine/workspace.mjs','local-engine/worker.mjs','local-engine/checkpoint.mjs','local-engine/lazy-baseline.mjs','local-engine/store.mjs','local-engine/uploads.mjs','lite/src/engine-wire.js','lite/dist/worker.bundle.js')) {
+foreach ($taskName in @('server.py','assets.py','designer_storage.py','desktop_files.py','chunk_storage.py','chunk_export.py','draft_storage.py','engine_gateway.py','local-engine/run-service.mjs','local-engine/service.mjs','local-engine/controller.mjs','local-engine/workspace.mjs','local-engine/worker.mjs','local-engine/checkpoint.mjs','local-engine/lazy-baseline.mjs','local-engine/source-reader.mjs','local-engine/store.mjs','local-engine/uploads.mjs','lite/src/engine-wire.js','lite/dist/worker.bundle.js')) {
     $taskBytes = [IO.File]::ReadAllBytes((Join-Path $taskRoot $taskName))
     $taskStream.Write($taskBytes,0,$taskBytes.Length)
 }
