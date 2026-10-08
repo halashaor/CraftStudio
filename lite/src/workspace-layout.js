@@ -17,7 +17,7 @@ export function workspaceLayout({$,library,notice}){
   handle.addEventListener('dblclick',event=>{event.preventDefault();finish(true);touched=true;delete sizes[key];apply();persist();});
   handle.addEventListener('keydown',event=>{const valid=spec.orientation==='vertical'?['ArrowLeft','ArrowRight']:['ArrowUp','ArrowDown'];if(!valid.includes(event.key)||event.ctrlKey||event.metaKey||event.altKey)return;event.preventDefault();event.stopPropagation();touched=true;sizes[key]=clamp(key,spec.read()+(event.key===valid[0]?-1:1)*spec.sign*(event.shiftKey?1:10));apply();clearTimeout(saveTimer);saveTimer=setTimeout(persist,180);});
  }
- cancelResize=()=>{if(!drag)return false;finish(true);return true;};window.addEventListener('blur',()=>finish(true));window.addEventListener('resize',()=>{finish(true);apply();});const layoutObserver=new ResizeObserver(apply);layoutObserver.observe(viewport);if($('saved-views'))layoutObserver.observe($('saved-views'));apply();
+ cancelResize=()=>{if(!drag)return false;finish(true);return true;};window.addEventListener('blur',()=>finish(true));window.addEventListener('resize',()=>{finish(true);apply();});const layoutObserver=new ResizeObserver(apply);layoutObserver.observe(viewport);for(const id of ['saved-views','space-review-bar','isolation-bar'])if($(id))layoutObserver.observe($(id));apply();
  library.preference('workspace-layout').then(data=>{if(touched||data?.schema!=='craftstudio-workspace-layout/1'||!data.sizes)return;for(const key of Object.keys(specs))if(Number.isFinite(data.sizes[key])&&data.sizes[key]>0)sizes[key]=data.sizes[key];apply();}).catch(error=>notice('布局读取失败：'+error.message,true));
  return{apply};
 }

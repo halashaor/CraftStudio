@@ -100,3 +100,5 @@ body.progressive-render #busy{display:none}
 .studio-workspace #workspace-shelf #asset-detail>.row{clear:both;padding-top:6px}.studio-workspace #workspace-shelf #asset-detail>.row button{white-space:nowrap}
 
 .studio-workspace #cad-inspector>#saved-views{flex:0 0 auto;max-height:40%;overflow:auto}
+
+#space-review-bar{display:flex;flex-wrap:wrap;align-items:center;gap:7px;flex-shrink:0;padding:6px 10px;background:#34475b;color:#dceafa;font-size:11px}#space-review-bar[hidden]{display:none!important}#space-review-bar span{flex:1;min-width:120px}#space-review-bar button{font-size:11px;padding:3px 6px}
