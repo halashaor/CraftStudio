@@ -5,7 +5,7 @@ export function drawingPoints(kind,anchors,cursor,plane='xz',frame=null){if(fram
   const dx=end[a]-start[a],dy=end[b]-start[b];
   return [start,...[1/3,2/3].map(t=>{const p=start.map((v,i)=>v+(end[i]-v)*t);p[a]-=dy*.25;p[b]+=dx*.25;return p;}),end].map(p=>[...p]);
  }
- if(kind==='polygon'||kind==='polyline')return [...anchors,end].map(p=>[...p]);
+ if(kind==='polygon'||kind==='polyline'||kind==='spline')return [...anchors,end].map(p=>[...p]);
  if(kind==='arc')return [start,anchors[1]||end,end].map(p=>[...p]);
  if(kind==='box'){end[n]+=6;return [[...start],end];}
  return [[...start],end];

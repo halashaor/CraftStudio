@@ -9,7 +9,7 @@ export function guideSnapTargets(guides,{excludeId=null}={}){
    if(!Array.isArray(path)||path.length<2||!path.every(valid))continue;
    add('endpoint',path[0]);add('endpoint',path.at(-1));
    if(g.recipe?.kind!=='rectangle')add('midpoint',pathMidpoint(path));
-   if(['polygon','polyline'].includes(g.recipe?.kind))for(const point of g.recipe.points||[])add('endpoint',point);
+   if(['polygon','polyline','spline'].includes(g.recipe?.kind))for(const point of g.recipe.points||[])add('endpoint',point);
    if(g.recipe?.kind==='polyline'){const p=g.recipe.points||[];for(let i=0;i<p.length-1;i++)add('midpoint',p[i].map((n,a)=>(n+p[i+1][a])/2));if(g.recipe.closed&&p.length>2)add('midpoint',p.at(-1).map((n,a)=>(n+p[0][a])/2));}
    if(g.recipe?.kind==='rectangle'){
     const corners=[path[0]];
