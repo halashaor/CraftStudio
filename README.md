@@ -243,6 +243,8 @@ Autosaved drafts preserve confirmed undo/redo history in browser-compute local m
 
 While an unconfirmed tool preview is active, the quick-save button says Save confirmed content and the result explains that the preview is not included. Saving keeps the preview available in the current page without accepting or discarding it. Confirm it to include the change in a subsequent save; supported construction tools still offer explicit Pause for separate intent persistence.
 
+Portable project export uses the current project-name field unless an explicit export title is supplied, in both local and Lite editions. The library’s Open action normally restores the latest draft; choose a numbered history entry to open a formal saved version.
+
 A formal save freezes its name, note, tags, size and block statistics before serialization and guards the scene revision. Later edits are not mislabeled as part of that version; when its draft succeeds, the save result explains that they remain in the working draft and need another formal save. A note typed during saving is not cleared.
 
 Pending save-form text (name, raw tags, type and next-version note) follows the local working draft and is restored on reload. The optional local engine keeps this UI form in a workspace-bound local preference. A submitted note is cleared before the next draft is written, so it does not reappear. Opening another project resets its fields; formal building exports do not include pending form data.
