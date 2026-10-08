@@ -175,6 +175,8 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 
 ## Selection, transforms and components
 
+Choose Blocks (the default) or Objects first in the selection inspector. Objects first selects a named object by the clicked cell’s exact membership; unowned cells fall back to single-block selection. Smaller overlapping objects take priority unless a candidate is already selected; Alt-click cycles candidates. Shift adds and Ctrl subtracts using the existing exact selection rules. Hidden objects and hidden collections are excluded. Picking changes selection only; move/copy/rotate still require a separate preview and confirmation. The preference is session-only, and picking cycles owners of the hit cell rather than selecting through unrelated occluding geometry.
+
 When box-selecting named objects, left-to-right uses a blue solid window for full containment; right-to-left uses a green dashed crossing window. The box labels its direction and replace/add/subtract/intersect operation while dragging. Escape cancels the current box and preserves the preceding selection; moving the held pointer afterwards does not restart it. Object tests currently use projected bounding boxes, not exact visible-surface selection or occlusion filtering.
 
 Object-tree additions/subtractions and object marquee selection keep named-object highlighting aligned with the exact voxel selection. Subtracting every selected object clears the selection. Partially selected overlapping objects use the free-region path instead of incorrectly copying their entire membership; named multi-object selection remains available for alignment/distribution.
