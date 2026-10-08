@@ -173,6 +173,8 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 
 ## Selection, transforms and components
 
+When box-selecting named objects, left-to-right uses a blue solid window for full containment; right-to-left uses a green dashed crossing window. The box labels its direction and replace/add/subtract/intersect operation while dragging. Escape cancels the current box and preserves the preceding selection; moving the held pointer afterwards does not restart it. Object tests currently use projected bounding boxes, not exact visible-surface selection or occlusion filtering.
+
 Object-tree additions/subtractions and object marquee selection keep named-object highlighting aligned with the exact voxel selection. Subtracting every selected object clears the selection. Partially selected overlapping objects use the free-region path instead of incorrectly copying their entire membership; named multi-object selection remains available for alignment/distribution.
 
 Switching workspaces clears selection, coordinate inputs and expanded source details, even if the next project reuses object IDs. Removing a group prunes its named references while retaining the valid free voxel selection; normal hiding/saving in the same workspace keeps selection. Inactive selections no longer appear selected merely because old coordinate fields span a region.

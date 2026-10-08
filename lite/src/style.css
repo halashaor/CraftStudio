@@ -104,3 +104,5 @@ body.progressive-render #busy{display:none}
 #space-review-bar{display:flex;flex-wrap:wrap;align-items:center;gap:7px;flex-shrink:0;padding:6px 10px;background:#34475b;color:#dceafa;font-size:11px}#space-review-bar[hidden]{display:none!important}#space-review-bar span{flex:1;min-width:120px}#space-review-bar button{font-size:11px;padding:3px 6px}
 
 .studio-workspace #direct-space-label{grid-column:1/-1}
+
+#cad-marquee[data-crossing="true"]{border-style:dashed;border-color:#48c69a;background:#48c69a22}#cad-marquee::after{content:attr(data-label);position:absolute;left:0;top:0;transform:translateY(-100%);white-space:nowrap;padding:4px 6px;border-radius:3px;background:#223347ed;color:#e6f1ff;font-size:11px;line-height:1.5}#cad-marquee[data-operation="subtract"]::after{color:#ffaaa4}#cad-marquee[data-operation="intersect"]::after{color:#d4b9ff}
