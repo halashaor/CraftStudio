@@ -241,3 +241,5 @@ Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-
 `view.isolate` 的 `{contextVisible:true|false}` 在现有隔离层中显示／隐藏周围参照，保留 `editBounds`；未隔离时返回错误。`push` 新层默认隐藏参照，`pop` 恢复上一层的参照状态。`captureView().scene.view.contextVisible` 表示当前状态。显式隐藏的对象仍遵循原有可见规则；公共自由编辑接口不受此显示开关限制。
 
 `construction.prepare` 的 `type:"geometry"` 支持 `config.kind:"spline"`：`points` 为曲线贯穿的三维途经点（开放至少两点，闭合至少三点），`closed:true` 生成闭合插值曲线。它采用向心 Catmull–Rom 三次插值，保留原有 `kind:"bezier"` 的语义。复用工作平面、素材、地形与范围参数；`guidesOnly:true` 可保存为建模来源，闭合且平面的结果可由 `profileIds` 拉伸。非平面曲线填充会报错。曲线配方随 craftlite 保存，NBT 导出确认后的方块；现有采样／生成预算仍适用。
+
+路径扫掠 `operation:"sweep"` 支持 `sweepMode:"rectangle-fit"`，`width/height` 为 0.5–64 的尺寸，截面由路径法向帧构造；`voxel:"smart"` 复用 `roles.slab/roles.stairs` 边界落格。仍支持空心、端盖、闭环方向校正及重叠检查。原 `sweepMode:"rectangle"` 的整方块语义保持不变。
