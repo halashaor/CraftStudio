@@ -143,6 +143,8 @@ Selection material change lists source block materials actually present in the s
 
 ## Sketches and generated forms
 
+While picking sketch points, auxiliary-geometry snapping also finds true 3D intersections near the cursor and labels both source guides. Ctrl temporarily suspends snapping. The snapped coordinate remains precise when saved, even off the half-block grid. Hidden guides, the sketch currently being edited and intersections outside a locked workplane are excluded. Curves use their saved sampled polylines; this is not analytic curve intersection, extension snapping or apparent projected intersection. Collinear overlaps do not produce a unique intersection target. Helpers remain viewport-only; a picked point is stored as a coordinate rather than a persistent intersection constraint.
+
 Import your own structure or terrain file, or begin in an empty workspace.
 
 Save a portable project for later editing, or export a blueprint for Minecraft.
