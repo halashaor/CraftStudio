@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Site} from '../src/site.js';
+import {Site,coordKey} from '../src/site.js';
 import {emptyProject} from '../src/codec.js';
 import {DesignAPI} from '../src/foundation.js';
 import {objectHidden,hiddenObjectContains} from '../src/collections.js';
@@ -16,6 +16,11 @@ test('sparse hidden objects do not hide decorations in holes of their bounding b
  assert.equal(hiddenObjectContains(design,object,[1,1,1]),true);
  assert.equal(hiddenObjectContains(design,object,[2,1,1]),false);
  assert.equal(hiddenObjectContains(design,object,[4,1,1]),false);
+});
+test('hidden decoration membership accepts canonical encoded cells and retains legacy coordinate forms',()=>{
+ const design={collections:[{id:'g',hidden:true}]},record=cells=>({collectionId:'g',cells,min:[1,1,1],max:[3,1,1]});
+ for(const cells of [[coordKey(1,1,1),coordKey(3,1,1)],[[1,1,1],[3,1,1]],['1,1,1','3,1,1']]){assert.equal(hiddenObjectContains(design,record(cells),[1,1,1]),true);assert.equal(hiddenObjectContains(design,record(cells),[2,1,1]),false);}
+ const {site}=setup();assert.equal(typeof site.design.objects[0].cells[0],'number');assert.equal(hiddenObjectContains(site.design,site.design.objects[1],[1,1,1]),true);assert.equal(hiddenObjectContains(site.design,site.design.objects[0],[1,1,1]),false);
 });
 test('moving selected members out preserves geometry, other collections and undo',()=>{
  const{site,api,call}=setup();

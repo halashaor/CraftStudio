@@ -1,7 +1,8 @@
+import {coordKey} from './site.js';
 export const objectHidden=(design,object)=>!!object.hidden||!!design.collections?.find(c=>c.id===object.collectionId)?.hidden;
 export function hiddenObjectContains(design,object,position){
  if(!objectHidden(design,object))return false;
- if(object.cells?.length)return object.cells.includes(position.join(','));
+ if(object.cells?.length){const key=coordKey(...position),text=position.join(',');return object.cells.some(cell=>typeof cell==='number'?cell===key:Array.isArray(cell)?cell.every((n,a)=>n===position[a]):cell===text);}
  return position.every((n,a)=>n>=object.min[a]&&n<=object.max[a]);
 }
 export function listedCollections(site){return(site.design.collections||[]).map(c=>({...c,objectIds:site.design.objects.filter(o=>o.collectionId===c.id).map(o=>o.id)}));}
