@@ -20,3 +20,12 @@ test('nearby intersections retain source names and obey workplanes, view depth, 
  assert.equal(nearestScreenSnap([...targets,{kind:'endpoint',point:[2,2,0]}],options).kind,'endpoint');
  assert.equal(nearestScreenSnap([{kind:'midpoint',point:[2,2,0]},...targets],options).kind,'intersection');
 });
+test('spatial bounds retain every actual crossing and workplane prefilter keeps straddling segments',()=>{
+ const guides=Array.from({length:24},(_,i)=>({id:String(i),points:[[i%6,0,Math.floor(i/6)],[(i*7)%9,0,(i*3)%8]]})),segments=guideSnapSegments(guides),options={pointer:[4,4],project:p=>[p[0],p[2],0],radius:30};
+ const expected=[];for(let i=0;i<segments.length;i++)for(let j=i+1;j<segments.length;j++){const point=segmentIntersection(segments[i].a,segments[i].b,segments[j].a,segments[j].b);if(point)expected.push({sourceIds:[segments[i].guideId,segments[j].guideId],point});}
+ assert.deepEqual(nearbyIntersections(segments,options).map(({sourceIds,point})=>({sourceIds,point})),expected);
+ const spatial=guideSnapSegments([{id:'through',points:[[0,-2,0],[0,2,0]]},{id:'across',points:[[-2,0,0],[2,0,0]]},{id:'outside',points:[[-2,4,0],[2,4,0]]}]);
+ const result=nearbyIntersections(spatial,{pointer:[0,0],project:p=>[p[0],p[1],0],plane:{origin:[0,0,0],normal:[0,1,0]}});assert.equal(result.length,1);assert.deepEqual(result[0].point,[0,0,0]);
+ // Callers supplying plain segments receive the same bounds preflight.
+ assert.equal(nearbyIntersections(spatial.map(({min,max,...segment})=>segment),{...options,pointer:[0,0]}).length,1);
+});

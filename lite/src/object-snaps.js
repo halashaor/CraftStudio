@@ -1,5 +1,6 @@
 const valid=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite),distance=(a,b)=>Math.hypot(...a.map((n,i)=>n-b[i]));
 const sub=(a,b)=>a.map((n,i)=>n-b[i]),dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
+const bounds=segment=>({min:segment.a.map((n,i)=>Math.min(n,segment.b[i])),max:segment.a.map((n,i)=>Math.max(n,segment.b[i]))});
 export function segmentIntersection(a,b,c,d){
  const u=sub(b,a),v=sub(d,c),w=sub(a,c),aa=dot(u,u),bb=dot(u,v),cc=dot(v,v),dd=dot(u,w),ee=dot(v,w),det=aa*cc-bb*bb;
  if(!aa||!cc||det<=1e-12*aa*cc)return null;
@@ -9,19 +10,22 @@ export function segmentIntersection(a,b,c,d){
  return distance(p,q)<=1e-6?p.map((n,i)=>(n+q[i])/2):null;
 }
 export function guideSnapSegments(guides){
- return guides.filter(g=>!g.hidden).flatMap(g=>(g.paths?.length?g.paths:[g.points]).flatMap(path=>Array.isArray(path)?path.slice(1).flatMap((point,i)=>valid(point)&&valid(path[i])&&distance(point,path[i])>1e-8?[{a:path[i],b:point,guideId:g.id,name:g.name||'辅助线'}]:[]):[]));
+ return guides.filter(g=>!g.hidden).flatMap(g=>(g.paths?.length?g.paths:[g.points]).flatMap(path=>Array.isArray(path)?path.slice(1).flatMap((point,i)=>valid(point)&&valid(path[i])&&distance(point,path[i])>1e-8?[{a:path[i],b:point,guideId:g.id,name:g.name||'辅助线',...bounds({a:path[i],b:point})}]:[]):[]));
 }
-export function nearbyIntersections(segments,{pointer,project,radius=12,excludeId=null}){
+export function nearbyIntersections(segments,{pointer,project,radius=12,excludeId=null,plane=null}){
  const near=segments.filter(segment=>{
   if(segment.guideId===excludeId)return false;
+  if(plane){const a=dot(sub(segment.a,plane.origin),plane.normal),b=dot(sub(segment.b,plane.origin),plane.normal);if(a>1e-4&&b>1e-4||a< -1e-4&&b< -1e-4)return false;}
   const a=project(segment.a),b=project(segment.b);
   if(!a||!b||[...a,...b].some(n=>!Number.isFinite(n)))return false;
   const dx=b[0]-a[0],dy=b[1]-a[1],length=dx*dx+dy*dy,t=length?Math.max(0,Math.min(1,((pointer[0]-a[0])*dx+(pointer[1]-a[1])*dy)/length)):0;
   return Math.hypot(a[0]+t*dx-pointer[0],a[1]+t*dy-pointer[1])<=radius;
- }),targets=[];
+ }).map(segment=>segment.min&&segment.max?segment:{...segment,...bounds(segment)}),targets=[];
  // Only pairs near the cursor are tested, rather than all pairs in the project.
  for(let i=0;i<near.length;i++)for(let j=i+1;j<near.length;j++){
-  const a=near[i],b=near[j],point=segmentIntersection(a.a,a.b,b.a,b.b);
+  const a=near[i],b=near[j];
+  if(a.min.some((n,axis)=>n>b.max[axis]+1e-6||a.max[axis]<b.min[axis]-1e-6))continue;
+  const point=segmentIntersection(a.a,a.b,b.a,b.b);
   if(point)targets.push({kind:'intersection',point,guideId:a.guideId,sourceIds:[a.guideId,b.guideId],name:a.guideId===b.guideId?a.name:a.name+' × '+b.name});
  }
  return targets;
