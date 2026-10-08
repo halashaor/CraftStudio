@@ -249,3 +249,5 @@ Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-
 只读 `materials.collect` 接收 `min/max/members/regions/all` 选区参数及可选 `space:"local"|"world"`，支持 `workspaceId/expectedRevision`。返回 `{blockCount,states:[{state,count}]}`，状态包含完整 `Name/Properties`，计数按实际选中方块去重统计；不带机器／方块实体 NBT，不改变场景修订号。可将 `states.map(v=>v.state)` 传给 `palettes.put`，方案写入仍为单独的可撤销操作。
 
 `construction.prepare` 的 `type:"designer"` 支持 `config.operation:"paint"`，提供 `objectIds` 或 `selection`、目标 `state` 及可选 `retainShape`（默认 true）。复用画笔的材质家族及形态／属性保留规则，保护含实体数据的跨类型替换。返回 `materialChange:{selected,changed,skipped,unchanged}`；准备阶段只读，确认仍遵循 `policy` 与修订号检查。
+
+选区换材质 `operation:"paint"` 增加可选 `sourceName`，只匹配该原方块 Name；空值处理所有选择，仍遵循形态保留规则。`materialChange` 增加 `matched/excluded/sources:[{Name,count}]`，来源统计覆盖实际选择，不只统计已替换部分。匹配是方块类型，不自动合并材质家族；原 API 不提供 `sourceName` 时语义保持不变。
