@@ -29,3 +29,10 @@ test('spatial bounds retain every actual crossing and workplane prefilter keeps 
  // Callers supplying plain segments receive the same bounds preflight.
  assert.equal(nearbyIntersections(spatial.map(({min,max,...segment})=>segment),{...options,pointer:[0,0]}).length,1);
 });
+test('sampled curve joins and closed seams are not self intersections, but nonadjacent crossings remain targets',()=>{
+ const options={pointer:[0,0],project:p=>[p[0],p[2],0],radius:30};
+ assert.deepEqual(nearbyIntersections(guideSnapSegments([{id:'curve',points:[[-2,0,0],[0,0,1],[2,0,0]]}]),options),[]);
+ assert.deepEqual(nearbyIntersections(guideSnapSegments([{id:'loop',points:[[-2,0,-2],[2,0,-2],[2,0,2],[-2,0,2],[-2,0,-2]]}]),options),[]);
+ const crossed=nearbyIntersections(guideSnapSegments([{id:'crossed',points:[[-2,0,-2],[2,0,2],[-2,0,2],[2,0,-2]]}]),options);assert.equal(crossed.length,1);assert.deepEqual(crossed[0].point,[0,0,0]);
+ const paths=nearbyIntersections(guideSnapSegments([{id:'parts',paths:[[[-2,0,0],[2,0,0]],[[0,0,-2],[0,0,2]]]}]),options);assert.equal(paths.length,1);assert.deepEqual(paths[0].point,[0,0,0]);
+});

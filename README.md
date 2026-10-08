@@ -221,6 +221,8 @@ Arrangement and feature-edit numeric fields share arithmetic input and label scr
 
 Arrangement/feature-edit previews now have local parameter Undo/Redo. Completed numeric edits, option changes, source choices and material changes can be stepped back without closing the tool; invalid expressions are restored first. A new edit drops the redo branch. Operation or canonical scene changes reset the parameter history; confirmed output still remains one scene undo. History lasts for the current operation session.
 
+Measurements use the same endpoint, midpoint, center and true-intersection guide snaps as sketches, with source highlighting, Ctrl pause and hidden-guide filtering. Fractional snapped coordinates are retained in saved annotations; annotations remain position snapshots. Adjacent sampled curve joins and closed seams are excluded from intersection targets while nonadjacent self-crossings remain available.
+
 Measurement previews have local Undo/Redo for picked points, completed coordinate/name edits, Back and Restart. Undo keeps the measurement tool open and restores the edited annotation identity after Restart. No voxel or saved-annotation data changes until Save annotation, which remains one scene undo. History is session-only; changing measurement type starts a new point-taking context.
 
 Measurement coordinates also accept arithmetic such as `(5+1)/4`. Enter adopts the result; dragging an axis label or Alt-dragging its value updates the preview continuously (Shift for fine adjustment, Ctrl for half-block steps). Each completed edit or drag is a separate preview undo step. Empty, invalid or unfinished expressions disable Save annotation; Escape or preview Undo restores the input first. Fractional coordinates are preserved.

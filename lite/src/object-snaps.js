@@ -10,7 +10,7 @@ export function segmentIntersection(a,b,c,d){
  return distance(p,q)<=1e-6?p.map((n,i)=>(n+q[i])/2):null;
 }
 export function guideSnapSegments(guides){
- return guides.filter(g=>!g.hidden).flatMap(g=>(g.paths?.length?g.paths:[g.points]).flatMap(path=>Array.isArray(path)?path.slice(1).flatMap((point,i)=>valid(point)&&valid(path[i])&&distance(point,path[i])>1e-8?[{a:path[i],b:point,guideId:g.id,name:g.name||'辅助线',...bounds({a:path[i],b:point})}]:[]):[]));
+ return guides.filter(g=>!g.hidden).flatMap(g=>(g.paths?.length?g.paths:[g.points]).flatMap((path,pathIndex)=>Array.isArray(path)?path.slice(1).flatMap((point,i)=>valid(point)&&valid(path[i])&&distance(point,path[i])>1e-8?[{a:path[i],b:point,guideId:g.id,name:g.name||'辅助线',pathIndex,segmentIndex:i,segmentCount:path.length-1,closed:valid(path[0])&&valid(path.at(-1))&&distance(path[0],path.at(-1))<1e-8,...bounds({a:path[i],b:point})}]:[]):[]));
 }
 export function nearbyIntersections(segments,{pointer,project,radius=12,excludeId=null,plane=null}){
  const near=segments.filter(segment=>{
@@ -24,6 +24,7 @@ export function nearbyIntersections(segments,{pointer,project,radius=12,excludeI
  // Only pairs near the cursor are tested, rather than all pairs in the project.
  for(let i=0;i<near.length;i++)for(let j=i+1;j<near.length;j++){
   const a=near[i],b=near[j];
+  if(a.guideId===b.guideId&&a.pathIndex===b.pathIndex&&a.segmentIndex!==undefined&&b.segmentIndex!==undefined&&(Math.abs(a.segmentIndex-b.segmentIndex)<=1||a.closed&&Math.abs(a.segmentIndex-b.segmentIndex)===a.segmentCount-1))continue;
   if(a.min.some((n,axis)=>n>b.max[axis]+1e-6||a.max[axis]<b.min[axis]-1e-6))continue;
   const point=segmentIntersection(a.a,a.b,b.a,b.b);
   if(point)targets.push({kind:'intersection',point,guideId:a.guideId,sourceIds:[a.guideId,b.guideId],name:a.guideId===b.guideId?a.name:a.name+' × '+b.name});
