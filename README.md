@@ -96,6 +96,8 @@ Sponge and Litematica conversions do not preserve every entity, biome, scheduled
 
 ## Workspace and navigation
 
+Right-click without dragging opens the viewport context menu for focus, isolation and common transforms. Unavailable actions show their prerequisite. Use Up/Down, Home/End and Enter to navigate and activate enabled items. Escape closes the menu before canceling a background preview, then returns focus to the viewport; clicking an outside input leaves focus there. This menu operates on the existing selection and does not select the object under the right-click automatically.
+
 | Action | Viewport control |
 |---|---|
 | Select / box-select | Left click / drag |

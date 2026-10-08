@@ -106,3 +106,5 @@ body.progressive-render #busy{display:none}
 .studio-workspace #direct-space-label{grid-column:1/-1}
 
 #cad-marquee[data-crossing="true"]{border-style:dashed;border-color:#48c69a;background:#48c69a22}#cad-marquee::after{content:attr(data-label);position:absolute;left:0;top:0;transform:translateY(-100%);white-space:nowrap;padding:4px 6px;border-radius:3px;background:#223347ed;color:#e6f1ff;font-size:11px;line-height:1.5}#cad-marquee[data-operation="subtract"]::after{color:#ffaaa4}#cad-marquee[data-operation="intersect"]::after{color:#d4b9ff}
+
+#cad-context-menu{max-height:calc(100vh - 8px);overflow-y:auto}#cad-context-menu button small{display:block;font-size:10px;line-height:1.4;color:#aeb8c5;margin-top:3px}#cad-context-menu button:focus-visible{outline:2px solid #8cc2ff;outline-offset:-2px;background:#405572}#cad-context-menu button:disabled{opacity:.6;cursor:default}
