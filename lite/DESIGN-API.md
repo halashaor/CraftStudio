@@ -245,3 +245,5 @@ Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-
 路径扫掠 `operation:"sweep"` 支持 `sweepMode:"rectangle-fit"`，`width/height` 为 0.5–64 的尺寸，截面由路径法向帧构造；`voxel:"smart"` 复用 `roles.slab/roles.stairs` 边界落格。仍支持空心、端盖、闭环方向校正及重叠检查。原 `sweepMode:"rectangle"` 的整方块语义保持不变。
 
 贴地几何 `terrain:"surface"` 的 `construction.prepare` 结果增加 `surfaceFit`：`skipped/missing/water/obstacle` 为范围内略过候选列数量，`records` 最多 256 个 `{pos:[x,y,z],reason:"missing"|"water"|"obstacle"}`，`truncated` 标明是否截断。`pos` 用于诊断定位；缺失地面时的 Y 来自设计路径而非推断地形高度。此信息不表示实际生成量，放置数量仍看 `counts`。
+
+只读 `materials.collect` 接收 `min/max/members/regions/all` 选区参数及可选 `space:"local"|"world"`，支持 `workspaceId/expectedRevision`。返回 `{blockCount,states:[{state,count}]}`，状态包含完整 `Name/Properties`，计数按实际选中方块去重统计；不带机器／方块实体 NBT，不改变场景修订号。可将 `states.map(v=>v.state)` 传给 `palettes.put`，方案写入仍为单独的可撤销操作。
