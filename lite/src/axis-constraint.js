@@ -6,3 +6,4 @@ export function axisConstraint({choice='free',plane='xz',locked=false,frame=null
  return{axes,basis,space:local?'local':'world',labels:local?['U (X)','V (Y)','法线 (Z)']:['X','Y','Z']};
 }
 export function constrainAxisMove(start,point,constraint){const delta=sub(point,start);return start.map((value,index)=>value+constraint.axes.reduce((sum,name)=>sum+dot(delta,constraint.basis['XYZ'.indexOf(name)])*constraint.basis['XYZ'.indexOf(name)][index],0));}
+export function reachableSnap(start,point,constraint){return Math.hypot(...constrainAxisMove(start,point,constraint).map((n,a)=>n-point[a]))<=1e-4;}
