@@ -243,3 +243,5 @@ Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-
 `construction.prepare` 的 `type:"geometry"` 支持 `config.kind:"spline"`：`points` 为曲线贯穿的三维途经点（开放至少两点，闭合至少三点），`closed:true` 生成闭合插值曲线。它采用向心 Catmull–Rom 三次插值，保留原有 `kind:"bezier"` 的语义。复用工作平面、素材、地形与范围参数；`guidesOnly:true` 可保存为建模来源，闭合且平面的结果可由 `profileIds` 拉伸。非平面曲线填充会报错。曲线配方随 craftlite 保存，NBT 导出确认后的方块；现有采样／生成预算仍适用。
 
 路径扫掠 `operation:"sweep"` 支持 `sweepMode:"rectangle-fit"`，`width/height` 为 0.5–64 的尺寸，截面由路径法向帧构造；`voxel:"smart"` 复用 `roles.slab/roles.stairs` 边界落格。仍支持空心、端盖、闭环方向校正及重叠检查。原 `sweepMode:"rectangle"` 的整方块语义保持不变。
+
+贴地几何 `terrain:"surface"` 的 `construction.prepare` 结果增加 `surfaceFit`：`skipped/missing/water/obstacle` 为范围内略过候选列数量，`records` 最多 256 个 `{pos:[x,y,z],reason:"missing"|"water"|"obstacle"}`，`truncated` 标明是否截断。`pos` 用于诊断定位；缺失地面时的 Y 来自设计路径而非推断地形高度。此信息不表示实际生成量，放置数量仍看 `counts`。

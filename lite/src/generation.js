@@ -53,5 +53,5 @@ export function editSketchPlan(site,config,available){
  let result={operations:[],design:working.design,guide:sketch.guide,warnings:[],usedRoles:{},regeneration:{objects:0,manual:0}};
  if(config.updateDependents!==false&&objects.length){result=regenerateObjects(working,objects,{manualStrategy:config.manualStrategy||'preserve',overrides,available});result.guide=sketch.guide;}
  else if(objects.length){working.design.objects=working.design.objects.map(o=>objects.some(v=>v.id===o.id)?{...o,generation:{...o.generation,outdated:true}}:o);result.design=working.design;result.warnings.push(objects.length+' 个关联对象保持原样，等待更新');}
- if(detachedObjects.length)result.warnings.push(detachedObjects.length+' 个已独立化对象保持原样');return result;
+ if(sketch.surfaceFit)result.surfaceFit=sketch.surfaceFit;result.warnings=[...new Set([...result.warnings,...sketch.warnings])];if(detachedObjects.length)result.warnings.push(detachedObjects.length+' 个已独立化对象保持原样');return result;
 }
