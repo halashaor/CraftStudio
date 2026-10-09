@@ -1,4 +1,5 @@
 import { PlanningAPI } from './api/planning-api.js';
+import { importRegionInput } from './minecraft/region-set.js';
 import { renameObjects } from './selection/object-naming.js';
 import { mutatePrefab } from './components/prefab-library.js';
 import {
@@ -363,6 +364,11 @@ async function execute(action, data) {
     }
     if (/\.craftlite$/i.test(data.name))
       return unpackPackage(JSON.parse(strFromU8(gunzipSync(bytes))));
+    if (/\.craftregions$/i.test(data.name)) {
+      const project = importRegionInput(bytes);
+      project.metadata.sourceHash = await fingerprint(bytes);
+      return hydrate(project);
+    }
     if (/\.zip$/i.test(data.name)) {
       const archive = readDeliveryArchive(bytes);
       if (archive.projectBytes)

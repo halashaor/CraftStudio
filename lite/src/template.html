@@ -35,13 +35,14 @@
           <div class="eyebrow">START WITH YOUR SITE</div>
           <h1>从真实场地开始</h1>
           <p class="muted">
-            选择带地形的区域蓝图，或一个存档区域文件。建筑、山坡和河岸一起进入场景。
+            选择带地形的区域蓝图，或同一维度的一个／多个存档区域文件。建筑、山坡和河岸一起进入场景。
           </p>
           <label id="dropzone" class="dropzone"
             ><span>＋</span><strong>拖入文件，或点击选择</strong
             ><small>NBT / schem / litematic / MCA / 工程</small
             ><input
               id="file"
+              multiple
               type="file"
               accept=".nbt,.schem,.litematic,.mca,.json,.craftlite,.html,.zip" /></label
           ><button id="provided-source" class="full">打开你提供的 1.nbt 真实场地</button>
@@ -53,14 +54,22 @@
             <input id="resource-file" type="file" multiple accept=".jar,.zip" />
             <div id="resource-info" class="small">使用方块轮廓预览；尚未附加资源。</div>
           </details>
-          <details class="card">
-            <summary>MCA 文件的读取选区</summary>
+          <details class="card" id="mca-options">
+            <summary>存档场地范围（MCA）</summary>
+            <p id="mca-selected" class="small">
+              先选择同一维度的一个或多个 MCA 文件，再设置世界坐标范围。
+            </p>
             <label>世界起点 X Y Z<input id="mca-min" value="0 60 0" /></label
             ><label>世界终点 X Y Z<input id="mca-max" value="31 90 31" /></label>
             <p class="small">
-              只读取选定文件内的区域，外置 MCC
-              暂不支持。选择大范围时建议先用蓝图与笔导出包含地下空间的 NBT。
+              按同一世界范围读取并拼接，所需文件不齐时保留当前工程。请包含山坡和所需地下高度。 外置
+              MCC 暂不支持；也可用蓝图与笔导出带地形的 NBT。
             </p>
+            <div class="row">
+              <button id="mca-read" type="button" disabled>读取这个场地范围</button
+              ><button id="mca-clear" type="button">清除文件选择</button>
+            </div>
+            <p id="mca-report" class="small" role="status" hidden></p>
           </details>
           <details class="card" id="create-panel" open>
             <summary>机械动力 · 运动结构</summary>

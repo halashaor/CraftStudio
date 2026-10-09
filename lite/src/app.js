@@ -1,6 +1,8 @@
+import { CreateSceneView } from './rendering/create-scene-view.js';
 import { ResourceController } from './materials/resource-controller.js';
 import { PageRequests } from './api/page-requests.js';
 import { ProposalReviewUI } from './ui/proposal-review-ui.js';
+import { RegionImportUI } from './ui/region-import-ui.js';
 import { ProjectImporter } from './storage/project-import.js';
 import { TaskRunner } from './ui/task-runner.js';
 import { designerClientUI } from './integration/designer-client-ui.js';
@@ -248,7 +250,6 @@ let resourceManager = null,
 let cad = null,
   viewNavigation = null;
 let studio = null;
-let motionOverrides = {};
 const library = new UnifiedLibrary();
 let storageOK = false,
   busy = false,
@@ -304,13 +305,15 @@ const group = new THREE.Group();
 scene.add(group);
 const createGroup = new THREE.Group();
 scene.add(createGroup);
-const createModels = new Map(),
-  createObjects = new Map();
-let motionTime = 0,
-  motionLast = 0,
+const createScene = new CreateSceneView({
+  group: createGroup,
+  textures,
+  materials: materialPool,
+  makeTexture,
+});
+let motionLast = 0,
   motionDrawLast = 0;
 renderer.localClippingEnabled = true;
-const motionClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 4096);
 const grid = new THREE.GridHelper(256, 256, 0x78917b, 0xa5b4a7);
 grid.position.set(0.5, -0.01, 0.5);
 grid.visible = false;
@@ -340,7 +343,7 @@ renderer.setAnimationLoop((now) => {
   const dt = motionLast ? Math.min((now - motionLast) / 1000, 0.15) : 0;
   motionLast = now;
   if ($('create-play').checked && document.visibilityState === 'visible') {
-    motionTime += dt * Number($('create-rate').value);
+    createScene.time += dt * Number($('create-rate').value);
     if (updateMotion() && now - motionDrawLast >= 1000 / 30) {
       needsRender = true;
       motionDrawLast = now;
@@ -772,171 +775,33 @@ function dropChunk(key) {
   group.remove(node);
   chunkGroups.delete(key);
 }
-function motionMaterial(b) {
-  const key = (b.texture || 'color') + '|' + b.alpha;
-  if (!materialPool.has(key)) {
-    const transparent = b.alpha === 'transparent';
-    materialPool.set(
-      key,
-      new THREE.MeshLambertMaterial({
-        map: textures.get(b.texture) || null,
-        vertexColors: true,
-        side: THREE.DoubleSide,
-        alphaTest: 0.1,
-        transparent,
-        opacity: transparent ? 0.76 : 1,
-        depthWrite: !transparent,
-      }),
-    );
-  }
-  const m = materialPool.get(key);
-  m.clippingPlanes = [motionClip];
-  return m;
-}
 async function syncCreate(data) {
-  motionOverrides = data.overrides || {};
-  motionClip.constant = +$('cut').value >= summary.size[1] - 1 ? 4096 : +$('cut').value + 1;
-  if (data.reset) {
-    for (const model of createModels.values()) for (const item of model) item.geometry.dispose();
-    createModels.clear();
-    for (const { node } of createObjects.values()) createGroup.remove(node);
-    createObjects.clear();
-    motionTime = 0;
-  }
-  await Promise.all(
-    Object.entries(data.textures).map(async ([k, v]) => {
-      try {
-        await makeTexture(k, v);
-      } catch {}
-    }),
-  );
-  const changedModels = new Set(Object.keys(data.definitions));
-  for (const [id, model] of Object.entries(data.definitions)) {
-    for (const old of createModels.get(id) || []) old.geometry.dispose();
-    const items = model.buckets.map((b) => {
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(b.positions, 3));
-      geometry.setAttribute('normal', new THREE.BufferAttribute(b.normals, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(b.colors, 3));
-      geometry.setAttribute('uv', new THREE.BufferAttribute(b.uv, 2));
-      geometry.computeBoundingSphere();
-      geometry.computeBoundingBox();
-      return { geometry, bucket: b };
-    });
-    createModels.set(id, items);
-  }
-  const live = new Set();
-  for (const d of data.instances) {
-    live.add(d.id);
-    let object = createObjects.get(d.id);
-    const motionKey = JSON.stringify(motionOverrides[d.id] || {});
-    if (
-      !object ||
-      object.motionKey !== motionKey ||
-      object.model !== d.model ||
-      changedModels.has(d.model)
-    ) {
-      if (object) createGroup.remove(object.node);
-      const node = new THREE.Group();
-      for (const item of createModels.get(d.model) || []) {
-        const mesh = new THREE.Mesh(item.geometry, motionMaterial(item.bucket));
-        mesh.userData = { owner: d.owner, readOnly: !!d.readOnly, motion: d };
-        node.add(mesh);
-      }
-      if (motionOverrides[d.id]?.type === 'belt') {
-        const a = motionOverrides[d.id],
-          width = a.max[0] - a.min[0] + 1,
-          depth = a.max[2] - a.min[2] + 1;
-        for (let i = 0; i < 10; i++) {
-          const stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(0.08, 0.025, depth * 0.85),
-            new THREE.MeshLambertMaterial({ color: 0xd4bb80 }),
-          );
-          stripe.userData.beltIndex = i;
-          stripe.position.set(-width / 2 + (i / 10) * width, a.max[1] + 1 - a.center[1] + 0.03, 0);
-          stripe.userData.owner = d.owner;
-          node.add(stripe);
-        }
-      }
-      object = { node, model: d.model, descriptor: d, motionKey };
-      createObjects.set(d.id, object);
-      createGroup.add(node);
-    }
-    object.descriptor = d;
-    object.node.position.set(...d.position);
-    for (const child of object.node.children) child.userData.motion = d;
-  }
-  for (const [id, object] of createObjects)
-    if (!live.has(id)) {
-      createGroup.remove(object.node);
-      createObjects.delete(id);
-    }
+  const textureWarnings = await createScene.sync(data, {
+    cut: +$('cut').value,
+    height: summary.size[1],
+  });
   updateMotion();
+  const warnings = [...data.warnings, ...textureWarnings];
   studio?.update(summary, data.instances);
   needsRender = true;
   $('create-info').textContent =
     `${data.stats.rotatingParts} 个旋转部件 · ${data.stats.contraptions} 个装置实体 · ${data.stats.unknownSpeeds} 个速度未知` +
-    (data.warnings.length ? ' · 部分部件为简化几何' : '');
+    (warnings.length ? ' · 部分部件为简化几何' : '');
   $('create-warnings')?.remove();
-  if (data.warnings.length) {
+  if (warnings.length) {
     const item = document.createElement('div');
     item.id = 'create-warnings';
     item.className = 'issue';
-    item.textContent = 'Create：' + data.warnings.slice(0, 5).join('；');
+    item.textContent = 'Create：' + warnings.slice(0, 5).join('；');
     $('issues').append(item);
   }
 }
 function updateMotion() {
-  host.dataset.motionTime = motionTime.toFixed(3);
-  let moving = false;
-  for (const { node, descriptor: d } of createObjects.values()) {
-    const a = motionOverrides[d.id],
-      rpm =
-        a?.rpm ??
-        (d.rpm === null
-          ? $('create-demo').checked
-            ? Number($('create-rpm').value) || 0
-            : 0
-          : d.rpm);
-    node.position.set(...d.position);
-    node.rotation.set(0, 0, 0);
-    const axis = a?.axis || d.axis;
-    if (axis) {
-      node.rotation[axis] =
-        (((d.savedAngle || 0) +
-          (a?.type === 'swing'
-            ? Math.sin((motionTime * 2 * Math.PI) / (a.period || 6)) * 45
-            : motionTime * rpm * 6)) *
-          Math.PI) /
-        180;
-      if (rpm) moving = true;
-    }
-    if (a && ['translate', 'path', 'belt'].includes(a.type)) {
-      node.rotation.set(0, 0, 0);
-      const t = ((motionTime / (a.period || 6)) * rpm) / 16,
-        factor = ((t % 1) + 1) % 1;
-      if (a.type === 'path' && a.route?.length > 1) {
-        const v = factor * a.route.length,
-          i = Math.floor(v),
-          from = new THREE.Vector3(...a.route[i]),
-          to = new THREE.Vector3(...a.route[(i + 1) % a.route.length]);
-        node.position.add(from.lerp(to, v - i));
-      } else if (a.type === 'translate')
-        node.position.add(
-          new THREE.Vector3(...(a.travel || [0, 5, 0])).multiplyScalar(
-            (1 - Math.cos(t * 2 * Math.PI)) / 2,
-          ),
-        );
-      else if (a.type === 'belt') {
-        const width = a.max?.[0] - a.min?.[0] + 1 || 1;
-        for (const child of node.children)
-          if (child.userData.beltIndex !== undefined)
-            child.position.x = -width / 2 + ((child.userData.beltIndex / 10 + factor) % 1) * width;
-      }
-      if (rpm) moving = true;
-    }
-  }
-  return moving;
+  host.dataset.motionTime = createScene.time.toFixed(3);
+  return createScene.update({
+    demo: $('create-demo').checked,
+    rpmFallback: Number($('create-rpm').value) || 0,
+  });
 }
 for (const id of ['create-visible']) $(id).onchange = () => task(render, '更新机械动力模型…');
 for (const id of ['create-demo', 'create-rpm'])
@@ -949,7 +814,7 @@ $('create-play').onchange = () => {
   needsRender = true;
 };
 $('create-reset').onclick = () => {
-  motionTime = 0;
+  createScene.time = 0;
   updateMotion();
   needsRender = true;
 };
@@ -1161,9 +1026,7 @@ async function renderNow(viewportOnly = false) {
         textures,
         materials: materialPool,
         roots: [scene],
-        pinnedTextureKeys: [...createModels.values()].flatMap((model) =>
-          model.map((item) => item.bucket.texture).filter(Boolean),
-        ),
+        pinnedTextureKeys: createScene.pinnedTextureKeys,
       });
       for (const key of released.releasedTextures) releasedTextures.add(key);
       host.dataset.residentTextures = textures.size;
@@ -1333,13 +1196,29 @@ const importer = new ProjectImporter({
   },
   notice,
 });
+const regionImport = new RegionImportUI({
+  $,
+  importer,
+  describe: () => call('api', { method: 'workspace.describe' }),
+  task,
+  showSettings: () => {
+    if (!$('cad-file-dialog').open) cad?.openLegacy('import');
+  },
+});
+function openSelectedFiles(files) {
+  files = Array.from(files);
+  if (!files.length) return;
+  if (files.every((file) => /\.mca$/i.test(file.name))) return regionImport.stage(files);
+  regionImport.clear();
+  return importer.openFiles(files);
+}
 function openFile(file) {
-  return importer.open(file);
+  return file ? openSelectedFiles([file]) : undefined;
 }
 $('file').onchange = () => {
-  const file = $('file').files[0];
+  const files = Array.from($('file').files);
   $('file').value = '';
-  if (file) task(() => openFile(file), '正在读取文件并建立真实场地…');
+  if (files.length) task(() => openSelectedFiles(files), '正在读取文件并建立真实场地…');
 };
 const drop = $('dropzone');
 drop.ondragover = (e) => {
@@ -1350,7 +1229,7 @@ drop.ondragleave = () => drop.classList.remove('dragging');
 drop.ondrop = (e) => {
   e.preventDefault();
   drop.classList.remove('dragging');
-  task(() => openFile(e.dataTransfer.files[0]), '正在读取拖入的文件…');
+  task(() => openSelectedFiles(e.dataTransfer.files), '正在读取拖入的文件…');
 };
 $('provided-source').onclick = () =>
   task(async () => {

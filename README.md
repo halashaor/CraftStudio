@@ -91,14 +91,14 @@ Selection NBT/ZIP exports can optionally include scene entities inside the selec
 | Vanilla / Create structure `.nbt` | Import and NBT export; preserve supported native data and placement masks |
 | Sponge `.schem` | Import and export; format conversion has metadata limits |
 | Litematica `.litematic` | Import; not a lossless Litematica round trip |
-| Anvil `.mca` | Import a selected region from one region file |
+| Anvil `.mca` | Import a world-coordinate selection across one or multiple region files |
 | Resource-pack ZIPs and mod/game JARs | Read supported model and texture assets from selected files |
 | Delivery `.zip` | Blueprint, placement and scoped reports; optional editable project; direct reopening |
 | `.craftlite` | Portable editable designer project |
 
 
 
-Sponge and Litematica conversions do not preserve every entity, biome, scheduled tick, or multi-region detail. MCA import reads the selected portion of one file and does not convert entities, lighting, or scheduled ticks. Blueprint export is not a complete Minecraft world save exporter.
+Sponge and Litematica conversions do not preserve every entity, biome, scheduled tick, or multi-region detail. MCA import combines selected files from one dimension by world coordinates, including negative coordinates. Choose the files, set the XYZ range in File, then click Read. Only selected chunk slices are read. Missing required files, malformed chunks or concurrent edits leave the current scene intact. Missing chunks are reported without invented terrain; columns with blocks above the height crop remain unknown for automatic ground placement. Include the full terrain height when using terrain tools. Mixed DataVersions are reported without a DataFixer upgrade. Entities, lighting, biomes, scheduled ticks and external `.mcc` chunks are not imported. Blueprint export is not a complete Minecraft world save exporter.
 
 ## Workspace and navigation
 
@@ -350,6 +350,8 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 ## Development
 
 The browser entry point composes focused feature modules. File opening lives in `storage/project-import.js`, page/API synchronization in `api/page-requests.js`, and UI task state in `ui/task-runner.js`. Shared engine modules own scene edits and validation; the page adapters own presentation and persistence notifications.
+
+Import boundaries are split between `minecraft/region-set.js` (selected MCA parsing), `storage/project-import.js` (atomic scene replacement) and `ui/region-import-ui.js` (file/range workflow). `rendering/create-scene-view.js` owns rendered Create instances, motion and geometry lifetime; the app only connects it to controls and frame updates. Optional texture failures are reported rather than silently swallowed.
 
 Draft state and autosave scheduling belong to `lite/src/storage/draft-controller.js`; checkpoint metadata and cached asset resend belong to `lite/src/storage/checkpoint-draft.js`. The app composes these services through callbacks. Concurrent save requests share the pending draft, later edits retain their unsaved state, and successful manual persistence cancels redundant scheduled writes. Storage errors are handled at the persistence boundary.
 

@@ -91,14 +91,14 @@ python server.py --port 18767
 | 原版／Create 结构 `.nbt` | 导入及 NBT 导出，保留已支持的原生数据与放置掩码 |
 | Sponge `.schem` | 导入及导出，格式转换存在元数据限制 |
 | Litematica `.litematic` | 导入，尚不能无损往返 Litematica 格式 |
-| Anvil `.mca` | 从单个区域文件读取选定范围 |
+| Anvil `.mca` | 按世界坐标读取跨一个或多个区域文件的选区 |
 | 材质包 ZIP 与 Mod／游戏 JAR | 从所选文件读取已支持的模型和贴图资源 |
 | 施工交付 `.zip` | 蓝图、坐标、对应范围清单及可选完整工程；支持直接回读 |
 | `.craftlite` | 可继续编辑的便携设计工程 |
 
 资源文件可以按需补充。缺少资源时，部分方块会使用替代几何或材质，直到提供对应文件。尚不能通用适配所有 Mod 的自定义渲染器与行为。
 
-Sponge 和 Litematica 转换不会完整保留所有实体、生物群系、计划刻和多区域信息。MCA 导入只读取一个文件内的选区，不转换实体、光照和计划刻。蓝图导出不等于完整 Minecraft 世界存档导出。
+Sponge 和 Litematica 转换不会完整保留所有实体、生物群系、计划刻和多区域信息。MCA 导入按世界坐标合并同一维度的区域文件，支持负坐标。先选文件，再在“文件”中设置 XYZ 范围，点击“读取”。只读取选中区块的数据片段；缺少必需文件、区块损坏或读取期间工程发生修改时，保留当前场景。缺失区块会报告，不补造地形；高度裁切上方仍有方块的列不作为自动贴地的可靠地表，使用地形工具时应包含完整地形高度。不同 DataVersion 会提示，不执行 DataFixer 升级。不导入实体、光照、生物群系、计划刻及外置 `.mcc` 区块。蓝图导出不等于完整 Minecraft 世界存档导出。
 
 ## 工作区与视角
 
@@ -352,6 +352,8 @@ const result = await window.CraftStudio.request({
 浏览器入口负责组合功能模块：文件打开位于 `storage/project-import.js`，页面与 API 的同步位于 `api/page-requests.js`，界面任务状态位于 `ui/task-runner.js`。共享引擎负责场景编辑和校验，页面适配层负责显示及保存状态通知。
 
 草稿状态与自动保存调度集中在 `lite/src/storage/draft-controller.js`，检查点元数据及缓存资源补传集中在 `lite/src/storage/checkpoint-draft.js`。主界面通过回调组合这些服务。并发保存请求共用正在进行的草稿保存，保存期间的新编辑继续保留待保存状态；手动保存成功后取消多余的定时写入。存储错误在持久化边界处理。
+
+导入按职责分为 `minecraft/region-set.js`（MCA 选区解析）、`storage/project-import.js`（原子场景替换）和 `ui/region-import-ui.js`（选文件与范围流程）。`rendering/create-scene-view.js` 管理 Create 渲染实例、动画及几何生命周期，入口只连接控件和帧更新。可选纹理读取失败会报告，不静默吞掉。
 
 源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。`ui/cad-layout.js` 挂载主界面及模板，`ui/cad-shell.js` 组合设计交互，`materials/material-picker.js` 将选材交给请求它的操作或画笔。工具定义按功能放在 `ui/commands/`，由 `ui/design-commands.js` 组合为搜索目录。可用条件读取当前选择、几何与任务状态；移动／复制／旋转的快捷键与视口菜单复用这些定义。
 

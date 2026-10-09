@@ -58,6 +58,7 @@ export class Site {
     this.undo = [];
     this.redo = [];
     this.columns = null;
+    this.clippedSurfaceColumns = new Set(project.metadata?.clippedSurfaceColumns || []);
     this.baseChunks = new Map();
     this.overlayChunks = new Map();
     this.ownedOverlayChunks = new Set();
@@ -425,6 +426,8 @@ export class Site {
     };
   }
   column(x, z) {
+    if (this.clippedSurfaceColumns.has(x + 4096 * z))
+      return { ground: null, water: null, top: null, clipped: true };
     if (this.baseline) return this.baseline.column(x, z, this.palette);
     if (!this.columns) {
       this.columns = new Map();
@@ -465,7 +468,8 @@ export class Site {
       max: hi,
       stride,
       rows,
-      classification: '地面按方块种类识别；最高占用高度包含原建筑和植物，空数据保持 null',
+      classification:
+        '地面按方块种类识别；最高占用高度包含原建筑和植物；未读取或上下文截断的列保持 null',
     };
   }
   platform(min, max, y, state, spacing = 4) {

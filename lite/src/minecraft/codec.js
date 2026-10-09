@@ -460,11 +460,16 @@ export function exportNBT(p, blocks = p.blocks, size = p.size) {
     }),
   );
 }
-export function importMCA(bytes, name, lo, hi) {
-  const match = name.match(/r\.(-?\d+)\.(-?\d+)\.mca$/);
+export function mcaCoordinates(name) {
+  const match = typeof name === 'string' && name.match(/r\.(-?\d+)\.(-?\d+)\.mca$/i);
   if (!match) throw Error('MCA 文件名需要 r.X.Z.mca');
-  const rx = +match[1],
-    rz = +match[2],
+  const result = [+match[1], +match[2]];
+  if (result.some((value) => !Number.isSafeInteger(value))) throw Error('MCA 文件坐标无效');
+  return result;
+}
+export function importMCA(bytes, name, lo, hi) {
+  if (bytes.length < 8192) throw Error('MCA 文件头截断');
+  const [rx, rz] = mcaCoordinates(name),
     view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength),
     p = emptyProject(name),
     lookup = new Map();
@@ -474,14 +479,22 @@ export function importMCA(bytes, name, lo, hi) {
   p.size = hi.map((v, a) => v - lo[a] + 1);
   p.origin = lo;
   p.metadata.originConfirmed = true;
+  p.metadata.missingChunks = 0;
+  const versions = new Set(),
+    clippedSurface = new Set();
   for (let cz = Math.floor(lo[2] / 16); cz <= Math.floor(hi[2] / 16); cz++)
     for (let cx = Math.floor(lo[0] / 16); cx <= Math.floor(hi[0] / 16); cx++) {
       const loc = view.getUint32(((cx & 31) + (cz & 31) * 32) * 4, false),
         offset = (loc >>> 8) * 4096;
-      if (!offset) continue;
+      if (!offset) {
+        p.metadata.missingChunks++;
+        continue;
+      }
       if (offset + 5 > bytes.length) throw Error('MCA 区块记录截断');
       const n = view.getUint32(offset, false),
         kind = bytes[offset + 4];
+      if (n < 1 || offset + 4 + n > bytes.length || n + 4 > (loc & 255) * 4096)
+        throw Error('MCA 区块长度或记录截断');
       if (kind & 128) throw Error('该区块使用外置 MCC，请改用含地形的区域 NBT');
       let data = bytes.subarray(offset + 5, offset + 4 + n);
       if (kind === 2) data = unzlibSync(data);
@@ -489,6 +502,9 @@ export function importMCA(bytes, name, lo, hi) {
       const root = readNBT(data).v,
         r = root.Level?.v || root;
       p.dataVersion = root.DataVersion?.v || 0;
+      versions.add(p.dataVersion);
+      if ((r.xPos && r.xPos.v !== cx) || (r.zPos && r.zPos.v !== cz))
+        throw Error('MCA 区块坐标与文件名不一致');
       const tiles = new Map(
         (r.block_entities || r.TileEntities)?.v[1]?.map((v) => {
           const d = plain(tag(10, v));
@@ -497,7 +513,7 @@ export function importMCA(bytes, name, lo, hi) {
       );
       for (const section of (r.sections || r.Sections)?.v[1] || []) {
         const sy = section.Y.v * 16;
-        if (sy > hi[1] || sy + 15 < lo[1]) continue;
+        if (sy + 15 < lo[1]) continue;
         const states = section.block_states?.v,
           palTag = states?.palette || section.Palette;
         if (!palTag) {
@@ -507,21 +523,47 @@ export function importMCA(bytes, name, lo, hi) {
         }
         const pal = palTag.v[1].map(paletteState),
           packedData = states?.data || section.BlockStates,
-          values = packed(
-            packedData?.v || [],
-            Math.max(4, Math.ceil(Math.log2(pal.length))),
-            4096,
-            p.dataVersion >= 2529,
-          );
+          bits = Math.max(4, Math.ceil(Math.log2(pal.length))),
+          padded = p.dataVersion >= 2529,
+          expectedWords = padded
+            ? Math.ceil(4096 / Math.floor(64 / bits))
+            : Math.ceil((4096 * bits) / 64);
+        if (
+          !pal.length ||
+          (pal.length > 1 && (!packedData || packedData.v.length !== expectedWords))
+        )
+          throw Error('MCA 方块状态数组或调色板不完整');
+        if (pal.length === 1 && AIR.has(pal[0].Name)) continue;
+        const values =
+          pal.length === 1
+            ? new Uint16Array(4096)
+            : packed(
+                packedData?.v || [],
+                Math.max(4, Math.ceil(Math.log2(pal.length))),
+                4096,
+                p.dataVersion >= 2529,
+              );
         for (let i = 0; i < 4096; i++) {
           const pos = [
             cx * 16 + (i % 16),
             sy + Math.floor(i / 256),
             cz * 16 + (Math.floor(i / 16) % 16),
           ];
-          if (pos.some((v, a) => v < lo[a] || v > hi[a])) continue;
+          if (
+            pos[0] < lo[0] ||
+            pos[0] > hi[0] ||
+            pos[2] < lo[2] ||
+            pos[2] > hi[2] ||
+            pos[1] < lo[1]
+          )
+            continue;
           const state = pal[values[i]];
-          if (!state || AIR.has(state.Name)) continue;
+          if (!state) throw Error('MCA 方块状态调色板索引无效');
+          if (AIR.has(state.Name)) continue;
+          if (pos[1] > hi[1]) {
+            clippedSurface.add(pos[0] - lo[0] + 4096 * (pos[2] - lo[2]));
+            continue;
+          }
           const key = stateKey(state);
           if (!lookup.has(key)) {
             lookup.set(key, p.palette.length);
@@ -534,6 +576,18 @@ export function importMCA(bytes, name, lo, hi) {
       }
     }
   p.metadata.sourceFormat = 'mca';
+  p.metadata.dataVersions = [...versions].sort((a, b) => a - b);
+  p.metadata.clippedSurfaceColumns = [...clippedSurface];
+  if (clippedSurface.size)
+    p.warnings.push(
+      clippedSurface.size +
+        ' 列上方仍有方块；地表上下文不完整，请提高世界终点 Y 后用于自动贴地设计。',
+    );
+  p.dataVersion = versions.size === 1 ? p.metadata.dataVersions[0] : 0;
+  if (p.metadata.missingChunks)
+    p.warnings.push(p.metadata.missingChunks + ' 个区块缺失或尚未生成，未补造地形。');
+  if (versions.size > 1)
+    p.warnings.push('选区含多个 DataVersion，整体版本记为未知；保留原状态与 NBT，不自动升级。');
   p.warnings.push('MCA：只读当前文件的所选区域；保留方块及方块实体，不转换实体、光照和计划刻。');
   return p;
 }
