@@ -1,3 +1,4 @@
+import { mutatePrefab } from './components/prefab-library.js';
 import {
   deliveryReport,
   deliveryArchive,
@@ -387,6 +388,9 @@ async function run(action, data) {
         'edit.apply',
         'transaction.commit',
         'selection.transform',
+        'prefabs.put',
+        'prefabs.remove',
+        'prefabs.place',
         'history.undo',
         'history.redo',
         'objects.put',
@@ -860,31 +864,10 @@ async function execute(action, data) {
       selectionResult = { objectId: d.objects.at(-1).id };
     }
     if (data.command === 'transform') transformSelection(site, data, policy);
-    if (data.command === 'prefabImport') {
-      const p = normalizePrefab(data.prefab);
-      p.id = crypto.randomUUID();
-      d.prefabs.push(p);
-    }
-    if (data.command === 'prefabMeta') {
-      const prefab = d.prefabs.find((prefab) => prefab.id === data.id);
-      if (!prefab) throw Error('找不到构件');
-      if (
-        typeof data.name !== 'string' ||
-        !data.name.trim() ||
-        !Array.isArray(data.tags) ||
-        data.tags.some((tag) => typeof tag !== 'string')
-      )
-        throw Error('请输入构件名称和文字分类');
-      d.prefabs = d.prefabs.map((prefab) =>
-        prefab.id === data.id
-          ? {
-              ...prefab,
-              name: data.name.trim(),
-              tags: [...new Set(data.tags.map((tag) => tag.trim()).filter(Boolean))],
-            }
-          : prefab,
-      );
-    }
+    if (data.command === 'prefabImport')
+      mutatePrefab(site, 'prefabs.put', { prefab: { ...data.prefab, id: crypto.randomUUID() } });
+    if (data.command === 'prefabMeta')
+      mutatePrefab(site, 'prefabs.put', { id: data.id, name: data.name, tags: data.tags });
     if (data.command === 'component') {
       const pkg = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes)))),
         other = Site.unpack(pkg.site),
@@ -899,10 +882,10 @@ async function execute(action, data) {
       resources.addSaved(pkg.assets || {});
     }
     if (data.command === 'prefab') {
-      const p = selection(site, data.min, data.max, { keys: data.members, regions: data.regions });
-      p.name = data.name || '新构件';
-      p.id = crypto.randomUUID();
-      d.prefabs.push(p);
+      mutatePrefab(site, 'prefabs.put', {
+        selection: { min: data.min, max: data.max, members: data.members, regions: data.regions },
+        name: data.name || '新构件',
+      });
     }
     if (data.command === 'insert') {
       const p = d.prefabs.find((p) => p.id === data.id);

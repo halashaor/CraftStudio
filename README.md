@@ -291,6 +291,8 @@ The optional local engine now stores immutable source blocks in independently ve
 
 ## AI and game integration
 
+AI can access the same current-project component shelf using `prefabs.list/read/put/place/remove` in the shared v1 API. Metadata reads are lightweight; block definitions are paged. Definitions can be imported or captured from exact selections, edited, placed or removed with the existing version guards, transactions, request receipts and undo. Staged definitions/placements stay invisible until commit. This is optional reuse alongside unrestricted voxel editing; it does not limit AI to templates.
+
 Connected AI can now use the same manually connected Java game session as the page: `CraftStudio.game` or MCP operation `game` supports status, prepare, build, job, cancel, read and undo. Preparation returns an ID and updates the visible review; build requires that exact ID plus the current source/connection guard. Game readback uses the page import/checkpoint path. Credentials stay out of returned metadata. This end-to-end integration was tested with a mock bridge; actual Minecraft construction remains unverified.
 
 Game delivery now follows Prepare/check → Review → Confirm build. The review shows source revision, block count, dimension, actual world bounds and overwrite policy. Choose the current selected building/region as well as additions, all changes or the full scene. Selection preserves exact object members and the site-relative offset. Changing the design, selection or target requires preparing again; confirmation sends the checked payload once. This flow has been tested with a mock bridge, not live Minecraft construction.

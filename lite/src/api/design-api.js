@@ -1,3 +1,4 @@
+import { readPrefabs, mutatePrefab } from '../components/prefab-library.js';
 import { paletteMutation } from '../materials/material-palettes.js';
 import { collectionMutation, listedCollections } from '../components/collections.js';
 import { viewMutation, listedViews } from '../view/saved-views.js';
@@ -255,6 +256,8 @@ export class DesignAPI {
           'terrain.readColumns',
           'materials.collect',
           'objects.list',
+          'prefabs.list',
+          'prefabs.read',
           'palettes.list',
           'collections.list',
           'workplanes.list',
@@ -294,6 +297,11 @@ export class DesignAPI {
             'views.remove',
             'generation.links',
             'objects.list',
+            'prefabs.list',
+            'prefabs.read',
+            'prefabs.put',
+            'prefabs.remove',
+            'prefabs.place',
             'objects.put',
             'palettes.list',
             'collections.list',
@@ -428,6 +436,8 @@ export class DesignAPI {
       else if (method === 'palettes.list')
         value = structuredClone(site.design.materialPalettes || []);
       else if (method === 'collections.list') value = listedCollections(site);
+      else if (['prefabs.list', 'prefabs.read'].includes(method))
+        value = readPrefabs(site, method, p);
       else if (method === 'objects.list')
         value = site.design.objects.map((o) => ({
           ...o,
@@ -482,6 +492,9 @@ export class DesignAPI {
           'workplanes.put',
           'workplanes.remove',
           'selection.transform',
+          'prefabs.put',
+          'prefabs.remove',
+          'prefabs.place',
         ].includes(method)
       ) {
         if (!tx) this.guard(p);
@@ -532,6 +545,17 @@ export class DesignAPI {
           }
           transformSelection(target, q, policy);
         }
+        if (['prefabs.put', 'prefabs.remove', 'prefabs.place'].includes(method)) {
+          const q = structuredClone(p);
+          if (q.space !== undefined && !['local', 'world'].includes(q.space))
+            fail('INVALID_SPACE', '坐标空间需要 local 或 world');
+          if (q.space === 'world' && (q.selection || q.at)) {
+            if (!target.originConfirmed) fail('ORIGIN_UNKNOWN', '请确认世界原点');
+            if (q.selection) localizeSelection(q.selection, target.origin);
+            if (q.at) q.at = q.at.map((value, axis) => value - target.origin[axis]);
+          }
+          value = mutatePrefab(target, method, q, policy);
+        }
         if (method === 'objects.put') {
           const object = structuredClone(p.object);
           if (!object?.name || !Array.isArray(object.cells) || !object.cells.length)
@@ -569,7 +593,8 @@ export class DesignAPI {
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
             method.startsWith('collections.') ||
-            method.startsWith('palettes.')
+            method.startsWith('palettes.') ||
+            method.startsWith('prefabs.')
               ? value
               : {}),
             staged: true,
@@ -583,7 +608,8 @@ export class DesignAPI {
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
             method.startsWith('collections.') ||
-            method.startsWith('palettes.')
+            method.startsWith('palettes.') ||
+            method.startsWith('prefabs.')
               ? value
               : {}),
           };

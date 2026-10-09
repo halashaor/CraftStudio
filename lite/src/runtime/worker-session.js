@@ -7,6 +7,8 @@ const readMethods = new Set([
   'views.list',
   'generation.links',
   'objects.list',
+  'prefabs.list',
+  'prefabs.read',
   'workplanes.list',
   'workplanes.atCurve',
   'measurements.list',
