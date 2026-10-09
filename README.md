@@ -349,6 +349,8 @@ Draft state and autosave scheduling belong to `lite/src/storage/draft-controller
 
 The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`. `ui/cad-layout.js` mounts the shell and its templates; `ui/cad-shell.js` composes design interactions; `materials/material-picker.js` routes material choices to the requesting operation or brush. Tool definitions live by feature in `ui/commands/`, with `ui/design-commands.js` composing the searchable catalogue. Availability reads current selection, geometry and task state; move/copy/rotate shortcuts and viewport menu actions reuse those definitions.
 
+`ui/object-tree-ui.js` owns object rows, source relationships and instance badges. It reuses rows by ID, indexes metadata once per update, and retains source expansion within the current document. Scene updates can refresh other objects without replacing an active inline name field. The shell supplies selection and mutation callbacks; `studio-ui.js` handles selection geometry and scene presentation instead of rebuilding the same object tree.
+
 Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
 
 

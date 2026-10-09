@@ -349,6 +349,8 @@ const result = await window.CraftStudio.request({
 
 源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。`ui/cad-layout.js` 挂载主界面及模板，`ui/cad-shell.js` 组合设计交互，`materials/material-picker.js` 将选材交给请求它的操作或画笔。工具定义按功能放在 `ui/commands/`，由 `ui/design-commands.js` 组合为搜索目录。可用条件读取当前选择、几何与任务状态；移动／复制／旋转的快捷键与视口菜单复用这些定义。
 
+`ui/object-tree-ui.js` 负责对象行、来源关系与关联实例标记，按 ID 复用行、每次更新集中索引元数据，并在当前工程内保留来源展开状态。其他对象刷新时，不重建正在输入名称的控件。主界面提供选择与修改回调；`studio-ui.js` 负责选择几何与场景显示，不再重复重建对象树。
+
 在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
 
 

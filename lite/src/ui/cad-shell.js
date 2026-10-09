@@ -1,3 +1,4 @@
+import { ObjectTreeUI } from './object-tree-ui.js';
 import { MaterialPicker } from '../materials/material-picker.js';
 import { OperationSession } from './operation-session.js';
 import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
@@ -49,7 +50,6 @@ export function cadShell({
   navigation,
   requestRender,
 }) {
-  const sourceDetailsOpen = new Set();
   let workspace = null,
     sketchBrowser = null,
     collectionBrowser = null;
@@ -382,6 +382,46 @@ export function cadShell({
     designer.open();
   };
   $('cad-modify-open').after(designerButton);
+  const objectTree = new ObjectTreeUI({
+    host: objects,
+    onSelect: (id, event) => {
+      if (!operations.allow()) return;
+      direct.cancel();
+      const mode = event.ctrlKey
+        ? 'subtract'
+        : event.shiftKey
+          ? 'add'
+          : $('cad-selection-mode').value;
+      selectObjects([id], mode);
+      if (designer.isActive()) {
+        if (selectionActive) designer.open();
+        else designer.close();
+      }
+    },
+    onFrame: frameBlockSelection,
+    onChange: (id, property, value) => {
+      if (!operations.allow()) return;
+      task(async () => {
+        refresh(
+          await call('studio', { command: 'object', id, [property]: value, policy: policy() }),
+        );
+        markDirty();
+        await render();
+      });
+    },
+    onEditGuide: (id) =>
+      window.dispatchEvent(new CustomEvent('craftstudio-edit-sketch', { detail: { id } })),
+    onEditFeature: (objectId) =>
+      window.dispatchEvent(new CustomEvent('craftstudio-edit-feature', { detail: { objectId } })),
+    onDetach: (id) => {
+      if (!operations.allow()) return;
+      task(async () => {
+        refresh(await call('detachGeneration', { id }));
+        markDirty();
+        notice('已断开生成关联，方块保持原样，可撤销');
+      });
+    },
+  });
   const componentContext = componentContextUI({
     $,
     getSummary,
@@ -1101,7 +1141,6 @@ export function cadShell({
       if (selectionWorkspace && selectionWorkspace !== s.workspaceId) {
         $('cad-selection-clear').click();
         for (const id of ['studio-min', 'studio-max', 'studio-at']) $(id).value = '0 0 0';
-        sourceDetailsOpen.clear();
       }
       selectionWorkspace = s.workspaceId;
       const availableIds = new Set(s.design.objects.map((o) => o.id));
@@ -1138,137 +1177,7 @@ export function cadShell({
         s.replace.toLocaleString() +
         ' · 删除 ' +
         s.remove.toLocaleString();
-      for (const row of objects.children) {
-        row.classList.add('tree-object');
-        row.classList.toggle('selected', selectedObjects.has(row.dataset.objectId));
-        const buttons = row.querySelectorAll('button');
-        if (buttons[0] && !buttons[0].dataset.cadBound) {
-          buttons[0].dataset.cadBound = '1';
-          buttons[0].dataset.sceneShortcuts = 'true';
-          buttons[0].onclick = (e) => {
-            if (direct.isActive()) direct.cancel();
-            const operation = e?.ctrlKey
-              ? 'subtract'
-              : e?.shiftKey
-                ? 'add'
-                : $('cad-selection-mode').value;
-            selectObjects([row.dataset.objectId], operation);
-            if (designer.isActive()) {
-              if (selectionActive) designer.open();
-              else designer.close();
-            }
-          };
-          buttons[0].ondblclick = () => frameBlockSelection();
-        }
-        if (buttons[1]) {
-          if (['显示', '隐藏'].includes(buttons[1].textContent))
-            buttons[1].dataset.label = buttons[1].textContent;
-          buttons[1].title = buttons[1].dataset.label;
-          buttons[1].setAttribute('aria-label', buttons[1].dataset.label + '对象');
-          buttons[1].textContent = buttons[1].dataset.label === '显示' ? '◉' : '◎';
-        }
-        const object = s.design.objects.find((o) => o.id === row.dataset.objectId);
-        const relation = links.objects.find((o) => o.id === object?.id);
-        const relationKey = JSON.stringify(relation || null),
-          existingRelation = row.querySelector('.generation-sources');
-        if (existingRelation?.dataset.relationKey !== relationKey) {
-          existingRelation?.remove();
-          if (relation) {
-            const details = document.createElement('details');
-            details.className = 'generation-sources';
-            details.dataset.relationKey = relationKey;
-            details.open = sourceDetailsOpen.has(object.id);
-            details.ontoggle = () => {
-              if (!details.isConnected) return;
-              if (details.open) sourceDetailsOpen.add(object.id);
-              else sourceDetailsOpen.delete(object.id);
-            };
-            const summary = document.createElement('summary');
-            summary.textContent = relation.detached
-              ? '已独立化'
-              : relation.sources.some((g) => g.missing)
-                ? '来源参照已失效'
-                : (relation.outdated ? '待更新 · ' : '') + '源草图 · ' + relation.sources.length;
-            details.append(summary);
-            for (const issue of relation.issues || []) {
-              const message = document.createElement('p');
-              message.className = 'small';
-              message.dataset.generationIssue = issue.code;
-              message.textContent = issue.message;
-              details.append(message);
-            }
-            for (const source of relation.sources) {
-              const b = document.createElement('button');
-              b.textContent =
-                source.name +
-                ' · ' +
-                (source.editable ? '编辑源草图' : source.missing ? '已失效' : '参照');
-              b.dataset.sourceGuideId = source.id;
-              b.disabled = !source.editable;
-              b.onclick = () =>
-                window.dispatchEvent(
-                  new CustomEvent('craftstudio-edit-sketch', { detail: { id: source.id } }),
-                );
-              details.append(b);
-            }
-            if (object.generation?.type === 'feature') {
-              const repair = document.createElement('button');
-              repair.textContent = '修复 / 更换建模来源';
-              repair.dataset.featureSourceObject = object.id;
-              repair.onclick = () =>
-                window.dispatchEvent(
-                  new CustomEvent('craftstudio-edit-feature', { detail: { objectId: object.id } }),
-                );
-              details.append(repair);
-            }
-            row.append(details);
-          }
-        }
-        if (object?.instanceOf) {
-          const family = s.design.componentDefinitions?.find((d) => d.id === object.instanceOf),
-            badge = row.querySelector('.component-badge') || document.createElement('small');
-          badge.className = 'component-badge';
-          badge.textContent =
-            '关联 · ' +
-            (family?.name || '组件') +
-            ' · ' +
-            s.design.objects.filter((o) => o.instanceOf === object.instanceOf).length +
-            ' 份';
-          if (!badge.parentElement) row.append(badge);
-          for (const el of row.querySelectorAll('.component-publish,.component-unique'))
-            el.remove();
-        } else {
-          for (const el of row.querySelectorAll(
-            '.component-badge,.component-publish,.component-unique',
-          ))
-            el.remove();
-        }
-        if (object?.generation?.detached) row.querySelector('.generation-detach')?.remove();
-        if (
-          object?.generation &&
-          !object.generation.detached &&
-          !row.querySelector('.generation-detach')
-        ) {
-          const detach = document.createElement('button');
-          detach.className = 'generation-detach';
-          detach.textContent = '独立化';
-          detach.title = '保留方块并断开后续草图更新';
-          detach.onclick = () =>
-            task(async () => {
-              refresh(await call('detachGeneration', { id: object.id }));
-              markDirty();
-              notice('已断开生成关联，方块保持原样，可撤销');
-            });
-          row.append(detach);
-        }
-        if (object?.generation?.outdated) buttons[0].textContent = object.name + ' · 待更新';
-        if (buttons[2]) {
-          if (['锁定', '解锁'].includes(buttons[2].textContent))
-            buttons[2].dataset.label = buttons[2].textContent;
-          buttons[2].title = buttons[2].dataset.label;
-          buttons[2].textContent = buttons[2].dataset.label === '锁定' ? '◇' : '◆';
-        }
-      }
+      objectTree.update(s, links, selectedObjects);
       syncVectors();
       collectionBrowser.update(s, links);
       componentContext.update(s);

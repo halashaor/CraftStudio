@@ -43,7 +43,6 @@ export function studioUI({
   outline.visible = false;
   scene.add(outline);
   let uiSignature = '',
-    objectSignature = '',
     selectedStart = null,
     motion = [],
     walk = false,
@@ -562,7 +561,13 @@ export function studioUI({
     prefabBrowser.update(summary.design?.prefabs || [], summary.workspaceId);
     const signature = JSON.stringify([
       summary.workspaceId,
-      summary.design?.objects,
+      summary.design?.objects.map((object) => [
+        object.id,
+        object.name,
+        object.min,
+        object.max,
+        object.hidden,
+      ]),
       summary.design?.prefabs.map((p) => [p.id, p.name, p.blocks.length]),
       summary.design?.cameras,
       summary.design?.animations,
@@ -585,6 +590,7 @@ export function studioUI({
       scene.add(lamp);
     }
     const d = summary.design || { objects: [], prefabs: [], cameras: [], animations: {} };
+    const objectIds = new Set(d.objects.map((object) => object.id));
     lighting(d.lighting || 'day');
     $('studio-light').value = d.lighting || 'day';
     const prev = $('studio-motion-target').value;
@@ -592,7 +598,7 @@ export function studioUI({
       ...[
         ...d.objects.map((o) => ({ id: o.id, name: o.name })),
         ...instances
-          .filter((o) => !d.objects.some((d) => d.id === o.id))
+          .filter((o) => !objectIds.has(o.id))
           .map((o) => ({ id: o.id, name: o.state.Name + ' ' + (o.owner || o.position).join(',') })),
       ].map((o) => {
         const e = document.createElement('option');
@@ -603,41 +609,6 @@ export function studioUI({
     );
     if ([...$('studio-motion-target').options].some((o) => o.value === prev))
       $('studio-motion-target').value = prev;
-    const objectKey = JSON.stringify([summary.workspaceId, d.objects]);
-    if (objectKey !== objectSignature) {
-      objectSignature = objectKey;
-      $('studio-objects').replaceChildren(
-        ...d.objects.map((o) => {
-          const row = document.createElement('div');
-          row.className = 'row';
-          row.dataset.objectId = o.id;
-          for (const [label, fn] of [
-            [
-              o.name,
-              () => {
-                picked(o.min, false);
-                picked(o.max, true);
-                controls.update();
-              },
-            ],
-            [
-              o.hidden ? '显示' : '隐藏',
-              () => task(() => command({ command: 'object', id: o.id, hidden: !o.hidden })),
-            ],
-            [
-              o.locked ? '解锁' : '锁定',
-              () => task(() => command({ command: 'object', id: o.id, locked: !o.locked })),
-            ],
-          ]) {
-            const e = document.createElement('button');
-            e.textContent = label;
-            e.onclick = fn;
-            row.append(e);
-          }
-          return row;
-        }),
-      );
-    }
     $('studio-cameras').replaceChildren(
       ...d.cameras.map((v) => {
         const e = document.createElement('button');
