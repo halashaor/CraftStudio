@@ -15,7 +15,7 @@ CraftStudio 面向建筑审美与自由设计。辅助草图、建模工具、�
 ### 离线 Lite：打开文件即可设计
 
 1. 下载或克隆本仓库。
-2. 用新版 Chrome 或 Edge 打开 [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html)。
+2. 用新版 Chrome 或 Edge 打开 [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html)。Windows 下可双击 `启动Lite版.cmd` 直接打开此独立文件。
 3. **开始工程。** 导入真实场地／蓝图文件，或选择**文件 → 新建空白工程**从零设计。初始工作范围不会生成方块或假地形。
 4. **绘制辅助几何。** 在视口中点击绘制直线、曲线或闭合轮廓，保存为可复用草图；按需要设置工作平面，在三维空间调整节点。
 5. **生成建筑形体。** 选闭合共面草图拉伸、多个平行截面放样，或沿路径扫掠截面；检查实际方块预览后确认。
@@ -359,7 +359,9 @@ const result = await window.CraftStudio.request({
 
 Windows 启动脚本与 HTTP 服务共用 `backend/build-files.json` 校验运行代码，覆盖后端模块和引擎运行文件，避免整理目录后启动器仍读取旧文件名。
 
-在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
+在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend maintenance server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
+
+开发维护可在 Git 检出目录执行 `python maintenance/sync_workspace.py --target 路径`，或用 `--source 仓库路径` 指定源目录，核对完整的受 Git 跟踪代码；未跟踪的工程与资源留在原位。加 `--apply` 补齐缺失文件；已有差异默认阻止复制，可用 `--keep 相对路径` 明确保留，或用 `--replace-changed` 替换并备份到目标目录的 `output/source-sync-backups/`。先审阅核对结果再应用；这是维护命令，不增加设计器面板。
 
 
 

@@ -26,6 +26,8 @@ Preserve terrain-first design, unrestricted human/AI voxel editing, arbitrary 3D
 
 Keep front-end modules under their functional directories in lite/src. app.js and worker.js compose features; they should not absorb new domain implementations. Keep Python helpers in backend/, with server.py and mcp_server.py as entry points. Separate sizable static interface markup into adjacent views/ templates. Prefer small named functions and focused controllers over generic wrappers. Validate external inputs and preserve transaction/transport error boundaries; avoid duplicate checks and catch-and-ignore blocks. Run the pinned Prettier and Black checks before publication. Prioritize complete end-to-end design workflows before further detail polishing.
 
+Keep developer workspace synchronization under maintenance/. Audit the complete tracked source tree before applying installation updates; preserve explicit local overrides and back up changed files. Incremental Git status alone does not prove the local installation has every published launcher or helper. Include maintenance/ in Python formatting checks.
+
 Object membership arrays are immutable snapshots: replace cells arrays when membership changes. ObjectProtection reuses weakly keyed indexes for unchanged arrays and resolves object/collection lock flags afresh for every operation.
 
 Keep draft epochs, dirty state, timers and in-flight save coalescing in storage/draft-controller.js. Keep checkpoint metadata and cached asset retry in storage/checkpoint-draft.js; app.js supplies scene/UI callbacks. Preserve immutable formal version snapshots and verify both concurrent-save behavior and project switching when changing this boundary.

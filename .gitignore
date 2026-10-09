@@ -28,3 +28,10 @@ bridge/installed-backups/
 /ARCHITECTURE.md
 /output/
 /lite/reference/
+
+# Local ad hoc browser checks and generated verification reports
+/lite/tests/*.mjs
+!/lite/tests/performance-baseline.mjs
+/lite/dist/edit-performance.json
+/lite/dist/verification.json
+/lite/reference-verification.json

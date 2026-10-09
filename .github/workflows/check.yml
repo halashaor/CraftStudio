@@ -26,7 +26,7 @@ jobs:
       - run: npm run build && npm run check:sync
         working-directory: lite
       - run: pip install -r requirements-dev.txt
-      - run: python -m black --check backend server.py mcp_server.py tests
+      - run: python -m black --check backend maintenance server.py mcp_server.py tests
       - run: python -m unittest discover -s tests -p "test_*.py"
   sync:
     needs: check

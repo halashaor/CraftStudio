@@ -15,7 +15,7 @@ CraftStudio focuses on architectural appearance and creative freedom. Sketches, 
 ### Offline Lite — open a file and start designing
 
 1. Download or clone this repository.
-2. Open [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html) in a recent Chrome or Edge browser.
+2. Open [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html) in a recent Chrome or Edge browser. On Windows, `启动Lite版.cmd` opens this standalone file directly.
 3. **Start a project.** Import a terrain/blueprint file, or use **File → New blank project** to design from scratch. The initial working extent creates no blocks or artificial terrain.
 4. **Draw auxiliary geometry.** Click a line, curve or closed contour in the viewport; save it as a reusable sketch. Choose a workplane when needed, and edit control points in 3D.
 5. **Generate a form.** Select a closed planar sketch for extrusion, multiple parallel sections for lofting, or a path and section for a sweep. Inspect the block preview before confirming.
@@ -359,7 +359,9 @@ The source layout follows responsibilities: `backend/` handles local files and S
 
 The Windows launcher and HTTP service share `backend/build-files.json` for build comparison. It covers the backend helpers and engine runtime, so reorganizing source paths does not leave the launcher hashing obsolete filenames.
 
-Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
+Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend maintenance server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
+
+From a Git checkout, run `python maintenance/sync_workspace.py --target PATH` to audit a separate local installation; use `--source REPO` to select another checkout. It compares the complete tracked source tree; untracked projects and resources stay in place. Add `--apply` to copy missing files. Changed local files block copying unless explicitly retained with `--keep relative/path` or replaced with `--replace-changed`; replacements are backed up under the target's `output/source-sync-backups/`. Review the audit before applying. This is a developer maintenance command, not a new designer panel.
 
 
 
