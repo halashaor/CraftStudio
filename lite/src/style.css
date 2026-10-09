@@ -3052,3 +3052,172 @@ input.dimension-scrubbing {
   max-height: 140px;
   overflow: auto;
 }
+/* Visual state diagrams explain what changes; color is paired with shape and labels. */
+.visual-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid #596273;
+  border-left: 3px solid #b8a2ef;
+  border-radius: 6px;
+  background: #242b36;
+}
+.context-diagram {
+  width: 70px;
+  height: 42px;
+  flex: 0 0 70px;
+  overflow: visible;
+}
+.context-plane {
+  fill: #3d4757;
+  stroke: #68788c;
+  stroke-width: 1;
+}
+.context-controls {
+  fill: none;
+  stroke: #e6bd79;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.context-curve {
+  fill: none;
+  stroke: #c1acf5;
+  stroke-width: 2.5;
+}
+.context-handles circle {
+  fill: #7ed5ee;
+  stroke: #202631;
+  stroke-width: 1;
+}
+.context-handles rect {
+  fill: #e6bd79;
+  stroke: #202631;
+  stroke-width: 1;
+}
+.context-blocks {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  fill: #73cbb3;
+  stroke: #233e39;
+  stroke-width: 1;
+}
+.visual-context[data-phase='blocks'] {
+  border-left-color: #73cbb3;
+}
+.visual-context[data-phase='blocks'] .context-blocks {
+  opacity: 1;
+}
+.visual-context[data-phase='blocks'] .context-handles,
+.visual-context[data-phase='blocks'] .context-controls {
+  opacity: 0;
+}
+.visual-context[data-phase='blocks'] .context-curve {
+  stroke-dasharray: 3 2;
+}
+.context-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.context-copy strong {
+  font-size: 14px;
+}
+.context-copy span {
+  font-size: 12px;
+  color: #d2dce7;
+}
+.context-copy small {
+  font-size: 11px;
+  color: #a8b6c7;
+  line-height: 1.45;
+}
+.diagram-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.studio-workspace .diagram-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 5px;
+  background: #282f39;
+  color: #c4cfde;
+  border: 1px solid #4e5969;
+  border-radius: 6px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.diagram-options svg {
+  width: 48px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.diagram-options .diagram-base {
+  stroke: #8795a8;
+  fill: #313b49;
+}
+.diagram-options .diagram-front {
+  fill: #33445a;
+  stroke: #9fb5d0;
+}
+.diagram-options .diagram-action {
+  stroke: #a5d2ef;
+  fill: none;
+  stroke-width: 2;
+}
+.diagram-options circle {
+  fill: #a5d2ef;
+  stroke: #222a35;
+}
+.studio-workspace .diagram-options button[aria-pressed='true'] {
+  border-color: #87bce6;
+  background: #344c66;
+  color: #f0f6ff;
+  box-shadow: inset 0 -2px #8dbfe7;
+}
+.studio-workspace .diagram-options button[aria-pressed='true'] .diagram-action {
+  stroke: #d6edff;
+}
+.diagram-options button:focus-visible {
+  outline: 2px solid #ead49b;
+  outline-offset: 2px;
+}
+.diagram-options button:disabled {
+  opacity: 0.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diagram-options button,
+  .context-blocks {
+    transition: none;
+  }
+}
+
+.diagram-options button[aria-pressed='true'] span::before {
+  content: '✓ ';
+}
+#sketch-model-handoff {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #485669;
+}
+#sketch-model-handoff-info {
+  color: #aab8c9;
+  font-size: 11px;
+  line-height: 1.5;
+}
+#sketch-stroke-blocks {
+  min-height: 36px;
+}
+.visual-context[data-phase='expression'] {
+  border-left-color: #edbc78;
+}

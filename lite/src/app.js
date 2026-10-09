@@ -212,6 +212,7 @@ window.CraftStudio = Object.freeze({
     camera.zoom = zoom;
     camera.updateProjectionMatrix();
     controls.update();
+    camera.updateMatrixWorld(true);
     needsRender = true;
     viewNavigation?.end();
     return {
@@ -1472,6 +1473,7 @@ function cast(e) {
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
     return null;
   mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, (-(e.clientY - r.top) / r.height) * 2 + 1);
+  camera.updateMatrixWorld(true);
   ray.setFromCamera(mouse, camera);
   const pickStarted = performanceTrace.begin(),
     hit = ray.intersectObjects([...group.children, ...createGroup.children], true)[0];
@@ -1521,6 +1523,7 @@ function strokePoint(e) {
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
     return null;
   mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, (-(e.clientY - r.top) / r.height) * 2 + 1);
+  camera.updateMatrixWorld(true);
   ray.setFromCamera(mouse, camera);
   const point = new THREE.Vector3();
   if (!ray.ray.intersectPlane(stroke.plane, point)) return null;

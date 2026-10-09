@@ -1,3 +1,5 @@
+import { SketchContextUI } from '../ui/sketch-context-ui.js';
+import { pointPlacement, surfacePathKinds } from '../sketch/placement-mode.js';
 import { SketchNodeDrag, nearestScreenNode } from '../sketch/sketch-node-drag.js';
 import viewMarkup0 from './views/construction-ui-panel.html';
 import { SketchSnapController } from '../sketch/snap-controller.js';
@@ -124,6 +126,7 @@ export function constructionUI({
   panel.innerHTML = viewMarkup0;
   $('scene').append(panel);
   const savedControls = document.createElement('div');
+  savedControls.id = 'sketch-saved-controls';
   savedControls.innerHTML =
     '<label>已保存的草图<select id="sketch-saved"></select></label><button id="sketch-edit-saved">编辑所选草图</button><div id="sketch-update-options" hidden><label class="check"><input id="sketch-update-related" type="checkbox" checked>更新关联建筑</label><label>手工改动<select id="sketch-manual-policy"><option value="preserve">保留手改和手动删除</option><option value="overwrite">明确替换手改，按草图重建</option></select></label><p class="small">预览不修改工程。确认会同时更新草图与建筑，可一次撤销。</p></div>';
   $('figure-controls').prepend(savedControls);
@@ -367,6 +370,7 @@ export function constructionUI({
             snap: +$('sketch-snap').value,
             snapApplied: true,
             planeLock: $('sketch-plane-lock').checked,
+            pickSurface: $('sketch-pick-surface').checked,
             constraint: $('sketch-constraint').value,
             referencePoints: savedGuides.find((g) => g.id === $('sketch-reference').value)?.points,
             guidesOnly: $('figure-guides-only').checked,
@@ -506,6 +510,50 @@ export function constructionUI({
     planeOverlay = workplaneView(THREE, scene, requestRender),
     stationOverlay = curvePlaneView(THREE, scene, requestRender),
     overlapOverlay = overlapPreview(THREE, scene, requestRender);
+  let lastDrawingPlane = $('figure-plane').value;
+  const sketchContext = new SketchContextUI({
+    $,
+    panel,
+    getState: () => ({
+      active,
+      type,
+      drawing,
+      kind: $('figure-kind').value,
+      plane: $('figure-plane').value,
+      pickSurface: $('sketch-pick-surface').checked,
+      workplane: workingFrame,
+      planeLock: $('sketch-plane-lock').checked,
+      guidesOnly: $('figure-guides-only').checked,
+      previewState: panel.dataset.previewState,
+      snap: Number($('sketch-snap').value),
+      materialName: materialName(material),
+      width: Number($('figure-width').value),
+    }),
+    chooseMode: choosePointPlacement,
+  });
+  function choosePointPlacement(mode) {
+    if (committing) return;
+    const before = captureParameters();
+    $('sketch-pick-surface').checked = mode === 'surface';
+    if (mode === 'surface') {
+      workingFrame = null;
+      planeSource = null;
+      planePicking = null;
+      planePickPoints = [];
+      $('sketch-plane-lock').checked = false;
+      planeOverlay.clear();
+    }
+    planeStatus();
+    if (drawing) {
+      snapping.clear();
+      $('construction-report').textContent = drawingHint();
+      if (anchors.length) immediate();
+    } else {
+      makeHandles();
+      schedule();
+      recordParameters(before);
+    }
+  }
   function movementConstraint(choice = movementAxes) {
     return axisConstraint({
       choice,
@@ -625,6 +673,8 @@ export function constructionUI({
   const previewOptionIds = {
     geometry: [
       'figure-fill',
+      'sketch-pick-surface',
+      'sketch-plane-lock',
       'figure-guides-only',
       'figure-voxel',
       'figure-surface',
@@ -694,6 +744,9 @@ export function constructionUI({
           type,
           points: constrainSketch(config()).points.map((p) => [...p]),
           sampleCount: bezierSamples,
+          drawingPlane: $('figure-plane').value,
+          workplane: structuredClone(workingFrame),
+          workplaneSource: structuredClone(planeSource),
           fields,
           options: captureOptions(),
         }
@@ -748,6 +801,12 @@ export function constructionUI({
       if (input) input.value = field.value;
     }
     if (type === 'geometry') {
+      if ('workplane' in value) {
+        workingFrame = value.workplane ? validateFrame(value.workplane) : null;
+        planeSource = structuredClone(value.workplaneSource);
+      }
+      if (value.drawingPlane) $('figure-plane').value = value.drawingPlane;
+      planeStatus();
       points = value.points.map((p) => [...p]);
       bezierSamples = value.sampleCount ?? null;
       control.setTranslationSnap(+$('sketch-snap').value || null);
@@ -1012,6 +1071,7 @@ export function constructionUI({
     token++;
     draft = null;
     $('construction-apply').disabled = true;
+    panel.dataset.previewState = 'pending';
     immediate();
     precise.request();
   }
@@ -1207,7 +1267,9 @@ export function constructionUI({
     }
     pointNodes = points.map((p, i) => {
       const node = new THREE.Mesh(
-        new THREE.SphereGeometry(0.25, 12, 8),
+        $('figure-kind').value === 'bezier' && i > 0 && i < points.length - 1
+          ? new THREE.BoxGeometry(0.45, 0.45, 0.45)
+          : new THREE.SphereGeometry(0.25, 12, 8),
         new THREE.MeshBasicMaterial({
           color: i === 0 || i === points.length - 1 ? 0x80cfff : 0xf8c480,
           depthTest: false,
@@ -1567,7 +1629,7 @@ export function constructionUI({
               : '指定楼梯';
       scopeInfo();
       planeStatus();
-      if (workingFrame) planeOverlay.draw(workingFrame);
+
       if (type === 'geometry') {
         handles.visible = !drawing;
         control.setTranslationSnap(+$('sketch-snap').value || null);
@@ -1858,7 +1920,7 @@ export function constructionUI({
     if (context.operation) $('feature-operation').value = context.operation;
     resumeUI();
     planeStatus();
-    if (type === 'geometry' && workingFrame) planeOverlay.draw(workingFrame);
+
     scopeSelection = hasSelection() ? structuredClone(studio.getSelection()) : null;
     $('construction-scope').value = type === 'terrain' ? 'footprint' : 'none';
     scopePanel.hidden = false;
@@ -1990,12 +2052,21 @@ export function constructionUI({
     };
   for (const id of ['figure-kind', 'figure-plane'])
     $(id).onchange = () => {
+      const before = captureParameters();
+      if (before) before.drawingPlane = lastDrawingPlane;
       if (id === 'figure-plane') {
         planeSource = null;
         workingFrame = null;
         planePicking = null;
+        $('sketch-pick-surface').checked = false;
+        if (surfacePathKinds.has($('figure-kind').value)) $('sketch-plane-lock').checked = false;
         planeStatus();
-        planeOverlay.clear();
+        if (surfacePathKinds.has($('figure-kind').value) && points.length && !drawing) {
+          makeHandles();
+          schedule();
+          recordParameters(before);
+          return;
+        }
       }
       if (id === 'figure-kind')
         $('sketch-plane-lock').checked = !['bezier', 'spline', 'box'].includes(
@@ -2003,9 +2074,15 @@ export function constructionUI({
         );
       $('sketch-constraint').value = 'free';
       beginDrawing();
+      planeStatus();
     };
+  $('sketch-pick-surface').onchange = () =>
+    choosePointPlacement($('sketch-pick-surface').checked ? 'surface' : 'plane');
   for (const id of ['sketch-snap', 'sketch-plane-lock', 'sketch-constraint', 'sketch-reference'])
     $(id).oninput = () => {
+      if (id === 'sketch-plane-lock' && $('sketch-plane-lock').checked)
+        $('sketch-pick-surface').checked = false;
+      planeStatus();
       bezierSamples = null;
       control.setTranslationSnap(+$('sketch-snap').value || null);
       try {
@@ -2435,8 +2512,8 @@ export function constructionUI({
     $('curve-plane-use').disabled = !savedGuides.some((g) => g.id === $('curve-plane-path').value);
     $('curve-plane-info').textContent = '已采用平面，调整路径位置可预览其他截面。';
     $('sketch-plane-lock').checked = true;
+    $('sketch-pick-surface').checked = false;
     planeStatus();
-    planeOverlay.draw(workingFrame);
     beginDrawing();
   }
   for (const [id, update] of [
@@ -2542,22 +2619,36 @@ export function constructionUI({
     }
   };
 
+  let shownPlaneKey = '';
+  function drawingFrame() {
+    if (!active || type !== 'geometry') return null;
+    if (workingFrame) return workingFrame;
+    const origin = anchors[0] || points[0];
+    return !spatialDrawing() && origin ? workplane([origin], $('figure-plane').value) : null;
+  }
   function planeStatus() {
-    window.dispatchEvent(
-      new CustomEvent('craftstudio-workplane-grid', {
-        detail: {
-          active: active && type === 'geometry' && !!workingFrame,
-          visible: planeOverlay.visible(),
-        },
-      }),
-    );
     if (workingFrame) $('figure-plane').value = 'custom';
     else if ($('figure-plane').value === 'custom') $('figure-plane').value = 'xz';
-    $('sketch-plane-status').textContent = workingFrame
-      ? '自定义平面 · 原点 ' +
-        workingFrame.origin.map((n) => n.toFixed(2)).join(',') +
-        ' · 红 U / 绿 V / 蓝法线 · 世界平面菜单可重置'
-      : '世界平面；可从现有面或三个位置设置。';
+    const frame = drawingFrame(),
+      key = JSON.stringify(frame);
+    if (shownPlaneKey !== key) {
+      shownPlaneKey = key;
+      planeOverlay.draw(frame);
+    }
+    window.dispatchEvent(
+      new CustomEvent('craftstudio-workplane-grid', {
+        detail: { active: !!frame, visible: planeOverlay.visible() },
+      }),
+    );
+    $('sketch-plane-status').textContent = spatialDrawing()
+      ? '落点跟随鼠标所指表面；坐标吸附按下方设置。'
+      : workingFrame
+        ? '自定义平面 · 原点 ' + workingFrame.origin.map((n) => n.toFixed(2)).join(',')
+        : '绘制平面 ' +
+          $('figure-plane').selectedOptions[0].textContent +
+          '；从第一个点确定所在位置。';
+    lastDrawingPlane = $('figure-plane').value;
+    sketchContext.update();
     panel.dataset.workplane = workingFrame ? JSON.stringify(workingFrame) : '';
   }
   function beginPlanePick(mode) {
@@ -2610,8 +2701,8 @@ export function constructionUI({
       planePicking = null;
       planePickPoints = [];
       $('sketch-plane-lock').checked = true;
+      $('sketch-pick-surface').checked = false;
       planeStatus();
-      planeOverlay.draw(workingFrame);
       beginDrawing();
     } catch (error) {
       $('construction-report').textContent = error.message;
@@ -2639,10 +2730,12 @@ export function constructionUI({
 
   function spatialDrawing() {
     return (
-      $('sketch-pick-surface').checked &&
-      !workingFrame &&
-      !$('sketch-plane-lock').checked &&
-      ['bezier', 'spline', 'polyline', 'line'].includes($('figure-kind').value)
+      pointPlacement({
+        kind: $('figure-kind').value,
+        pickSurface: $('sketch-pick-surface').checked,
+        workplane: workingFrame,
+        planeLock: $('sketch-plane-lock').checked,
+      }) === 'surface'
     );
   }
   function planePoint(e) {
@@ -2651,6 +2744,7 @@ export function constructionUI({
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       1 - ((e.clientY - rect.top) / rect.height) * 2,
     );
+    getCamera().updateMatrixWorld(true);
     ray.setFromCamera(pointer, getCamera());
     const axis = { xz: 1, xy: 2, yz: 0 }[$('figure-plane').value],
       level = anchors[0]?.[axis],
@@ -2660,11 +2754,7 @@ export function constructionUI({
       : level === undefined
         ? null
         : { origin: normal.toArray().map((n) => n * level), normal: normal.toArray() };
-    const surfacePicking =
-      $('sketch-pick-surface').checked &&
-      !workingFrame &&
-      !$('sketch-plane-lock').checked &&
-      ['bezier', 'spline', 'polyline', 'line'].includes($('figure-kind').value);
+    const surfacePicking = spatialDrawing();
     const objectPoint = snapping.snap(e, { plane: surfacePicking ? null : plane });
     if (objectPoint) return objectPoint;
     if (surfacePicking) {
@@ -2821,6 +2911,7 @@ export function constructionUI({
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         1 - ((e.clientY - rect.top) / rect.height) * 2,
       );
+      getCamera().updateMatrixWorld(true);
       ray.setFromCamera(pointer, getCamera());
       if (type === 'geometry' && !committing) {
         const selected = nearestScreenNode(pointNodes, {
@@ -2944,6 +3035,7 @@ export function constructionUI({
     const kind = $('figure-kind').value;
     if (!anchors.length) {
       anchors.push(p);
+      planeStatus();
       drawingRedo = [];
       $('figure-back').disabled = false;
       panel.dataset.drawingPoints = String(anchors.length);
@@ -3001,6 +3093,7 @@ export function constructionUI({
       1 - ((e.clientY - rect.top) / rect.height) * 2,
     );
     ray.params.Line.threshold = 0.35;
+    getCamera().updateMatrixWorld(true);
     ray.setFromCamera(pointer, getCamera());
     const lines = persistent.children.filter(
       (line) =>
@@ -3178,7 +3271,7 @@ export function constructionUI({
         if (planePicking) {
           planePicking = null;
           planePickPoints = [];
-          planeOverlay.draw(workingFrame);
+          shownPlaneKey = '';
           planeStatus();
           if (!drawing) schedule();
           else $('construction-report').textContent = drawingHint();
@@ -3226,7 +3319,6 @@ export function constructionUI({
     workingFrame = c.workplane ? validateFrame(c.workplane) : null;
     planeSource = c.workplaneSource || null;
     planeStatus();
-    planeOverlay.draw(workingFrame);
     scopeSelection = c.selection ? structuredClone(c.selection) : scopeSelection;
     $('construction-scope').value = c.selectionMode || (c.selection ? 'volume' : 'none');
     scopeInfo();
@@ -3255,6 +3347,7 @@ export function constructionUI({
       ['fill', 'figure-fill'],
       ['guidesOnly', 'figure-guides-only'],
       ['planeLock', 'sketch-plane-lock'],
+      ['pickSurface', 'sketch-pick-surface'],
     ])
       $(field).checked = !!c[key];
     $('sketch-reference').value =
@@ -3327,7 +3420,7 @@ export function constructionUI({
       redo: drawingRedo.length > 0,
     }),
     openFromGuide,
-    hasWorkplaneGrid: () => active && type === 'geometry' && !!workingFrame,
+    hasWorkplaneGrid: () => !!drawingFrame(),
     toggleWorkplaneGrid: () => {
       const visible = planeOverlay.toggle();
       planeStatus();
@@ -3378,6 +3471,7 @@ export function constructionUI({
       savedGuides = list;
       namedPlanes = s.design?.workplanes || [];
       planeLibraryOptions();
+      savedControls.hidden = !list.some((guide) => guide.recipe?.kind && guide.recipe.points);
       const selected = $('sketch-saved').value;
       $('sketch-saved').replaceChildren(
         ...list

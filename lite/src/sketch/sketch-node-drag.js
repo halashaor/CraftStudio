@@ -56,6 +56,7 @@ export class SketchNodeDrag {
     const { THREE, element } = this,
       rect = element.getBoundingClientRect(),
       ray = new THREE.Raycaster();
+    this.getCamera().updateMatrixWorld(true);
     ray.setFromCamera(
       new THREE.Vector2(
         ((event.clientX - rect.left) / rect.width) * 2 - 1,

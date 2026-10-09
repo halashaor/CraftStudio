@@ -13,6 +13,25 @@
     <option value="objects">对象</option>
   </select>
   <p class="small">点一下选择，拖框选多个；Shift 加选，Ctrl 减选。</p>
+  <div class="diagram-options selection-depth-options" role="group" aria-label="框选是否穿透">
+    <button data-box-depth="visible" aria-pressed="true">
+      <svg viewBox="0 0 48 32" aria-hidden="true">
+        <path class="diagram-base" d="M19 3H40V24H19Z" stroke-dasharray="3 3" />
+        <path class="diagram-front" d="M7 10H28V31H7Z" />
+        <path class="diagram-action" d="M3 6H32V31H3Z" stroke-dasharray="2 2" /></svg
+      ><span>只选看得见的</span>
+    </button>
+    <button data-box-depth="through" aria-pressed="false">
+      <svg viewBox="0 0 48 32" aria-hidden="true">
+        <path class="diagram-action" d="M19 3H40V24H19Z M7 10H28V31H7Z" />
+        <path class="diagram-base" d="M3 1H44V31H3Z" stroke-dasharray="2 2" /></svg
+      ><span>穿透到背面</span>
+    </button>
+  </div>
+  <select id="cad-box-depth" hidden aria-hidden="true">
+    <option value="visible">只选可见方块</option>
+    <option value="through">穿透选择前后方块</option>
+  </select>
   <details id="cad-selection-advanced">
     <summary id="cad-selection-advanced-summary">更多框选设置</summary>
     <label
@@ -20,12 +39,6 @@
         <option value="crossing">碰到就选中</option>
         <option value="window">完全框入才选</option>
         <option value="direction">按 CAD 拖动方向</option>
-      </select></label
-    >
-    <label
-      >方块框选深度<select id="cad-box-depth">
-        <option value="visible">只选可见方块</option>
-        <option value="through">穿透选择前后方块</option>
       </select></label
     >
     <label

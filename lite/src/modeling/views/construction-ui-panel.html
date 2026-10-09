@@ -32,24 +32,22 @@
     <button id="sketch-face-plane">选取面</button><button id="sketch-three-plane">三点建面</button
     ><button id="sketch-face-view">正对平面</button>
   </div>
-  <label class="check"
-    ><input id="sketch-pick-surface" type="checkbox" checked />曲线路径按鼠标所指表面取点</label
-  >
+  <input id="sketch-pick-surface" type="checkbox" checked hidden aria-hidden="true" />
   <p id="sketch-plane-status" class="small">世界平面；可从现有面或三个位置设置。</p>
   <label class="check"><input id="figure-fill" type="checkbox" />填充闭合图形 / 体积</label
   ><label class="check"
     ><input id="figure-guides-only" type="checkbox" checked />只保存辅助轮廓，不放置方块</label
   >
+  <label
+    >坐标吸附<select id="sketch-snap">
+      <option value="0.5">半格（兼容半砖）</option>
+      <option value="1">整格</option>
+      <option value="0">自由辅助几何</option>
+    </select></label
+  >
   <details class="sketch-settings">
     <summary>工作平面、吸附与尺寸约束</summary>
-    <label
-      >吸附<select id="sketch-snap">
-        <option value="0.5">半格（兼容半砖）</option>
-        <option value="1">整格</option>
-        <option value="0">自由辅助几何</option>
-      </select></label
-    ><label class="check"
-      ><input id="sketch-plane-lock" type="checkbox" />锁定控制点到工作平面</label
+    <label class="check"><input id="sketch-plane-lock" type="checkbox" />锁定控制点到工作平面</label
     ><label class="check"
       ><input id="sketch-geometry-snap" type="checkbox" checked /><span
         id="sketch-geometry-snap-label"

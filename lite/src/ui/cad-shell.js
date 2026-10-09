@@ -785,8 +785,9 @@ export function cadShell({
         );
         $('pick-panel').hidden = true;
       } else if ($('cad-selection-target').value === 'blocks') {
-        const camera = getCamera(),
-          viewProjection = new THREE.Matrix4().multiplyMatrices(
+        const camera = getCamera();
+        camera.updateMatrixWorld(true);
+        const viewProjection = new THREE.Matrix4().multiplyMatrices(
             camera.projectionMatrix,
             camera.matrixWorldInverse,
           ),
