@@ -649,11 +649,11 @@ async function execute(action, data) {
     if (!draft || draft.id !== data.id) throw Error('预览已更新，请重新确认');
     if (draft.revision !== api.revision || draft.workspaceId !== api.workspaceId)
       throw Error('场景已变化，请重新生成预览');
-    const history = site.undo.length,
+    const lastHistory = site.undo.at(-1),
       previousDesign = structuredClone(site.design),
       captured = captureGeneration(site, draft.plan.operations);
     site.operations(draft.plan.operations, data.policy || {});
-    if (site.undo.length === history) {
+    if (site.undo.at(-1) === lastHistory) {
       site.undo.push({ overlay: site.overlay, size: [...site.size], design: previousDesign });
       site.redo = [];
     }
@@ -852,8 +852,12 @@ async function execute(action, data) {
       beforeHistory = site.undo.length;
     const d = design(site),
       policy = data.policy || { allowTerrain: false, allowExisting: false };
+    let selectionResult = null;
     if (data.command === 'build') buildOnSite(site, data.kind, data.params, policy);
-    if (data.command === 'paste') pastePrefab(site, data.prefab, data.at, data, policy);
+    if (data.command === 'paste') {
+      pastePrefab(site, data.prefab, data.at, data, policy);
+      selectionResult = { objectId: d.objects.at(-1).id };
+    }
     if (data.command === 'transform') transformSelection(site, data, policy);
     if (data.command === 'prefabImport') {
       const p = data.prefab;
@@ -978,7 +982,7 @@ async function execute(action, data) {
     }
     mesher.changed(site);
     createScene.changedCells(site);
-    return summary();
+    return { ...summary(), ...(selectionResult ? { selectionResult } : {}) };
   }
 
   if (action === 'mesh') {

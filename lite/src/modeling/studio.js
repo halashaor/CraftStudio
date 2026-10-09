@@ -700,15 +700,14 @@ export function pastePrefab(site, prefab, at, options = {}, policy = {}) {
     return mode === 'empty' ? !exists : mode === 'replace' ? exists : true;
   });
   if (!ops.length) throw Error('没有可放置的位置，请移动预览或更改重叠方式');
-  const previous = structuredClone(design(site)),
-    history = site.undo.length;
+  const previous = structuredClone(design(site));
   site.operations(ops, {
     ...policy,
     allowExisting: mode === 'empty' ? policy.allowExisting : true,
   });
-  if (site.undo.length === history) throw Error('目标方块已经相同，无需重复放置');
+  if (!site.changedPositions.length) throw Error('目标方块已经相同，无需重复放置');
   site.undo.at(-1).design = previous;
-  const pos = ops.map((o) => o.pos);
+  const pos = site.changedPositions;
   design(site).objects.push({
     id: crypto.randomUUID(),
     name: prefab.name + ' · 粘贴',
@@ -717,5 +716,5 @@ export function pastePrefab(site, prefab, at, options = {}, policy = {}) {
     min: [0, 1, 2].map((a) => pos.reduce((n, p) => Math.min(n, p[a]), Infinity)),
     max: [0, 1, 2].map((a) => pos.reduce((n, p) => Math.max(n, p[a]), -Infinity)),
   });
-  return ops.length;
+  return pos.length;
 }

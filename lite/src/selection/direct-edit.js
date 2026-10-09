@@ -1,4 +1,4 @@
-import { memberCoordinates } from './selection-preview.js';
+import { confirmedSelection } from './transform-result.js';
 import { PreviewHistory } from '../runtime/preview-history.js';
 import { dimensionInput } from '../ui/dimension-expression.js';
 import {
@@ -513,61 +513,46 @@ export function directEdit({
       notice('还没有改变位置，可以拖动箭头或输入位移');
       return;
     }
+    let committed = false;
     applying = true;
     control.enabled = false;
     $('direct-apply').disabled = true;
     try {
-      refresh(
-        await call(
-          'studio',
-          snapshot.mode === 'paste'
-            ? {
-                expectedRevision: snapshot.revision,
-                workspaceId: snapshot.workspaceId,
-                command: 'paste',
-                prefab: snapshot.prefab,
-                at: v.at,
-                turn: v.turn,
-                overlap: $('direct-overlap').value,
-                policy: policy(),
-              }
-            : {
-                expectedRevision: snapshot.revision,
-                workspaceId: snapshot.workspaceId,
-                command: 'transform',
-                min: snapshot.min,
-                max: snapshot.max,
-                at: v.at,
-                members: snapshot.members,
-                regions: snapshot.regions,
-                move: snapshot.mode !== 'copy',
-                turn: v.turn,
-                policy: policy(),
-              },
-        ),
+      const receipt = await call(
+        'studio',
+        snapshot.mode === 'paste'
+          ? {
+              expectedRevision: snapshot.revision,
+              workspaceId: snapshot.workspaceId,
+              command: 'paste',
+              prefab: snapshot.prefab,
+              at: v.at,
+              turn: v.turn,
+              overlap: $('direct-overlap').value,
+              policy: policy(),
+            }
+          : {
+              expectedRevision: snapshot.revision,
+              workspaceId: snapshot.workspaceId,
+              command: 'transform',
+              min: snapshot.min,
+              max: snapshot.max,
+              at: v.at,
+              members: snapshot.members,
+              regions: snapshot.regions,
+              move: snapshot.mode !== 'copy',
+              turn: v.turn,
+              policy: policy(),
+            },
       );
-      await render();
+      committed = true;
+      refresh(receipt);
       markDirty();
+      const selection = confirmedSelection(snapshot, v, receipt);
       applying = false;
       cancel();
-      const members = Array.from(
-        memberCoordinates(
-          snapshot.relativeMembers || snapshot.prefab?.blocks.map((b) => b.pos) || [],
-        ),
-        (pos) => {
-          let [x, y, z] = pos,
-            [w, , l] = snapshot.size;
-          for (let t = 0; t < v.turn; t++) {
-            [x, z] = [l - 1 - z, x];
-            [w, l] = [l, w];
-          }
-          return [x, y, z].map((n, a) => n + v.at[a]);
-        },
-      );
-      studio.selectRange(
-        { min: v.at, max: v.at.map((n, a) => n + v.extent[a] - 1), members },
-        'replace',
-      );
+      studio.selectRange(selection, 'replace');
+      await render();
       notice(
         snapshot.mode === 'paste'
           ? '已粘贴，可一次撤销'
@@ -578,7 +563,7 @@ export function directEdit({
               : '已移动，可一次撤销',
       );
     } catch (e) {
-      notice(e.message, true);
+      notice(committed ? '修改已提交，场景显示未刷新：' + e.message : e.message, true);
     } finally {
       applying = false;
       control.enabled = true;
