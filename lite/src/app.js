@@ -1,3 +1,4 @@
+import { DraftController } from './storage/draft-controller.js';
 import { newProjectUI } from './ui/new-project-ui.js';
 import { viewNavigationUI } from './view/view-navigation-ui.js';
 import { captureSaveForm, restoreSaveForm } from './storage/save-form.js';
@@ -312,8 +313,6 @@ let storageOK = false,
   active = null,
   hasDocument = false,
   selected = null,
-  dirty = false,
-  autosaveTimer = null,
   referenceInfo = null;
 const textures = new Map(),
   scene = new THREE.Scene(),
@@ -1259,18 +1258,29 @@ async function renderNow(viewportOnly = false) {
     }
   }
 }
-let editEpoch = 0;
+const drafts = new DraftController({
+  library,
+  call,
+  baselineRequest,
+  captureForm: () => captureSaveForm($),
+  context: () => ({
+    summary,
+    active,
+    available: storageOK,
+    blocked: !!stroke || busy,
+    remote: workerSession.active.worker instanceof RemoteEngineWorker,
+  }),
+  status: (message) => {
+    $('storage-status').textContent = message;
+  },
+  unavailable: () => {
+    storageOK = false;
+  },
+});
 function markDirty() {
   hasDocument = true;
-  editEpoch++;
-  dirty = true;
-  $('storage-status').textContent = '编辑已更新 · 等待空闲保存草稿';
-  clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => autosave(), 1800);
+  drafts.markDirty();
 }
-let savingDraft = false,
-  draftPromise = null,
-  savedDraftAssetKey = null;
 for (const id of ['save-title', 'save-tags', 'save-note'])
   $(id).addEventListener('input', () => {
     if (summary && storageOK) markDirty();
@@ -1278,114 +1288,9 @@ for (const id of ['save-title', 'save-tags', 'save-note'])
 $('save-kind').addEventListener('change', () => {
   if (summary && storageOK) markDirty();
 });
-async function autosave() {
-  if (!storageOK || summary?.preview) return;
-  if (stroke || savingDraft || busy) {
-    clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(() => autosave(), 1000);
-    return;
-  }
-  await persistDraft();
-}
-function draftRetry(message) {
-  const error = Error(message);
-  error.retryDraft = true;
-  return error;
-}
-async function saveCheckpointDraft(projectId, workspaceId, title, saveForm) {
-  const result = await baselineRequest({ method: 'scene.chunkSnapshot', params: { workspaceId } });
-  if (!result.ok) throw draftRetry(result.error.message);
-  const head = result.value;
-  let attachment;
-  try {
-    attachment = await call('draftAttachments', {
-      expectedRevision: head.revision,
-      workspaceId: head.workspaceId,
-      cachedAssetKey: savedDraftAssetKey,
-      saveForm,
-    });
-  } catch (e) {
-    throw draftRetry(e.message);
-  }
-  if ((active?.id || null) !== projectId || summary?.workspaceId !== head.workspaceId)
-    throw draftRetry('工程已切换，等待当前工程草稿同步');
-  let data = {
-    workspaceId: head.workspaceId,
-    revision: head.revision,
-    digest: head.digest,
-    ...attachment,
-    title,
-  };
-  try {
-    await library.draftCheckpoint(data, projectId);
-  } catch (e) {
-    if (e.message.includes('资源附件不存在') && !attachment.assetBytes) {
-      try {
-        attachment = await call('draftAttachments', {
-          expectedRevision: head.revision,
-          workspaceId: head.workspaceId,
-          saveForm,
-        });
-        data = { ...data, ...attachment };
-        await library.draftCheckpoint(data, projectId);
-      } catch (retry) {
-        throw draftRetry(retry.message);
-      }
-    } else if (e.message.includes('草稿检查点已变化')) throw draftRetry(e.message);
-    else throw e;
-  }
-  savedDraftAssetKey = attachment.assetKey;
-}
-async function persistDraft() {
-  if (draftPromise) return draftPromise;
-  const epoch = editEpoch,
-    projectId = active?.id || null,
-    workspaceId = summary?.workspaceId,
-    saveForm = captureSaveForm($),
-    title = saveForm.title || summary.name;
-  savingDraft = true;
-  draftPromise = (async () => {
-    try {
-      await library.open();
-      if ((library.store?.info || library.desktop)?.capabilities?.includes('checkpoint-draft/1'))
-        await saveCheckpointDraft(projectId, workspaceId, title, saveForm);
-      else {
-        const data = await call('draft', { title, saveForm });
-        await library.draft(data, projectId);
-      }
-      if (workerSession.active.worker instanceof RemoteEngineWorker)
-        await library.preference('save-form:' + workspaceId, saveForm);
-      if (epoch === editEpoch) {
-        dirty = false;
-        $('storage-status').textContent = active
-          ? `${library.desktop ? 'SQLite' : '浏览器本地'}草稿已保存 · 正式版本 v${active.head}`
-          : library.desktop
-            ? 'SQLite 草稿已保存；点击保存加入工程库'
-            : '浏览器本地草稿已保存；点击保存加入工程库';
-      } else {
-        clearTimeout(autosaveTimer);
-        autosaveTimer = setTimeout(() => autosave(), 1000);
-      }
-    } catch (e) {
-      if (e.retryDraft) {
-        dirty = true;
-        $('storage-status').textContent = '草稿等待重新同步：' + e.message;
-        clearTimeout(autosaveTimer);
-        autosaveTimer = setTimeout(() => autosave(), 1000);
-      } else {
-        storageOK = false;
-        $('storage-status').textContent = '本地存储不可用，请下载完整工程：' + e.message;
-      }
-    } finally {
-      savingDraft = false;
-      draftPromise = null;
-    }
-  })();
-  return draftPromise;
-}
 
 async function checkpoint() {
-  if (!hasDocument || (!dirty && active) || summary?.preview) return;
+  if (!hasDocument || (!drafts.dirty && active) || summary?.preview) return;
   if (!storageOK) throw Error('当前设计尚未保存，请先下载完整工程，再切换场景');
   if (!active) {
     const bytes = await projectBytes($('save-title').value || summary.name);
@@ -1397,8 +1302,9 @@ async function checkpoint() {
       size: summary.size,
     });
   }
-  await persistDraft();
-  if (!storageOK || dirty) throw Error('当前设计草稿尚未保存，请重试或下载完整工程后再切换场景');
+  await drafts.persist();
+  if (!storageOK || drafts.dirty)
+    throw Error('当前设计草稿尚未保存，请重试或下载完整工程后再切换场景');
 }
 const sampleButton = document.createElement('button');
 sampleButton.id = 'provided-demo';
@@ -1871,8 +1777,7 @@ async function finishStroke(s) {
           [...s.warnings].join('；') +
           ' 有效改动可一次撤销。',
       );
-    clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(() => autosave(), 1200);
+    drafts.schedule(1200);
   }
 }
 function releaseStroke(e) {
@@ -2233,7 +2138,7 @@ async function save(copy = false) {
   if (summary?.preview) throw Error('请先采用或取消预览');
   if (!storageOK) throw Error('本地数据库不可用，可下载完整工程文件');
   const snapshot = structuredClone(summary),
-    epoch = editEpoch,
+    epoch = drafts.epoch,
     projectId = active?.id || null,
     info = {
       id: copy ? null : active?.id,
@@ -2258,11 +2163,11 @@ async function save(copy = false) {
   await rememberEngine();
   refresh(await call('summary'));
   if ($('save-note').value === info.note) $('save-note').value = '';
-  await persistDraft();
+  await drafts.persist();
   const pending = cad?.isTransformActive() ? '；当前预览尚未确认，未写入工程' : '',
     changed =
-      editEpoch !== epoch
-        ? dirty || !storageOK
+      drafts.epoch !== epoch
+        ? drafts.dirty || !storageOK
           ? '；保存期间还有新的改动，尚未保存'
           : '；保存期间的新改动已保留为草稿，尚未成为正式版本'
         : '';
@@ -2686,13 +2591,13 @@ window.addEventListener('keyup', (e) => {
   }
 });
 window.addEventListener('beforeunload', (e) => {
-  if (dirty) {
+  if (drafts.dirty) {
     e.preventDefault();
     e.returnValue = '';
   }
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && dirty) autosave();
+  if (document.hidden && drafts.dirty) drafts.autosave();
 });
 const bridgePanel = document.createElement('details');
 bridgePanel.className = 'card';
@@ -2765,8 +2670,8 @@ cad = cadShell({
   call,
   library,
   prepareIntentPersistence: async () => {
-    await persistDraft();
-    if (!storageOK || dirty) throw Error('工程草稿尚未保存，暂存只保留在当前会话');
+    await drafts.persist();
+    if (!storageOK || drafts.dirty) throw Error('工程草稿尚未保存，暂存只保留在当前会话');
     return await call('toolContext');
   },
   notice,

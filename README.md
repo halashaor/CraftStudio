@@ -297,6 +297,8 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 
 ## Development
 
+Draft state and autosave scheduling belong to `lite/src/storage/draft-controller.js`; checkpoint metadata and cached asset resend belong to `lite/src/storage/checkpoint-draft.js`. The app composes these services through callbacks. Concurrent save requests share the pending draft, later edits retain their unsaved state, and successful manual persistence cancels redundant scheduled writes. Storage errors are handled at the persistence boundary.
+
 The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`.
 
 Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
