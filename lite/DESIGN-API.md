@@ -366,6 +366,18 @@ Keep the same MCP jobId/request ID for pending or uncertain requests. `GAME_WRIT
 游戏令牌只留在页面连接控件与本地通信中，不进入状态回执。AI 与人共用当前游戏连接、准备内容和任务编号；不会走旧兼容 CURRENT 工程。此接口接通工作流，不代表已完成真实游戏施工验收，也不绕过现有实体/原生蓝图限制。
 
 
+### Named selections / 命名选择
+
+`selectionSets.list` returns lightweight record summaries. `selectionSets.resolve` takes `id` and returns either a fixed `selection` mask or current visible `objectIds`, with `hiddenObjectIds`, `missingObjectIds` and `lockedObjectIds`. Both reads accept the normal workspace/revision guard. Object references follow existing IDs through transforms; copies with new IDs are not automatically included. When every referenced object is unavailable, UI restore retains the current selection and reports the unavailable members.
+
+`selectionSets.put` takes `selectionSet: {id?,name,objectIds}` or `{id?,name,selection}`. Omit `id` to create a record, supply it to overwrite, or supply only an existing `id` and `name` to rename. Fixed masks use local coordinates by default; `space:"world"` requires a confirmed origin. `selectionSets.remove` takes `id` and removes metadata only. Writes share transaction staging, version guards, receipts and undo. Records persist in editable project files, not Minecraft NBT. These methods do not copy geometry or make hidden geometry visible.
+
+```json
+{"operation":"request","request":{"method":"selectionSets.put","params":{"workspaceId":"WORKSPACE_ID","expectedRevision":1,"selectionSet":{"name":"All windows","objectIds":["window-a","window-b"]}}}}
+```
+
+命名对象选择保存身份引用，自由方块选择保存固定坐标；恢复不修改场景修订。移除记录不删除方块。
+
 ### Reusable prefab JSON / 可复用构件 JSON
 
 `craftstudio-prefab/1` uses integer XYZ size and a nonempty blocks array. Each block has a local pos and either an explicit state `{Name,Properties?}` or a palette index with a corresponding root palette. Import/placement normalizes indexed states to explicit objects. Arbitrary valid Java namespaced IDs are supported; the material catalogue is not a whitelist. Properties values use Minecraft's string representation. Typed block-entity NBT and unknown metadata are retained; this change does not execute Mod code or add missing renderer support.

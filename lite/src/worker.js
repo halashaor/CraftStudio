@@ -396,6 +396,8 @@ async function run(action, data) {
         'history.redo',
         'objects.put',
         'objects.rename',
+        'selectionSets.put',
+        'selectionSets.remove',
         'collections.put',
         'collections.remove',
         'palettes.put',

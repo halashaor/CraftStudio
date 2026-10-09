@@ -1,3 +1,4 @@
+import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
 import { viewportContextMenu } from './viewport-context-menu.js';
 import { objectNameUI } from '../selection/object-name-ui.js';
 import { componentContextUI } from '../components/component-context-ui.js';
@@ -751,6 +752,19 @@ export function cadShell({
     selectObjects,
     objects,
   });
+  const selectionSets = new SelectionSetsUI({
+    $,
+    call,
+    refresh,
+    markDirty,
+    task,
+    getSummary,
+    getObjectIds: () => (selectionActive && objectOnly ? [...selectedObjects] : []),
+    getSelection: () => (selectionActive ? studio.getSelection() : null),
+    selectObjects,
+    selectRegion: (selection) => studio.selectRange(selection, 'replace'),
+    notice,
+  });
   $('cad-object-search').oninput = collectionBrowser.filter;
   $('cad-history').onclick = () => {
     const s = getSummary();
@@ -1317,6 +1331,17 @@ export function cadShell({
     busyReason,
   );
   add(
+    'selection-sets',
+    '常用命名选择',
+    '编辑',
+    () => {
+      $('selection-sets-panel').open = true;
+      $('selection-sets-panel').scrollIntoView({ block: 'nearest' });
+    },
+    'named selection sets 常用选择 保存选择 恢复选择',
+    () => '',
+  );
+  add(
     'paste',
     '粘贴预览',
     '编辑',
@@ -1831,6 +1856,7 @@ export function cadShell({
       collectionBrowser.update(s, links);
       componentContext.update(s);
       objectNames.update(s);
+      selectionSets.update(s);
     },
     materialName: assets.labelName,
     selection: () => syncVectors(),

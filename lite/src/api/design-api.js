@@ -1,3 +1,8 @@
+import {
+  listSelectionSets,
+  resolveSelectionSet,
+  selectionSetMutation,
+} from '../selection/selection-sets.js';
 import { renameObjects } from '../selection/object-naming.js';
 import { readPrefabs, mutatePrefab } from '../components/prefab-library.js';
 import { paletteMutation } from '../materials/material-palettes.js';
@@ -257,6 +262,8 @@ export class DesignAPI {
           'terrain.readColumns',
           'materials.collect',
           'objects.list',
+          'selectionSets.list',
+          'selectionSets.resolve',
           'prefabs.list',
           'prefabs.read',
           'palettes.list',
@@ -298,6 +305,10 @@ export class DesignAPI {
             'views.remove',
             'generation.links',
             'objects.list',
+            'selectionSets.list',
+            'selectionSets.resolve',
+            'selectionSets.put',
+            'selectionSets.remove',
             'prefabs.list',
             'prefabs.read',
             'prefabs.put',
@@ -440,6 +451,8 @@ export class DesignAPI {
       else if (method === 'collections.list') value = listedCollections(site);
       else if (['prefabs.list', 'prefabs.read'].includes(method))
         value = readPrefabs(site, method, p);
+      else if (method === 'selectionSets.list') value = listSelectionSets(site);
+      else if (method === 'selectionSets.resolve') value = resolveSelectionSet(site, p.id);
       else if (method === 'objects.list')
         value = site.design.objects.map((o) => ({
           ...o,
@@ -488,6 +501,8 @@ export class DesignAPI {
           'edit.brush',
           'objects.put',
           'objects.rename',
+          'selectionSets.put',
+          'selectionSets.remove',
           'collections.put',
           'collections.remove',
           'palettes.put',
@@ -559,6 +574,14 @@ export class DesignAPI {
           }
           value = mutatePrefab(target, method, q, policy);
         }
+        if (['selectionSets.put', 'selectionSets.remove'].includes(method)) {
+          const q = structuredClone(p);
+          if (q.selectionSet?.selection && q.space === 'world') {
+            if (!target.originConfirmed) fail('ORIGIN_UNKNOWN', '请确认世界原点');
+            localizeSelection(q.selectionSet.selection, target.origin);
+          }
+          value = selectionSetMutation(target, method, q);
+        }
         if (method === 'objects.rename') value = renameObjects(target, p.names);
         if (method === 'objects.put') {
           const object = structuredClone(p.object);
@@ -599,7 +622,8 @@ export class DesignAPI {
             method.startsWith('views.') ||
             method.startsWith('collections.') ||
             method.startsWith('palettes.') ||
-            method.startsWith('prefabs.')
+            method.startsWith('prefabs.') ||
+            method.startsWith('selectionSets.')
               ? value
               : {}),
             staged: true,
@@ -615,7 +639,8 @@ export class DesignAPI {
             method.startsWith('views.') ||
             method.startsWith('collections.') ||
             method.startsWith('palettes.') ||
-            method.startsWith('prefabs.')
+            method.startsWith('prefabs.') ||
+            method.startsWith('selectionSets.')
               ? value
               : {}),
           };
