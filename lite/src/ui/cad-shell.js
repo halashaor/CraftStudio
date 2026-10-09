@@ -1,3 +1,4 @@
+import { selectionSettingsUI } from './selection-settings-ui.js';
 import { screenObjectMatches } from '../selection/screen-box.js';
 import { ObjectTreeUI } from './object-tree-ui.js';
 import { ObjectSelectionBinding } from '../selection/object-selection-binding.js';
@@ -73,6 +74,7 @@ export function cadShell({
     labels,
     brushOptions,
   } = cadLayout({ $, chooseTool, library, notice, requestMaterial });
+  selectionSettingsUI($);
   const materialPicker = new MaterialPicker({ $, openShelf: () => dock('assets') });
   let activeDock = 'objects';
   let selectionActive = false;
@@ -736,7 +738,7 @@ export function cadShell({
         pointer.operation
       ] +
       ' · ' +
-      (crossing ? '相交选入 ←' : '完整框入 →') +
+      (crossing ? '框到就选' : '完全框入') +
       ' · Esc 取消';
     Object.assign(marquee.style, {
       left: Math.min(pointer.x, e.clientX) + 'px',

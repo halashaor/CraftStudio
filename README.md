@@ -353,6 +353,8 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 
 Curves can pick their actual clicked surface positions when no workplane lock is active. Nodes have a screen-space hit tolerance and can be dragged directly in the camera plane; X/Y/Z and workplane constraints still apply. **Place blocks along curve** opens an explicit block preview with the current material/width and boundary fitting. Surface-picked placement uses the curve as the lower surface. Existing auxiliary guides can create their first linked block result without duplicating the guide; source edits remain linked and confirmation is one undo step. **Save auxiliary curve** is labeled separately. Existing-scene protection still rejects geometric collisions.
 
+Common selection now has two visible buttons: Select blocks and Select building/component. Screen-depth, full-containment/CAD rules and set-combination controls are under More box settings, collapsed by default. Nondefault rules remain named in that summary; the default remains visible cells, touching selection and replacement. This is interface simplification, not evidence of first-time user usability.
+
 ## Development
 
 The browser entry point composes focused feature modules. File opening lives in `storage/project-import.js`, page/API synchronization in `api/page-requests.js`, and UI task state in `ui/task-runner.js`. Shared engine modules own scene edits and validation; the page adapters own presentation and persistence notifications.

@@ -2,41 +2,48 @@
 <div id="cad-selection-info" class="inspector-section">
   <h3>当前选择</h3>
   <p id="cad-selection-label">点击或拖框选择；Shift 增加，Ctrl 减去。</p>
-  <label
-    >选择内容<select id="cad-selection-target">
-      <option value="blocks">方块</option>
-      <option value="objects">对象优先</option>
-    </select></label
-  >
-  <p class="small">对象优先按实际成员选中整对象；重叠处 Alt+点击切换，没有对象时仍选方块。</p>
-  <label
-    >框选命中<select id="cad-box-hit">
-      <option value="crossing">碰到就选中</option>
-      <option value="window">完全框入才选</option>
-      <option value="direction">按 CAD 拖动方向</option>
-    </select></label
-  >
-  <label
-    >方块框选深度<select id="cad-box-depth">
-      <option value="visible">只选可见方块</option>
-      <option value="through">穿透选择前后方块</option>
-    </select></label
-  >
-  <label
-    >选区组合<select id="cad-selection-mode">
-      <option value="replace">重新选择</option>
-      <option value="add">增加范围</option>
-      <option value="subtract">减去范围</option>
-      <option value="intersect">保留交集</option>
-    </select></label
-  >
-  <p class="small" id="cad-selection-combine-hint">
-    框选按屏幕矩形选择当前内容；Shift 增加，Ctrl
-    减去。切到对象可选整栋建筑。黄色外框只是范围，孔洞不会自动选中。
-  </p>
+  <div class="row" role="group" aria-label="选择方块或整栋构件">
+    <button data-selection-target="blocks" aria-pressed="true" class="primary">选方块</button>
+    <button data-selection-target="objects" aria-pressed="false" title="选择已登记的整栋建筑或构件">
+      选整栋 / 构件
+    </button>
+  </div>
+  <select id="cad-selection-target" hidden aria-hidden="true">
+    <option value="blocks">方块</option>
+    <option value="objects">对象</option>
+  </select>
+  <p class="small">点一下选择，拖框选多个；Shift 加选，Ctrl 减选。</p>
+  <details id="cad-selection-advanced">
+    <summary id="cad-selection-advanced-summary">更多框选设置</summary>
+    <label
+      >框选命中<select id="cad-box-hit">
+        <option value="crossing">碰到就选中</option>
+        <option value="window">完全框入才选</option>
+        <option value="direction">按 CAD 拖动方向</option>
+      </select></label
+    >
+    <label
+      >方块框选深度<select id="cad-box-depth">
+        <option value="visible">只选可见方块</option>
+        <option value="through">穿透选择前后方块</option>
+      </select></label
+    >
+    <label
+      >选区组合<select id="cad-selection-mode">
+        <option value="replace">重新选择</option>
+        <option value="add">增加范围</option>
+        <option value="subtract">减去范围</option>
+        <option value="intersect">保留交集</option>
+      </select></label
+    >
+    <p class="small" id="cad-selection-combine-hint">
+      框选按屏幕矩形选择当前内容；Shift 增加，Ctrl
+      减去。切到对象可选整栋建筑。黄色外框只是范围，孔洞不会自动选中。
+    </p>
+  </details>
   <div class="row">
     <button id="cad-selection-focus" title="保留当前朝向和透视 / 正交模式，聚焦所选范围">
-      聚焦选择</button
+      查看选中</button
     ><button id="cad-selection-modify">变换</button
     ><button id="cad-selection-clear">取消选择</button>
   </div>
