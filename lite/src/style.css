@@ -3029,3 +3029,26 @@ input.dimension-scrubbing {
     border-top: 1px solid #536273;
   }
 }
+.collection-tree-item > div {
+  margin-left: 12px;
+  border-left: 1px solid var(--border, #46515d);
+  padding-left: 6px;
+}
+.collection-tree-item > summary {
+  display: list-item;
+  padding: 2px 0;
+}
+.collection-tree-item > summary > button {
+  max-width: calc(100% - 18px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.collection-tree-item button[aria-current='true'] {
+  background: var(--accent, #476d91);
+}
+#cad-collection-tree {
+  max-height: 140px;
+  overflow: auto;
+}

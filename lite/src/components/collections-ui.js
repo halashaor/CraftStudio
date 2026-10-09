@@ -1,3 +1,4 @@
+import { CollectionTreeUI } from './collection-tree-ui.js';
 import markup from './views/collections-panel.html';
 import { objectHidden } from './collections.js';
 import { SceneBrowser, objectKindLabel } from '../ui/scene-browser.js';
@@ -23,6 +24,13 @@ export function collectionsUI({
     '<small id="cad-browser-count" aria-live="polite"></small><button id="cad-browser-clear" hidden>显示全部</button>';
   $('cad-object-search').after(status);
   let browser = new SceneBrowser();
+  const tree = new CollectionTreeUI({
+    host: $('cad-collection-tree'),
+    onSelect: (id) => {
+      $('cad-collection-filter').value = 'group:' + id;
+      $('cad-collection-filter').onchange();
+    },
+  });
   function clear() {
     $('cad-object-search').value = '';
     $('cad-collection-filter').value = '';
@@ -62,8 +70,11 @@ export function collectionsUI({
           badge.className = 'collection-badge';
           row.append(badge);
         }
-        badge.textContent = '集合 · ' + collection.name + (collection.locked ? ' · 锁定' : '');
-        badge.title = collection.hidden ? '集合已隐藏' : '';
+        badge.textContent =
+          '集合 · ' +
+          browser.hierarchy.path(collection.id) +
+          (browser.hierarchy.flag(collection.id, 'locked') ? ' · 锁定' : '');
+        badge.title = browser.hierarchy.flag(collection.id, 'hidden') ? '集合或上级已隐藏' : '';
       } else badge?.remove();
       const relation = relations.get(object?.id),
         attention = relation?.issues.length > 0;
@@ -128,7 +139,7 @@ export function collectionsUI({
   $('cad-collection-create').onclick = () =>
     task(async () => {
       const result = await mutate('collections.put', {
-        collection: { name: $('cad-collection-name').value },
+        collection: { name: $('cad-collection-name').value, parentId: current()?.id || null },
         objectIds: getObjectIds(),
       });
       $('cad-collection-filter').value = 'group:' + result.id;
@@ -164,7 +175,9 @@ export function collectionsUI({
       selectObjects(
         summary()
           .design.objects.filter(
-            (o) => o.collectionId === c.id && !objectHidden(summary().design, o),
+            (o) =>
+              browser.hierarchy.contains(c.id, o.collectionId) &&
+              !objectHidden(summary().design, o),
           )
           .map((o) => o.id),
       );
@@ -181,6 +194,14 @@ export function collectionsUI({
       if (!collection) throw Error('先选择集合');
       await mutate('collections.put', {
         collection: { ...collection, locked: !collection.locked },
+      });
+    });
+  $('cad-collection-reparent').onclick = () =>
+    task(async () => {
+      const c = current();
+      if (!c) throw Error('先选择集合');
+      await mutate('collections.put', {
+        collection: { ...c, parentId: $('cad-collection-parent').value || null },
       });
     });
   $('cad-collection-remove').onclick = () =>
@@ -219,16 +240,21 @@ export function collectionsUI({
     currentSummary = s;
     browser = new SceneBrowser(s.design, links);
     const previous = $('cad-collection-filter').value,
-      list = summary()?.design.collections || [],
+      hierarchy = browser.hierarchy,
       select = $('cad-collection-filter');
     select.replaceChildren(
       ...[
         ['', '全部对象与草图'],
         ['none', '未归类对象'],
-        ...list.map((c) => [
-          'group:' + c.id,
-          c.name + ' · ' + summary().design.objects.filter((o) => o.collectionId === c.id).length,
-        ]),
+        ...hierarchy
+          .rows()
+          .map(({ collection: c }) => [
+            'group:' + c.id,
+            hierarchy.path(c.id) +
+              ' · ' +
+              summary().design.objects.filter((o) => hierarchy.contains(c.id, o.collectionId))
+                .length,
+          ]),
       ].map(([value, name]) => {
         const o = document.createElement('option');
         o.value = value;
@@ -251,12 +277,40 @@ export function collectionsUI({
     );
     $('cad-object-kind').value = kinds.includes(previousKind) ? previousKind : '';
     const c = current();
+    $('cad-collection-parent').replaceChildren(
+      ...[
+        ['', '场景根级'],
+        ...hierarchy
+          .rows()
+          .filter(({ collection }) => !c || !hierarchy.contains(c.id, collection.id))
+          .map(({ collection }) => [collection.id, hierarchy.path(collection.id)]),
+      ].map(([value, name]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = name;
+        return option;
+      }),
+    );
+    $('cad-collection-parent').value = c?.parentId || '';
+    $('cad-collection-parent').disabled = !c;
+    $('cad-collection-reparent').disabled = !c;
+    $('cad-collection-create').textContent = c ? '新建子集合' : '新建集合';
+    tree.update(s, c?.id);
+    $('cad-collection-inherited').textContent = c
+      ? [
+          !c.hidden && hierarchy.flag(c.id, 'hidden') ? '上级集合已隐藏；请先显示上级集合。' : '',
+          !c.locked && hierarchy.flag(c.id, 'locked') ? '上级集合已锁定；请先解锁上级集合。' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : '';
     for (const id of ['rename', 'assign', 'unassign', 'select', 'hide', 'lock', 'remove'])
       $('cad-collection-' + id).disabled = !c;
     $('cad-collection-select').disabled =
       !c ||
       !s.design.objects.some(
-        (object) => object.collectionId === c.id && !objectHidden(s.design, object),
+        (object) =>
+          browser.hierarchy.contains(c.id, object.collectionId) && !objectHidden(s.design, object),
       );
     $('cad-collection-hide').textContent = c?.hidden ? '显示集合' : '隐藏集合';
     $('cad-collection-lock').textContent = c?.locked ? '解锁集合' : '锁定集合';

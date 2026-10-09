@@ -1,6 +1,7 @@
+import { CollectionHierarchy, collectionFlag } from './collection-hierarchy.js';
 import { coordKey } from '../core/coordinates.js';
 export const objectHidden = (design, object) =>
-  !!object.hidden || !!design.collections?.find((c) => c.id === object.collectionId)?.hidden;
+  !!object.hidden || collectionFlag(design, object.collectionId, 'hidden');
 export function hiddenObjectContains(design, object, position) {
   if (!objectHidden(design, object)) return false;
   if (object.cells?.length) {
@@ -17,9 +18,16 @@ export function hiddenObjectContains(design, object, position) {
   return position.every((n, a) => n >= object.min[a] && n <= object.max[a]);
 }
 export function listedCollections(site) {
-  return (site.design.collections || []).map((c) => ({
+  const hierarchy = new CollectionHierarchy(site.design.collections);
+  return hierarchy.collections.map((c) => ({
     ...c,
     objectIds: site.design.objects.filter((o) => o.collectionId === c.id).map((o) => o.id),
+    descendantObjectIds: site.design.objects
+      .filter((o) => hierarchy.contains(c.id, o.collectionId))
+      .map((o) => o.id),
+    effectiveHidden: hierarchy.flag(c.id, 'hidden'),
+    effectiveLocked: hierarchy.flag(c.id, 'locked'),
+    path: hierarchy.path(c.id),
   }));
 }
 export function collectionMutation(site, method, p) {
@@ -27,9 +35,18 @@ export function collectionMutation(site, method, p) {
   if (method === 'collections.remove') {
     const index = list.findIndex((c) => c.id === p.id);
     if (index < 0) throw Error('集合已不存在');
+    const parentId = list[index].parentId;
     list.splice(index, 1);
+    for (const collection of list)
+      if (collection.parentId === p.id) {
+        if (parentId) collection.parentId = parentId;
+        else delete collection.parentId;
+      }
     for (const object of site.design.objects)
-      if (object.collectionId === p.id) delete object.collectionId;
+      if (object.collectionId === p.id) {
+        if (parentId) object.collectionId = parentId;
+        else delete object.collectionId;
+      }
     return { id: p.id, removed: true };
   }
   const value = p.collection;
@@ -54,6 +71,10 @@ export function collectionMutation(site, method, p) {
     record = { ...old, id, name: value.name.trim(), hidden: value.hidden ?? old.hidden ?? false };
   if (value.locked !== undefined || old.locked !== undefined)
     record.locked = value.locked ?? old.locked;
+  const parentId = value.parentId === undefined ? old.parentId : value.parentId;
+  new CollectionHierarchy(list).validateParent(id, parentId);
+  if (parentId) record.parentId = parentId;
+  else delete record.parentId;
   if (index < 0) list.push(record);
   else list[index] = record;
   if (p.objectIds)

@@ -1,3 +1,4 @@
+import { CollectionHierarchy } from '../components/collection-hierarchy.js';
 import { generationLinks } from '../modeling/generation-links.js';
 import { objectHidden } from '../components/collections.js';
 import { objectLocked } from '../components/object-protection.js';
@@ -20,6 +21,7 @@ export class SceneBrowser {
   constructor(design = {}, links = generationLinks(design)) {
     this.design = design;
     this.objects = design.objects || [];
+    this.hierarchy = new CollectionHierarchy(design.collections);
     this.guides = new Map((design.guides || []).map((guide) => [guide.id, guide]));
     this.collections = new Map(
       (design.collections || []).map((collection) => [collection.id, collection]),
@@ -64,7 +66,7 @@ export class SceneBrowser {
         [
           object.name,
           objectKindLabel(object.kind || 'object'),
-          this.collections.get(object.collectionId)?.name,
+          this.hierarchy.path(object.collectionId),
           families.get(object.instanceOf),
           ...[...this.sources.get(object.id)].map((id) => this.guides.get(id)?.name),
         ]
@@ -90,7 +92,7 @@ export class SceneBrowser {
         collection === 'none'
           ? !object.collectionId
           : collection.startsWith('group:')
-            ? object.collectionId === collection.slice(6)
+            ? this.hierarchy.contains(collection.slice(6), object.collectionId)
             : true;
       const hidden = objectHidden(this.design, object),
         locked = objectLocked(this.design, object);

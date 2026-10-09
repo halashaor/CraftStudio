@@ -1,8 +1,8 @@
+import { CollectionHierarchy, collectionFlag } from './collection-hierarchy.js';
 import { coordKey } from '../core/coordinates.js';
 
 export const objectLocked = (design, object) =>
-  !!object.locked ||
-  !!design.collections?.find((collection) => collection.id === object.collectionId)?.locked;
+  !!object.locked || collectionFlag(design, object.collectionId, 'locked');
 
 const memberKey = (value) =>
   typeof value === 'number'
@@ -20,9 +20,10 @@ function memberIndex(cells) {
 // Resolve lock flags per operation; reuse only immutable membership indexes.
 export class ObjectProtection {
   constructor(design) {
+    const hierarchy = new CollectionHierarchy(design.collections);
     const lockedCollections = new Set(
-      (design.collections || [])
-        .filter((collection) => collection.locked)
+      hierarchy.collections
+        .filter((collection) => hierarchy.flag(collection.id, 'locked'))
         .map((collection) => collection.id),
     );
     this.entries = (design.objects || [])

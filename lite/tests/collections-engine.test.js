@@ -41,6 +41,10 @@ test('collection visibility, membership and undo survive durable and portable re
       hidden: true,
       locked: true,
       objectIds: ['part'],
+      descendantObjectIds: ['part'],
+      effectiveHidden: true,
+      effectiveLocked: true,
+      path: 'House',
     });
     const head = await c.call('api', { method: 'workspace.describe' });
     const blocked = await c.call('api', {
@@ -90,6 +94,83 @@ test('collection visibility, membership and undo survive durable and portable re
   } finally {
     await c.close();
     await portable.close();
+    store.close();
+  }
+});
+
+test('nested collection ancestor visibility and protection survive local engine checkpoints', async () => {
+  const store = new EngineStore(':memory:');
+  let controller = await EngineController.open({ store, key: 'nested-collection' });
+  const rpc = async (method, params = {}) => {
+    const head = await controller.call('api', { method: 'workspace.describe' });
+    return controller.call('api', {
+      method,
+      params: { workspaceId: head.workspaceId, expectedRevision: head.revision, ...params },
+    });
+  };
+  try {
+    for (const [method, params] of [
+      [
+        'edit.apply',
+        { operations: [{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:oak_planks' } }] },
+      ],
+      ['objects.put', { object: { id: 'door', name: 'Door', cells: [[1, 1, 1]] } }],
+      [
+        'collections.put',
+        { collection: { id: 'house', name: 'House', hidden: true, locked: true } },
+      ],
+      [
+        'collections.put',
+        { collection: { id: 'floor', name: 'Floor', parentId: 'house' }, objectIds: ['door'] },
+      ],
+    ]) {
+      const result = await rpc(method, params);
+      assert.ok(result.ok, result.error?.message);
+    }
+    await controller.close();
+    controller = await EngineController.open({ store, key: 'nested-collection' });
+    const floor = (await rpc('collections.list')).value.find((c) => c.id === 'floor');
+    assert.equal(floor.parentId, 'house');
+    assert.equal(floor.effectiveHidden, true);
+    assert.equal(floor.effectiveLocked, true);
+    assert.equal(floor.hidden, false);
+    const blocked = await rpc('edit.apply', {
+      operations: [{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:glass' } }],
+    });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.error.message, /锁定/);
+    const mesh = await controller.call('meshChunks', {
+      mode: 'after',
+      cut: 4095,
+      plants: true,
+      showGround: true,
+      showExisting: true,
+    });
+    assert.equal(
+      mesh.chunks.flatMap((c) => c.buckets).reduce((n, b) => n + b.positions.length, 0),
+      0,
+    );
+    assert.ok(
+      (await rpc('collections.put', { collection: { id: 'floor', name: 'Floor', parentId: null } }))
+        .ok,
+    );
+    assert.equal(
+      (await rpc('collections.list')).value.find((c) => c.id === 'floor').effectiveLocked,
+      false,
+    );
+    assert.ok((await rpc('history.undo')).ok);
+    await controller.close();
+    controller = await EngineController.open({ store, key: 'nested-collection' });
+    assert.equal(
+      (await rpc('collections.list')).value.find((c) => c.id === 'floor').parentId,
+      'house',
+    );
+    assert.equal(
+      (await rpc('scene.getBlocks', { positions: [[1, 1, 1]] })).value[0].state.Name,
+      'minecraft:oak_planks',
+    );
+  } finally {
+    await controller.close();
     store.close();
   }
 });
