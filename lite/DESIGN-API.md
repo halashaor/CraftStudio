@@ -324,3 +324,16 @@ Mutations require workspaceId and expectedRevision from a fresh list/describe. `
 Use `designer_call` with operation resources and the same options through MCP. list needs no write guard; add/configure do. The normal 64 MiB JSON-body limit applies. UI edits and connected automation share the same library, ordering, refresh and draft notification. Invalid candidates are parsed before replacing live resources; rejected applies restore the previous durable preference. A disconnected/uncertain operation must be observed using its existing job receipt before retrying. A transport failure cannot prove that the engine did not commit. Changes affect the reusable local library and current appearance, not just one project.
 
 页面与外部 AI 共用资源库；不会导出完整资源文件给列表调用。启用顺序从上到下，后者覆盖前者。变更会影响本机后续工程，工程便携文件仍携带使用到的模型和贴图。未执行 Mod 代码，也不宣称支持所有自定义渲染器。
+
+
+### Optional entities in selection exports / 选区导出的实体
+
+For `format: "nbt"` or `"delivery"` with `kind: "selection"`, set `includeEntities: true` to include recognizable vanilla Structure entity wrappers inside the selection's bounding box. Blocks still use exact members; entity inclusion uses local position and does not infer object ownership, so an independent entity inside the same bounds is included too. The default remains blocks-only. Full-scene NBT and complete projects already preserve all source entities. Additions/patch exports reject this entity option because original entities are not new block changes.
+
+Entity wrapper pos (double list) and blockPos (integer list) are rebased to the cropped origin. Internal typed entity NBT is copied without reinterpretation. Results/ZIP manifest report entities, entitySelection and entityWarnings; unsupported or unlocated source wrappers are omitted from the partial export with a report and remain in the complete project. The same notes appear in the package README. This is preservation/export support, not entity rendering/editing or validated game spawning. Existing game bridge restrictions on native entities remain.
+
+```js
+await CraftStudio.export({format: 'delivery', kind: 'selection', includeEntities: true});
+```
+
+交付面板勾选“包含选区外接范围内的场景实体”后，ZIP 与单独选区 NBT 都沿用此选项。实体按位置取外接范围，方块仍按精确成员取；两种规则分别说明，不默认为实体分配建筑归属。纯实体范围可通过明确的 API selection 坐标导出；没有实体位置的未知数据仍留在完整工程中。

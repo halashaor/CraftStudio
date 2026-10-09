@@ -117,6 +117,9 @@ export function deliveryArchive({ title, kind, blueprint, report, projectBytes }
         placement,
         size: blueprint.size,
         records: blueprint.blocks,
+        entities: blueprint.entities ?? null,
+        entitySelection: blueprint.entitySelection || (kind === 'full' ? 'all' : 'none'),
+        entityWarnings: blueprint.entityWarnings || [],
         changedCells: report.changedCells,
         materialsScope: kind === 'full' ? 'changed placements' : 'exported placements',
         includesEditableProject: !!projectBytes,
@@ -135,6 +138,10 @@ export function deliveryArchive({ title, kind, blueprint, report, projectBytes }
         ? '本包包含明确拆除空气；是否执行拆除取决于游戏工具的粘贴策略。'
         : '本包按所选范围导出；不要把未列出的孔洞当成拆除指令。',
       'changes.csv 只记录这个范围内的本次变更。',
+      '场景实体：' +
+        (blueprint.entities ?? (kind === 'full' ? '完整场景保留' : 0)) +
+        (blueprint.entitySelection === 'bounds' ? '；按选区外接范围选取，不推断对象归属。' : '。'),
+      ...(blueprint.entityWarnings || []),
       kind === 'full'
         ? 'changed-materials.csv 统计本次变更所需的放置材料，不是整个原场地的材料总量。'
         : 'materials.csv 统计此蓝图的放置材料，空气不计入材料。',

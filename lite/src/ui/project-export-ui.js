@@ -10,6 +10,7 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
   function syncScope() {
     const kind = $('delivery-kind').value;
     const missing = kind === 'selection' && $('download-selection').disabled;
+    $('delivery-entities').disabled = kind !== 'selection';
     $('download-delivery').disabled = missing;
     $('delivery-hint').textContent = missing ? '先在场景或对象列表选择要交付的建筑。' : hints[kind];
   }
@@ -24,9 +25,16 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
       const result = await exporter.delivery({
         kind: $('delivery-kind').value,
         includeProject: $('delivery-project').checked,
+        includeEntities: $('delivery-kind').value === 'selection' && $('delivery-entities').checked,
       });
       download(result.bytes, result.filename, 'application/zip');
-      notice('施工交付包已下载，蓝图、坐标说明与清单在同一个文件中');
+      notice(
+        '施工交付包已下载' +
+          (result.entities ? ' · 含 ' + result.entities + ' 个场景实体' : '') +
+          (result.entityWarnings?.length
+            ? ' · ' + result.entityWarnings.join('；')
+            : '，蓝图、坐标说明与清单在同一个文件中'),
+      );
     }, '正在打包已确认的设计…');
   $('download-project').onclick = () =>
     task(async () => {
@@ -49,7 +57,9 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
     $('download-' + kind).onclick = () =>
       task(async () => {
         const snapshot = exporter.capture(),
-          value = await exporter.blueprint(kind, undefined, snapshot.guard);
+          value = await exporter.blueprint(kind, undefined, snapshot.guard, {
+            includeEntities: kind === 'selection' && $('delivery-entities').checked,
+          });
         download(value.bytes || value, safeStem(snapshot.title) + '.' + kind + '.nbt');
         if (value.offsetLocal) {
           download(
@@ -58,6 +68,9 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
                 localOffset: value.offsetLocal,
                 worldOffset: value.offsetWorld,
                 containsAir: value.containsAir,
+                entities: value.entities,
+                entitySelection: value.entitySelection,
+                entityWarnings: value.entityWarnings,
               },
               null,
               2,

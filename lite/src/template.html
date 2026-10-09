@@ -255,6 +255,9 @@
                 type="checkbox"
               />附带可继续编辑的完整工程（含原始场地）</label
             >
+            <label class="check"
+              ><input id="delivery-entities" type="checkbox" />包含选区外接范围内的场景实体</label
+            >
             <button id="download-delivery" class="full primary">下载施工交付包 .zip</button>
             <p id="delivery-hint" class="small"></p>
             <details id="delivery-individual">
@@ -268,7 +271,8 @@
               ><button id="download-csv" class="full">逐格变更 CSV</button>
             </details>
             <p class="small">
-              仅当前选择只导出所选成员，孔洞不会混入其他对象；不包含场景实体。变更 NBT
+              仅当前选择的方块按精确成员导出；场景实体可另外选择包含，按外接范围取，不推断对象归属。变更
+              NBT
               含空气，但是否执行拆除取决于游戏工具的粘贴策略。施工请结合变更表；完整工程保留原始地形与原始实体数据。
             </p>
           </div>

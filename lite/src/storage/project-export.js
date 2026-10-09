@@ -37,12 +37,14 @@ export class ProjectExporter {
     const project = Site.unpack(pkg.site).project();
     return JSON.stringify(project);
   }
-  async blueprint(kind, selection, guard = {}) {
+  async blueprint(kind, selection, guard = {}, { includeEntities = false } = {}) {
+    if (includeEntities && !['selection', 'full'].includes(kind))
+      throw Error('局部实体仅支持选区范围；完整场景始终保留全部实体');
     if (kind === 'selection') {
       selection ||= this.selection();
       if (!selection) throw Error('请先选择要导出的建筑、方块或区域');
     }
-    if (kind !== 'full') return this.call('export', { kind, selection, ...guard });
+    if (kind !== 'full') return this.call('export', { kind, selection, includeEntities, ...guard });
     const { summary } = this.context(),
       origin = [...summary.origin],
       size = [...summary.size],
@@ -55,12 +57,20 @@ export class ProjectExporter {
       offsetLocal: [0, 0, 0],
       offsetWorld: known ? origin : null,
       size,
+      entities: summary.entities,
+      entitySelection: 'all',
     };
   }
-  async delivery({ kind = 'additions', title, selection, includeProject = false } = {}) {
+  async delivery({
+    kind = 'additions',
+    title,
+    selection,
+    includeProject = false,
+    includeEntities = false,
+  } = {}) {
     const snapshot = this.capture(title);
     if (kind === 'selection') selection = structuredClone(selection || this.selection());
-    const blueprint = await this.blueprint(kind, selection, snapshot.guard);
+    const blueprint = await this.blueprint(kind, selection, snapshot.guard, { includeEntities });
     const report = await this.call('deliveryReport', { kind, selection, ...snapshot.guard });
     const projectBytes = includeProject
       ? await this.projectBytes(snapshot.title, { ...snapshot.guard, preserveTitle: true })
@@ -73,7 +83,12 @@ export class ProjectExporter {
       projectBytes,
       ...snapshot.guard,
     });
-    return { bytes, filename: safeStem(snapshot.title) + '.' + kind + '.zip' };
+    return {
+      bytes,
+      filename: safeStem(snapshot.title) + '.' + kind + '.zip',
+      entities: blueprint.entities,
+      entityWarnings: blueprint.entityWarnings,
+    };
   }
   async changeTable() {
     const { summary } = this.context();
@@ -89,11 +104,13 @@ export class ProjectExporter {
     title,
     selection,
     includeProject = false,
+    includeEntities = false,
     preserveTitle = false,
   } = {}) {
     const snapshot = this.capture(title);
     if (format === 'delivery')
-      return (await this.delivery({ kind, title, selection, includeProject })).bytes;
+      return (await this.delivery({ kind, title, selection, includeProject, includeEntities }))
+        .bytes;
     if (format === 'craftlite') {
       const bytes = await this.projectBytes(snapshot.title, { ...snapshot.guard, preserveTitle });
       this.refresh(await this.call('summary'));
@@ -105,7 +122,7 @@ export class ProjectExporter {
       );
     if (format === 'schem') return this.call('sponge', snapshot.guard);
     if (format === 'nbt' && ['full', 'additions', 'patch', 'selection'].includes(kind)) {
-      const value = await this.blueprint(kind, selection, snapshot.guard);
+      const value = await this.blueprint(kind, selection, snapshot.guard, { includeEntities });
       return kind === 'full' ? value.bytes : value;
     }
     throw Error('不支持的导出格式或范围');

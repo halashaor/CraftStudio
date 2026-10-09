@@ -84,6 +84,8 @@ The interface uses a fixed tool column, central 3D viewport, right-side scene co
 
 ## Files and resources
 
+Selection NBT/ZIP exports can optionally include scene entities inside the selection bounding box. Blocks keep exact membership; entity positions and block anchors are rebased, and typed internal NBT is retained. The ZIP reports included entities and any unlocated wrappers omitted from the partial export. Full projects preserve the source entities. This does not add entity rendering/editing or confirm live game spawning.
+
 | Input / output | Current support |
 |---|---|
 | Vanilla / Create structure `.nbt` | Import and NBT export; preserve supported native data and placement masks |

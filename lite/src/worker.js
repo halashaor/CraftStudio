@@ -1454,6 +1454,8 @@ async function execute(action, data) {
     return action === 'deliveryReport' ? deliveryReport(site, data) : deliveryArchive(data);
   }
   if (action === 'export') {
+    if (data.includeEntities && !['selection', 'full'].includes(data.kind))
+      throw Error('局部实体仅支持选区范围');
     if (data.expectedRevision !== undefined) api.guard(data);
     if (preview) throw Error('请先采用预览');
     if (data.kind === 'full') return exportNBT(site.project());
@@ -1461,7 +1463,12 @@ async function execute(action, data) {
     if (data.kind === 'selection') {
       const { min, max, members, regions } = data.selection || {};
       const cells = selectionCellValues(site, min, max, { keys: members, regions });
-      blueprint = cropBlueprint(site, cells, { min, max });
+      blueprint = cropBlueprint(
+        site,
+        cells,
+        { min, max },
+        { includeEntities: data.includeEntities },
+      );
     } else blueprint = changeBlueprint(site, data.kind);
     const { project, ...placement } = blueprint;
     return {
