@@ -1,3 +1,4 @@
+import { objectLocked } from './object-protection.js';
 import { coordKey, coords } from '../core/site.js';
 import { stateKey } from '../minecraft/codec.js';
 import { rotateState } from '../modeling/studio.js';
@@ -157,7 +158,7 @@ export function componentUpdatePlan(
     revision = definition.revision + 1;
   let kept = 0;
   for (const object of siblings) {
-    if (object.locked) throw Error('关联组件中有锁定对象：' + object.name);
+    if (objectLocked(design, object)) throw Error('关联组件中有锁定对象：' + object.name);
     if (!object.instancePose || !object.componentRecords)
       throw Error('实例缺少放置记录：' + object.name);
     if (object.id === source.id) {

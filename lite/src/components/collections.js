@@ -1,4 +1,4 @@
-import { coordKey } from '../core/site.js';
+import { coordKey } from '../core/coordinates.js';
 export const objectHidden = (design, object) =>
   !!object.hidden || !!design.collections?.find((c) => c.id === object.collectionId)?.hidden;
 export function hiddenObjectContains(design, object, position) {
@@ -37,6 +37,8 @@ export function collectionMutation(site, method, p) {
     throw Error('请为集合填写 1–128 字名称');
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean')
     throw Error('集合显示状态无效');
+  if (value.locked !== undefined && typeof value.locked !== 'boolean')
+    throw Error('集合锁定状态无效');
   const id = value.id || crypto.randomUUID();
   if (typeof id !== 'string' || !id || id.length > 128) throw Error('集合编号无效');
   for (const ids of [p.objectIds, p.removeObjectIds])
@@ -50,6 +52,8 @@ export function collectionMutation(site, method, p) {
   const index = list.findIndex((c) => c.id === id),
     old = index < 0 ? {} : list[index],
     record = { ...old, id, name: value.name.trim(), hidden: value.hidden ?? old.hidden ?? false };
+  if (value.locked !== undefined || old.locked !== undefined)
+    record.locked = value.locked ?? old.locked;
   if (index < 0) list.push(record);
   else list[index] = record;
   if (p.objectIds)

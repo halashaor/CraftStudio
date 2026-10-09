@@ -1,3 +1,4 @@
+import { ObjectProtection, objectLocked } from './components/object-protection.js';
 import { changeBlueprint, cropBlueprint } from './minecraft/blueprint.js';
 import { WorkerRuntime } from './runtime/worker-runtime.js';
 import { readSaveForm } from './storage/save-form.js';
@@ -526,7 +527,8 @@ async function execute(action, data) {
       palette = [],
       ids = new Map(),
       counts = { place: 0, replace: 0, remove: 0, cut: 0, fill: 0 },
-      conflicts = [];
+      conflicts = [],
+      protection = new ObjectProtection(site.design);
     if (data.type === 'geometry' && data.config.guidesOnly && !data.config.editGuideId)
       plan.operations = [];
     for (const op of new Map(plan.operations.map((op) => [coordKey(...op.pos), op])).values()) {
@@ -540,12 +542,8 @@ async function execute(action, data) {
       )
         continue;
       try {
-        if (
-          site.design.objects.some(
-            (o) => o.locked && op.pos.every((n, a) => n >= o.min[a] && n <= o.max[a]),
-          )
-        )
-          throw Error('这个对象已锁定');
+        const locked = protection.at(op.pos);
+        if (locked) throw Error('对象或集合已锁定：' + locked.name);
         site.allowed(op.pos, data.policy || {});
       } catch (e) {
         if (conflicts.length < 20) conflicts.push({ pos: op.pos, message: e.message });
@@ -670,7 +668,7 @@ async function execute(action, data) {
   if (action === 'detachGeneration') {
     const object = site.design.objects.find((o) => o.id === data.id);
     if (!object) throw Error('对象不存在');
-    if (object.locked) throw Error('对象已锁定');
+    if (objectLocked(site.design, object)) throw Error('对象或集合已锁定');
     site.undo.push({
       overlay: site.overlay,
       size: [...site.size],
@@ -744,7 +742,8 @@ async function execute(action, data) {
   }
 
   if (action === 'pasteCheck') {
-    const result = { place: 0, replace: 0, skip: 0, locked: 0 };
+    const result = { place: 0, replace: 0, skip: 0, locked: 0 },
+      protection = new ObjectProtection(site.design);
     for (const op of insertOperations(data.prefab, data.at, { turn: data.turn })) {
       const exists = !!site.at(op.pos);
       if ((data.overlap === 'empty' && exists) || (data.overlap === 'replace' && !exists)) {
@@ -753,12 +752,7 @@ async function execute(action, data) {
       }
       exists ? result.replace++ : result.place++;
       try {
-        if (
-          site.design.objects.some(
-            (o) => o.locked && op.pos.every((n, a) => n >= o.min[a] && n <= o.max[a]),
-          )
-        )
-          throw Error('锁定');
+        if (protection.at(op.pos)) throw Error('锁定');
         site.allowed(op.pos, {
           ...data.policy,
           allowExisting: data.overlap === 'empty' ? data.policy?.allowExisting : true,

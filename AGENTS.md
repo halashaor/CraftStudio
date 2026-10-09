@@ -25,3 +25,5 @@ Preserve terrain-first design, unrestricted human/AI voxel editing, arbitrary 3D
 ## Code organization
 
 Keep front-end modules under their functional directories in lite/src. app.js and worker.js compose features; they should not absorb new domain implementations. Keep Python helpers in backend/, with server.py and mcp_server.py as entry points. Separate sizable static interface markup into adjacent views/ templates. Prefer small named functions and focused controllers over generic wrappers. Validate external inputs and preserve transaction/transport error boundaries; avoid duplicate checks and catch-and-ignore blocks. Run the pinned Prettier and Black checks before publication. Prioritize complete end-to-end design workflows before further detail polishing.
+
+Object membership arrays are immutable snapshots: replace cells arrays when membership changes. ObjectProtection reuses weakly keyed indexes for unchanged arrays and resolves object/collection lock flags afresh for every operation.

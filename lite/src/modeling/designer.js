@@ -1,3 +1,4 @@
+import { objectLocked } from '../components/object-protection.js';
 import { brushPlan } from '../selection/tool-mask.js';
 import { selectionCellValues } from './studio.js';
 import { stateKey } from '../minecraft/codec.js';
@@ -36,7 +37,8 @@ export function selectedObjects(site, c, { allowLocked = false } = {}) {
   if (c.objectIds?.length) {
     const items = c.objectIds.map((id) => site.design.objects.find((o) => o.id === id));
     if (items.some((o) => !o)) throw Error('选择对象已变化，请重新选择');
-    if (!allowLocked && items.some((o) => o.locked)) throw Error('选择包含锁定对象');
+    if (!allowLocked && items.some((o) => objectLocked(site.design, o)))
+      throw Error('选择包含锁定对象');
     return items;
   }
   if (!c.selection) throw Error('先选择对象或区域');

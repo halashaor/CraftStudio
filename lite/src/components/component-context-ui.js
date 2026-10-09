@@ -1,3 +1,4 @@
+import { objectLocked } from './object-protection.js';
 import { objectHidden } from './collections.js';
 export function componentContextUI({
   $,
@@ -34,13 +35,13 @@ export function componentContextUI({
       s.workspaceId,
       ids,
       definition?.name,
-      siblings.map((o) => [o.id, o.name, o.locked, objectHidden(s.design, o)]),
+      siblings.map((o) => [o.id, o.name, objectLocked(s.design, o), objectHidden(s.design, o)]),
     ]);
     if (key === signature) return;
     signature = key;
     $('component-context-name').textContent = definition?.name || chosen[0].name;
     const hidden = siblings.filter((o) => objectHidden(s.design, o)).length,
-      locked = siblings.filter((o) => o.locked).length;
+      locked = siblings.filter((o) => objectLocked(s.design, o)).length;
     $('component-context-count').textContent =
       siblings.length +
       ' 份 · 当前选择 ' +
@@ -49,7 +50,7 @@ export function componentContextUI({
       (hidden ? ' · 隐藏 ' + hidden : '') +
       (locked ? ' · 锁定 ' + locked : '');
     const single = chosen.length === 1;
-    $('component-context-unique').disabled = !single || !!chosen[0].locked;
+    $('component-context-unique').disabled = !single || objectLocked(s.design, chosen[0]);
     $('component-context-publish').disabled = !single || !!locked;
     $('component-context-select').disabled = hidden === siblings.length;
     $('component-context-source').textContent = !single
@@ -64,7 +65,9 @@ export function componentContextUI({
         button.dataset.sceneShortcuts = 'true';
         button.setAttribute('aria-label', '选择同类实例：' + o.name);
         button.textContent =
-          o.name + (objectHidden(s.design, o) ? ' · 隐藏' : '') + (o.locked ? ' · 锁定' : '');
+          o.name +
+          (objectHidden(s.design, o) ? ' · 隐藏' : '') +
+          (objectLocked(s.design, o) ? ' · 锁定' : '');
         button.disabled = objectHidden(s.design, o);
         button.setAttribute('aria-pressed', String(ids.includes(o.id)));
         button.onclick = () => selectObjects([o.id]);

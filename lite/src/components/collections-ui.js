@@ -1,3 +1,4 @@
+import markup from './views/collections-panel.html';
 import { generationLinks } from '../modeling/generation-links.js';
 export function collectionsUI({
   $,
@@ -13,8 +14,7 @@ export function collectionsUI({
 }) {
   const host = document.createElement('details');
   host.id = 'cad-collections';
-  host.innerHTML =
-    '<summary>集合与筛选</summary><label class="check"><input type="checkbox" id="cad-object-attention">只看需要处理</label><small id="cad-object-attention-count"></small><label>浏览集合<select id="cad-collection-filter"><option value="">全部对象</option></select></label><label>集合名称<input id="cad-collection-name" placeholder="例如：主馆、庭院、设备层"></label><div class="row"><button id="cad-collection-create">新建</button><button id="cad-collection-rename">改名</button></div><div class="row"><button id="cad-collection-assign">选中对象归入</button><button id="cad-collection-select">选择全部成员</button></div><div class="row"><button id="cad-collection-unassign">选中对象移出</button></div><div class="row"><button id="cad-collection-hide">隐藏集合</button><button id="cad-collection-remove">解除集合</button></div><p class="small">集合用于组织对象；解除集合不删除方块。隐藏集合保留成员自己的隐藏状态。</p>';
+  host.innerHTML = markup;
   $('cad-object-search').after(host);
   let currentSummary = null;
   const summary = () => currentSummary || getSummary();
@@ -40,7 +40,7 @@ export function collectionsUI({
           badge.className = 'collection-badge';
           row.append(badge);
         }
-        badge.textContent = '集合 · ' + collection.name;
+        badge.textContent = '集合 · ' + collection.name + (collection.locked ? ' · 锁定' : '');
         badge.title = collection.hidden ? '集合已隐藏' : '';
       } else badge?.remove();
       const relation = relations.get(object?.id),
@@ -141,6 +141,14 @@ export function collectionsUI({
       if (!c) throw Error('先选择集合');
       await mutate('collections.put', { collection: { ...c, hidden: !c.hidden } });
     });
+  $('cad-collection-lock').onclick = () =>
+    task(async () => {
+      const collection = current();
+      if (!collection) throw Error('先选择集合');
+      await mutate('collections.put', {
+        collection: { ...collection, locked: !collection.locked },
+      });
+    });
   $('cad-collection-remove').onclick = () =>
     task(async () => {
       const c = current();
@@ -177,9 +185,10 @@ export function collectionsUI({
     );
     select.value = Array.from(select.options).some((o) => o.value === previous) ? previous : '';
     const c = current();
-    for (const id of ['rename', 'assign', 'unassign', 'select', 'hide', 'remove'])
+    for (const id of ['rename', 'assign', 'unassign', 'select', 'hide', 'lock', 'remove'])
       $('cad-collection-' + id).disabled = !c;
     $('cad-collection-hide').textContent = c?.hidden ? '显示集合' : '隐藏集合';
+    $('cad-collection-lock').textContent = c?.locked ? '解锁集合' : '锁定集合';
     filter();
   }
   return { update, filter };

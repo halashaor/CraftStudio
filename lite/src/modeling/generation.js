@@ -1,3 +1,4 @@
+import { objectLocked } from '../components/object-protection.js';
 import { affectedGeneration, orderedGeneration } from './generation-order.js';
 import { coordKey, coords } from '../core/site.js';
 import { stateKey } from '../minecraft/codec.js';
@@ -120,7 +121,7 @@ export function regenerateObjects(
     byId.has(o.id) ? clone(byId.get(o.id)) : o,
   );
   for (const o of [...objects].reverse()) {
-    if (o.locked) throw Error('关联对象已锁定：' + o.name);
+    if (objectLocked(working.design, o)) throw Error('关联对象已锁定：' + o.name);
     if (!o.generation?.records)
       throw Error('旧特征缺少生成归属快照：' + o.name + '。请保留旧对象，或先重新生成并建立关联');
     if (detachedGeneration(o))

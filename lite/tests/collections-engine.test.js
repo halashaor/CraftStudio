@@ -30,7 +30,7 @@ test('collection visibility, membership and undo survive durable and portable re
     });
     await call('objects.put', { object: { id: 'part', name: 'Part', cells: [[1, 1, 1]] } });
     await call('collections.put', {
-      collection: { id: 'house', name: 'House', hidden: true },
+      collection: { id: 'house', name: 'House', hidden: true, locked: true },
       objectIds: ['part'],
     });
     await c.close();
@@ -39,8 +39,20 @@ test('collection visibility, membership and undo survive durable and portable re
       id: 'house',
       name: 'House',
       hidden: true,
+      locked: true,
       objectIds: ['part'],
     });
+    const head = await c.call('api', { method: 'workspace.describe' });
+    const blocked = await c.call('api', {
+      method: 'edit.apply',
+      params: {
+        expectedRevision: head.revision,
+        policy: { allowTerrain: true, allowExisting: true },
+        operations: [{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:glass' } }],
+      },
+    });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.error.message, /锁定/);
     const mesh = await c.call('meshChunks', {
       mode: 'after',
       cut: 4095,
@@ -61,6 +73,10 @@ test('collection visibility, membership and undo survive durable and portable re
     assert.equal(
       (await portable.call('api', { method: 'objects.list' })).value[0].collectionId,
       'house',
+    );
+    assert.equal(
+      (await portable.call('api', { method: 'collections.list' })).value[0].locked,
+      true,
     );
     await call('history.undo');
     assert.equal((await call('collections.list')).length, 0);

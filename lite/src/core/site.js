@@ -1,9 +1,9 @@
+import { ObjectProtection } from '../components/object-protection.js';
 import { restoreDraftHistory } from '../storage/draft-history.js';
 import { VoxelOverlayMap } from './voxel-overlay-map.js';
 import { emptyProject, stateKey } from '../minecraft/codec.js';
-export const coordKey = (x, y, z) => x + 4096 * (z + 4096 * y);
-export const coords = (k) => [k % 4096, Math.floor(k / 16777216), Math.floor(k / 4096) % 4096];
-export const chunkKey = (pos) => pos.map((v) => Math.floor(v / 16)).join(',');
+import { coordKey, coords, chunkKey } from './coordinates.js';
+export { coordKey, coords, chunkKey } from './coordinates.js';
 export function terrainType(name) {
   if (/:(water|lava)$/.test(name)) return 'water';
   if (
@@ -180,7 +180,8 @@ export class Site {
     this.palette = [...this.palette];
     this.states = new Map(this.states);
     const next = new VoxelOverlayMap(this.overlay),
-      changes = new Map();
+      changes = new Map(),
+      protection = new ObjectProtection(this.design);
     this.lastSkipped = 0;
     const set = (pos, state, reason = '手工编辑', nbt = undefined) => {
       if (pos.some((n) => !Number.isInteger(n) || n < 0 || n >= 4096))
@@ -197,12 +198,8 @@ export class Site {
       )
         return;
       try {
-        if (
-          this.design.objects.some(
-            (o) => o.locked && pos.every((n, a) => n >= o.min[a] && n <= o.max[a]),
-          )
-        )
-          throw Error('这个对象已锁定');
+        const locked = protection.at(pos);
+        if (locked) throw Error('对象或集合已锁定：' + locked.name);
         this.allowed(pos, policy);
       } catch (error) {
         if (!policy.skipLocked) throw error;
