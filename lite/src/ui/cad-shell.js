@@ -7,7 +7,7 @@ import { combineObjectIds, objectsAtCell } from '../selection/object-selection.j
 import { collectionsUI } from '../components/collections-ui.js';
 import { objectHidden } from '../components/collections.js';
 import { frameBounds } from '../view/frame-bounds.js';
-import { guideActions } from '../modeling/guide-actions.js';
+import { SketchBrowser } from '../sketch/sketch-browser.js';
 import { savedViewsUI } from '../view/saved-views-ui.js';
 import { generationLinks } from '../modeling/generation-links.js';
 import { measurementUI } from '../measurement/measurement-ui.js';
@@ -54,7 +54,7 @@ export function cadShell({
   oldAside.id = 'legacy-aside';
   const left = document.createElement('aside');
   left.id = 'cad-browser';
-  left.innerHTML = `<div class="dock-title">设计浏览器</div><div class="dock-tabs"><button data-dock="objects" class="active">对象</button><button data-dock="assets">素材</button><button data-dock="components">构件</button></div><section id="dock-objects"><input id="cad-object-search" placeholder="查找对象"><div class="tree-root">▾ 当前设计</div><div id="cad-original-row">▧ 原始场地 <span>保留</span></div><div id="cad-object-list"></div><button id="cad-group-selection" class="full">将选择建立为对象</button></section><section id="dock-assets" hidden></section><section id="dock-components" hidden><h3>当前工程构件</h3><p class="muted">拖入场景，或点击插入。构件仍可自由编辑。</p><div id="cad-components-container"></div><button id="cad-component-library" class="full">打开本地构件库</button></section>`;
+  left.innerHTML = `<div class="dock-title">设计浏览器</div><div class="dock-tabs"><button data-dock="objects" class="active">对象</button><button data-dock="assets">素材</button><button data-dock="components">构件</button></div><section id="dock-objects"><input id="cad-object-search" placeholder="查找对象或草图" type="search"><div class="tree-root">▾ 当前设计</div><div id="cad-original-row">▧ 原始场地 <span>保留</span></div><div id="cad-object-list"></div><button id="cad-group-selection" class="full">将选择建立为对象</button></section><section id="dock-assets" hidden></section><section id="dock-components" hidden><h3>当前工程构件</h3><p class="muted">拖入场景，或点击插入。构件仍可自由编辑。</p><div id="cad-components-container"></div><button id="cad-component-library" class="full">打开本地构件库</button></section>`;
   main.prepend(left);
   const right = document.createElement('aside');
   right.id = 'cad-inspector';
@@ -1165,10 +1165,24 @@ export function cadShell({
     }
   };
   titleInput.onblur = () => finishName();
-  const sketchTree = document.createElement('details');
-  sketchTree.open = true;
-  sketchTree.innerHTML = '<summary>草图与辅助轮廓</summary><div id="cad-sketch-list"></div>';
-  $('dock-objects').append(sketchTree);
+  const sketchBrowser = new SketchBrowser({
+    $,
+    editSaved: (id) => {
+      direct.cancel();
+      designer.close();
+      chooseTool('inspect');
+      construction.editSaved(id);
+    },
+    openFromGuide: (id, operation) =>
+      task(async () => {
+        if (busyReason()) throw Error(busyReason());
+        direct.cancel();
+        designer.close();
+        chooseTool('inspect');
+        workspace.selectCategory('model');
+        await construction.openFromGuide(id, operation);
+      }),
+  });
   $('cad-selection-focus').onclick = () => {
     if (!zoomSelection()) notice('请先选择对象或区域');
   };
@@ -1518,7 +1532,6 @@ export function cadShell({
     'global view clear isolation',
     () => (getSummary()?.view?.isolated ? '' : '当前未隔离'),
   );
-  let sketchTreeSignature = '';
   const commandFinder = commandSearch({ $, commands, library, notice, requestRender });
   viewPresets.mount();
   syncVectors();
@@ -1558,7 +1571,6 @@ export function cadShell({
         selectedObjects = new Set([...selectedObjects].filter((id) => availableIds.has(id)));
         objectOnly = false;
       }
-      collectionBrowser.update(s);
       const links = generationLinks(s.design);
       commandFinder.update();
       direct.ensureFresh(s);
@@ -1567,104 +1579,7 @@ export function cadShell({
       designer.update(s);
       measurement.update(s);
       viewPresets.update(s);
-      const sketchKey = JSON.stringify([s.workspaceId, s.design?.guides, links.guides]);
-      if (sketchKey !== sketchTreeSignature) {
-        sketchTreeSignature = sketchKey;
-        const guideProfiles = closedProfiles(s.design?.guides || []);
-        $('cad-sketch-list').replaceChildren(
-          ...(s.design?.guides || [])
-            .filter((g) => g.recipe?.kind && g.recipe.points)
-            .map((g) => {
-              const row = document.createElement('div');
-              row.className = 'row';
-              const button = document.createElement('button');
-              const linked = links.guides.find((r) => r.id === g.id)?.dependents || [];
-              button.textContent =
-                g.name +
-                ' · 编辑' +
-                (linked.length ? ' · 直接关联 ' + linked.length + ' 个结果' : '');
-              button.dataset.guideId = g.id;
-              button.onclick = () => {
-                direct.cancel();
-                designer.close();
-                chooseTool('inspect');
-                construction.editSaved(g.id);
-              };
-              row.append(button);
-              const actions = guideActions(s.design.guides, g.id, guideProfiles);
-              for (const [operation, label] of [
-                ['extrude', '拉伸'],
-                ['sweep', '沿路径生成'],
-              ]) {
-                const action = actions[operation],
-                  b = document.createElement('button');
-                b.textContent = label;
-                b.dataset.guideAction = operation;
-                b.dataset.guideId = g.id;
-                b.disabled = !!action.reason;
-                b.title =
-                  action.reason ||
-                  (operation === 'extrude' && action.sourceIds.length > 1
-                    ? '使用相接的 ' + action.sourceIds.length + ' 段闭合线框'
-                    : '使用此草图作为来源');
-                b.onclick = () =>
-                  task(async () => {
-                    if (busyReason()) throw Error(busyReason());
-                    direct.cancel();
-                    designer.close();
-                    chooseTool('inspect');
-                    workspace.selectCategory('model');
-                    await construction.openFromGuide(g.id, operation);
-                  });
-                row.append(b);
-              }
-              const offsetSource = links.guides.find((r) => r.id === g.id)?.source;
-              if (offsetSource) {
-                const detail = document.createElement('div');
-                detail.className = 'generation-sources';
-                const label = document.createElement('small');
-                label.textContent =
-                  (offsetSource.outdated ? '来源已变 · ' : '') +
-                  '偏移副本 · ' +
-                  offsetSource.name +
-                  ' · 距离 ' +
-                  offsetSource.distance;
-                detail.append(label);
-                const edit = document.createElement('button');
-                edit.textContent = '编辑来源';
-                edit.disabled = offsetSource.missing;
-                edit.dataset.offsetSourceId = offsetSource.guideId;
-                edit.onclick = () =>
-                  window.dispatchEvent(
-                    new CustomEvent('craftstudio-edit-sketch', {
-                      detail: { id: offsetSource.guideId },
-                    }),
-                  );
-                const rebuild = document.createElement('button');
-                rebuild.textContent = '按来源重建';
-                rebuild.dataset.offsetRebuildId = g.id;
-                rebuild.disabled = !offsetSource.canRebuild;
-                rebuild.title = offsetSource.reason || '保留距离，预览新的偏移轮廓与下游建筑';
-                rebuild.onclick = () =>
-                  window.dispatchEvent(
-                    new CustomEvent('craftstudio-rebuild-offset', { detail: { guideId: g.id } }),
-                  );
-                const repair = document.createElement('button');
-                repair.textContent = '更换来源';
-                repair.dataset.offsetRepairId = g.id;
-                repair.onclick = () =>
-                  window.dispatchEvent(
-                    new CustomEvent('craftstudio-rebuild-offset', {
-                      detail: { guideId: g.id, repair: true },
-                    }),
-                  );
-                detail.append(edit, rebuild, repair);
-                row.append(detail);
-              }
-              return row;
-            }),
-        );
-      }
+      sketchBrowser.update(s, links);
       $('cad-empty').hidden = !!(
         s.sourceBlocks ||
         s.changes ||
@@ -1691,7 +1606,6 @@ export function cadShell({
         if (buttons[0] && !buttons[0].dataset.cadBound) {
           buttons[0].dataset.cadBound = '1';
           buttons[0].dataset.sceneShortcuts = 'true';
-          const prior = buttons[0].onclick;
           buttons[0].onclick = (e) => {
             if (direct.isActive()) direct.cancel();
             const operation = e?.ctrlKey
@@ -1817,6 +1731,7 @@ export function cadShell({
         }
       }
       syncVectors();
+      collectionBrowser.update(s, links);
       componentContext.update(s);
       objectNames.update(s);
     },

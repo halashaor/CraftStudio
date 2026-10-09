@@ -1,5 +1,5 @@
 import markup from './views/collections-panel.html';
-import { generationLinks } from '../modeling/generation-links.js';
+import { SceneBrowser } from '../ui/scene-browser.js';
 export function collectionsUI({
   $,
   call,
@@ -12,10 +12,23 @@ export function collectionsUI({
   selectObjects,
   objects,
 }) {
-  const host = document.createElement('details');
-  host.id = 'cad-collections';
+  const host = document.createElement('section');
+  host.id = 'cad-collection-controls';
   host.innerHTML = markup;
   $('cad-object-search').after(host);
+  const status = document.createElement('div');
+  status.className = 'scene-browser-status';
+  status.innerHTML =
+    '<small id="cad-browser-count" aria-live="polite"></small><button id="cad-browser-clear" hidden>显示全部</button>';
+  $('cad-object-search').after(status);
+  let browser = new SceneBrowser();
+  $('cad-browser-clear').onclick = () => {
+    $('cad-object-search').value = '';
+    $('cad-collection-filter').value = '';
+    $('cad-object-attention').checked = false;
+    update();
+  };
+
   let currentSummary = null;
   const summary = () => currentSummary || getSummary();
   const current = () => {
@@ -25,11 +38,13 @@ export function collectionsUI({
       : null;
   };
   function filter() {
-    const value = $('cad-collection-filter').value,
-      q = $('cad-object-search').value.toLowerCase(),
-      design = summary()?.design,
-      relations = new Map(generationLinks(design).objects.map((o) => [o.id, o]));
-    let attentionCount = 0;
+    const design = summary()?.design,
+      result = browser.filter({
+        query: $('cad-object-search').value,
+        collection: $('cad-collection-filter').value,
+        attention: $('cad-object-attention').checked,
+      }),
+      relations = browser.relations;
     for (const row of objects.children) {
       const object = design?.objects.find((o) => o.id === row.dataset.objectId),
         collection = design?.collections?.find((c) => c.id === object?.collectionId);
@@ -47,7 +62,6 @@ export function collectionsUI({
         attention = relation?.issues.length > 0;
       let issueBadge = row.querySelector('.generation-issue-badge');
       if (attention) {
-        attentionCount++;
         if (!issueBadge) {
           issueBadge = document.createElement('small');
           issueBadge.className = 'generation-issue-badge';
@@ -71,15 +85,23 @@ export function collectionsUI({
           .map((issue) => issue.message + (issue.sourceId ? ' · ' + issue.sourceId : ''))
           .join('\n');
       } else issueBadge?.remove();
-      row.hidden =
-        ($('cad-object-attention').checked && !attention) ||
-        !row.textContent.toLowerCase().includes(q) ||
-        (value === 'none' && !!object?.collectionId) ||
-        (value.startsWith('group:') && object?.collectionId !== value.slice(6));
+      row.hidden = !result.objectIds.has(row.dataset.objectId);
     }
-    $('cad-object-attention-count').textContent = attentionCount
-      ? '需要处理 ' + attentionCount + ' 个对象'
-      : '没有待处理的生成对象';
+    for (const row of $('cad-sketch-list')?.children || [])
+      row.hidden = !result.guideIds.has(row.dataset.guideId);
+    $('cad-object-attention-count').textContent = result.attentionCount
+      ? '需要处理 ' + result.attentionCount + ' 个对象'
+      : '';
+    $('cad-browser-count').textContent =
+      '对象 ' +
+      result.objectIds.size +
+      '/' +
+      result.objectCount +
+      ' · 草图 ' +
+      result.guideIds.size +
+      '/' +
+      result.guideCount;
+    $('cad-browser-clear').hidden = !result.filtered;
   }
   async function mutate(method, params) {
     const s = getSummary(),
@@ -163,14 +185,20 @@ export function collectionsUI({
     if (c) $('cad-collection-name').value = c.name;
     update();
   };
-  function update(s = getSummary()) {
+  function update(s = getSummary(), links) {
+    if (currentSummary && currentSummary.workspaceId !== s.workspaceId) {
+      $('cad-object-search').value = '';
+      $('cad-collection-filter').value = '';
+      $('cad-object-attention').checked = false;
+    }
     currentSummary = s;
+    browser = new SceneBrowser(s.design, links);
     const previous = $('cad-collection-filter').value,
       list = summary()?.design.collections || [],
       select = $('cad-collection-filter');
     select.replaceChildren(
       ...[
-        ['', '全部对象'],
+        ['', '全部对象与草图'],
         ['none', '未归类对象'],
         ...list.map((c) => [
           'group:' + c.id,

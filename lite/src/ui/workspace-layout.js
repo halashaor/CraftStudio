@@ -38,7 +38,7 @@ export function workspaceLayout({ $, library, notice }) {
       orientation: 'horizontal',
       sign: 1,
       read: () => tree.getBoundingClientRect().height,
-      default: () => (innerWidth <= 800 ? 135 : innerWidth <= 1100 ? 175 : 215),
+      default: () => right.clientHeight * 0.45,
       bounds: () => {
         const extra = [...right.children]
           .filter(

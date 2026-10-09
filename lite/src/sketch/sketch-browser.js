@@ -1,0 +1,103 @@
+import { guideActions } from '../modeling/guide-actions.js';
+import { closedProfiles } from './sketch-profiles.js';
+
+export class SketchBrowser {
+  constructor({ $, editSaved, openFromGuide }) {
+    Object.assign(this, { $, editSaved, openFromGuide });
+    this.signature = '';
+    const tree = document.createElement('details');
+    tree.open = true;
+    tree.innerHTML = '<summary>草图与辅助轮廓</summary><div id="cad-sketch-list"></div>';
+    $('dock-objects').append(tree);
+  }
+
+  update(s, links) {
+    const { $, editSaved, openFromGuide } = this;
+    const sketchKey = JSON.stringify([s.workspaceId, s.design?.guides, links.guides]);
+    if (sketchKey !== this.signature) {
+      this.signature = sketchKey;
+      const guideProfiles = closedProfiles(s.design?.guides || []);
+      $('cad-sketch-list').replaceChildren(
+        ...(s.design?.guides || [])
+          .filter((g) => g.recipe?.kind && g.recipe.points)
+          .map((g) => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            row.dataset.guideId = g.id;
+            const button = document.createElement('button');
+            const linked = links.guides.find((r) => r.id === g.id)?.dependents || [];
+            button.textContent =
+              g.name +
+              ' · 编辑' +
+              (linked.length ? ' · 直接关联 ' + linked.length + ' 个结果' : '');
+            button.dataset.guideId = g.id;
+            button.onclick = () => editSaved(g.id);
+            row.append(button);
+            const actions = guideActions(s.design.guides, g.id, guideProfiles);
+            for (const [operation, label] of [
+              ['extrude', '拉伸'],
+              ['sweep', '沿路径生成'],
+            ]) {
+              const action = actions[operation],
+                b = document.createElement('button');
+              b.textContent = label;
+              b.dataset.guideAction = operation;
+              b.dataset.guideId = g.id;
+              b.disabled = !!action.reason;
+              b.title =
+                action.reason ||
+                (operation === 'extrude' && action.sourceIds.length > 1
+                  ? '使用相接的 ' + action.sourceIds.length + ' 段闭合线框'
+                  : '使用此草图作为来源');
+              b.onclick = () => openFromGuide(g.id, operation);
+              row.append(b);
+            }
+            const offsetSource = links.guides.find((r) => r.id === g.id)?.source;
+            if (offsetSource) {
+              const detail = document.createElement('div');
+              detail.className = 'generation-sources';
+              const label = document.createElement('small');
+              label.textContent =
+                (offsetSource.outdated ? '来源已变 · ' : '') +
+                '偏移副本 · ' +
+                offsetSource.name +
+                ' · 距离 ' +
+                offsetSource.distance;
+              detail.append(label);
+              const edit = document.createElement('button');
+              edit.textContent = '编辑来源';
+              edit.disabled = offsetSource.missing;
+              edit.dataset.offsetSourceId = offsetSource.guideId;
+              edit.onclick = () =>
+                window.dispatchEvent(
+                  new CustomEvent('craftstudio-edit-sketch', {
+                    detail: { id: offsetSource.guideId },
+                  }),
+                );
+              const rebuild = document.createElement('button');
+              rebuild.textContent = '按来源重建';
+              rebuild.dataset.offsetRebuildId = g.id;
+              rebuild.disabled = !offsetSource.canRebuild;
+              rebuild.title = offsetSource.reason || '保留距离，预览新的偏移轮廓与下游建筑';
+              rebuild.onclick = () =>
+                window.dispatchEvent(
+                  new CustomEvent('craftstudio-rebuild-offset', { detail: { guideId: g.id } }),
+                );
+              const repair = document.createElement('button');
+              repair.textContent = '更换来源';
+              repair.dataset.offsetRepairId = g.id;
+              repair.onclick = () =>
+                window.dispatchEvent(
+                  new CustomEvent('craftstudio-rebuild-offset', {
+                    detail: { guideId: g.id, repair: true },
+                  }),
+                );
+              detail.append(edit, rebuild, repair);
+              row.append(detail);
+            }
+            return row;
+          }),
+      );
+    }
+  }
+}

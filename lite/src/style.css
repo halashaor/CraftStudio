@@ -2910,3 +2910,29 @@ input.dimension-scrubbing {
   opacity: 0.6;
   cursor: default;
 }
+
+.scene-browser-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+}
+.scene-browser-status small {
+  color: #a9b9cc;
+}
+.scene-browser-status button {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.scene-browser-filters label {
+  margin: 4px 0;
+}
+.scene-browser-filters .check {
+  font-size: 11px;
+}
+#cad-collections {
+  margin: 6px 0;
+}
