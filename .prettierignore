@@ -1,0 +1,7 @@
+web/
+lite/dist/
+lite/node_modules/
+bridge/
+docs/
+output/
+ARCHITECTURE.md

@@ -1,2 +1,25 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {searchCommands} from '../src/command-search.js';
-test('concept aliases keep disabled tools discoverable and exact labels rank first',()=>{const commands=[{id:'curve',label:'贯穿点曲线',category:'草图',aliases:'插值曲线 平滑路径 长曲线',unavailable:()=>''},{id:'feature',label:'精确矩形沿路径生成',category:'建模',aliases:'半砖步道 薄梁 半格截面',unavailable:()=> '请先保存路径'}];assert.equal(searchCommands(commands,'平滑路径')[0].id,'curve');assert.equal(searchCommands(commands,'薄梁')[0].id,'feature');assert.equal(searchCommands(commands,'贯穿点曲线')[0].id,'curve');assert.equal(searchCommands(commands,'不存在的入口').length,0);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { searchCommands } from '../src/ui/command-search.js';
+test('concept aliases keep disabled tools discoverable and exact labels rank first', () => {
+  const commands = [
+    {
+      id: 'curve',
+      label: '贯穿点曲线',
+      category: '草图',
+      aliases: '插值曲线 平滑路径 长曲线',
+      unavailable: () => '',
+    },
+    {
+      id: 'feature',
+      label: '精确矩形沿路径生成',
+      category: '建模',
+      aliases: '半砖步道 薄梁 半格截面',
+      unavailable: () => '请先保存路径',
+    },
+  ];
+  assert.equal(searchCommands(commands, '平滑路径')[0].id, 'curve');
+  assert.equal(searchCommands(commands, '薄梁')[0].id, 'feature');
+  assert.equal(searchCommands(commands, '贯穿点曲线')[0].id, 'curve');
+  assert.equal(searchCommands(commands, '不存在的入口').length, 0);
+});

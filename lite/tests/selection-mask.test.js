@@ -1,5 +1,100 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {combineSelection,selectionPredicate} from '../src/selection-mask.js';import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';import {selection,transformSelection} from '../src/studio.js';import {brushPlan} from '../src/tool-mask.js';import {DesignAPI} from '../src/foundation.js';import {Resources} from '../src/resources.js';
-const box=(a,b)=>({min:[a,1,1],max:[b,1,1]});function scene(){const p=emptyProject();p.size=[64,4,4];p.palette=[{Name:'minecraft:oak_planks'}];p.blocks=[1,2,3,30].map(x=>({pos:[x,1,1],state:0}));return new Site(p);}
-test('selection boolean volumes include air without enumerating large empty ranges',()=>{let r=combineSelection(null,box(0,3));r=combineSelection(r,box(20,32),'add');r=combineSelection(r,box(2,2),'subtract');r=combineSelection(r,box(0,30),'intersect');const inside=selectionPredicate(r);for(const x of [0,1,3,20,30])assert.equal(inside([x,1,1]),true);for(const x of [2,10,31])assert.equal(inside([x,1,1]),false);assert.equal(selectionPredicate({members:[[1,1,1]]})([1,1,1]),true);assert.throws(()=>selectionPredicate({regions:[{...box(0,1),operation:'bad'}]}));const s=scene();assert.equal(selection(s,[0,0,0],[4095,4095,4095],{all:true}).blocks.length,4);});
-test('copy, transform and brushes share a compound selection and keep its holes',()=>{const s=scene(),before=s.pack();let r=combineSelection(null,box(1,3));r=combineSelection(r,box(2,2),'subtract');r=combineSelection(r,box(30,30),'add');assert.deepEqual(selection(s,r.min,r.max,{regions:r.regions}).blocks.map(b=>b.pos[0]+r.min[0]),[1,3,30]);const plan=brushPlan(s,{points:[1,2,3,10,30].map(x=>[x,1,1]),mode:'paint',state:{Name:'minecraft:glass'},mask:{selection:r},retainShape:false});assert.equal(plan.operations.length,3);assert.deepEqual(s.pack(),before);transformSelection(s,{...r,at:[2,2,1],move:false},{allowExisting:true});assert.ok(s.at([2,2,1]));assert.equal(s.at([3,2,1]),null);assert.ok(s.at([4,2,1]));assert.ok(s.at([31,2,1]));s.restore('undo');assert.deepEqual(s.pack().overlay,before.overlay);});
-test('world-space compound selections share exact rules in the public AI API',()=>{const s=scene();s.origin=[-20,64,30];s.originConfirmed=true;const api=new DesignAPI({getSite:()=>s,resources:()=>new Resources()});const regions=[{min:[-19,65,31],max:[-17,65,31],operation:'replace'},{min:[-18,65,31],max:[-18,65,31],operation:'subtract'}];const r=api.execute({method:'edit.brush',params:{expectedRevision:0,space:'world',points:[[-19,65,31],[-18,65,31],[-17,65,31]],mode:'paint',state:{Name:'minecraft:glass'},mask:{selection:{min:[-19,65,31],max:[-17,65,31],regions}},policy:{allowExisting:true}}});assert.ok(r.ok,r.error?.message);assert.equal(s.palette[s.at([2,1,1]).state].Name,'minecraft:oak_planks');const moved=api.execute({method:'selection.transform',params:{expectedRevision:r.revision,space:'world',min:[-19,65,31],max:[-17,65,31],regions,at:[-19,66,31],policy:{allowExisting:true}}});assert.ok(moved.ok,moved.error?.message);assert.equal(s.at([2,2,1]),null);assert.ok(s.at([1,2,1]));});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { combineSelection, selectionPredicate } from '../src/selection/selection-mask.js';
+import { Site } from '../src/core/site.js';
+import { emptyProject } from '../src/minecraft/codec.js';
+import { selection, transformSelection } from '../src/modeling/studio.js';
+import { brushPlan } from '../src/selection/tool-mask.js';
+import { DesignAPI } from '../src/api/design-api.js';
+import { Resources } from '../src/materials/resources.js';
+const box = (a, b) => ({ min: [a, 1, 1], max: [b, 1, 1] });
+function scene() {
+  const p = emptyProject();
+  p.size = [64, 4, 4];
+  p.palette = [{ Name: 'minecraft:oak_planks' }];
+  p.blocks = [1, 2, 3, 30].map((x) => ({ pos: [x, 1, 1], state: 0 }));
+  return new Site(p);
+}
+test('selection boolean volumes include air without enumerating large empty ranges', () => {
+  let r = combineSelection(null, box(0, 3));
+  r = combineSelection(r, box(20, 32), 'add');
+  r = combineSelection(r, box(2, 2), 'subtract');
+  r = combineSelection(r, box(0, 30), 'intersect');
+  const inside = selectionPredicate(r);
+  for (const x of [0, 1, 3, 20, 30]) assert.equal(inside([x, 1, 1]), true);
+  for (const x of [2, 10, 31]) assert.equal(inside([x, 1, 1]), false);
+  assert.equal(selectionPredicate({ members: [[1, 1, 1]] })([1, 1, 1]), true);
+  assert.throws(() => selectionPredicate({ regions: [{ ...box(0, 1), operation: 'bad' }] }));
+  const s = scene();
+  assert.equal(selection(s, [0, 0, 0], [4095, 4095, 4095], { all: true }).blocks.length, 4);
+});
+test('copy, transform and brushes share a compound selection and keep its holes', () => {
+  const s = scene(),
+    before = s.pack();
+  let r = combineSelection(null, box(1, 3));
+  r = combineSelection(r, box(2, 2), 'subtract');
+  r = combineSelection(r, box(30, 30), 'add');
+  assert.deepEqual(
+    selection(s, r.min, r.max, { regions: r.regions }).blocks.map((b) => b.pos[0] + r.min[0]),
+    [1, 3, 30],
+  );
+  const plan = brushPlan(s, {
+    points: [1, 2, 3, 10, 30].map((x) => [x, 1, 1]),
+    mode: 'paint',
+    state: { Name: 'minecraft:glass' },
+    mask: { selection: r },
+    retainShape: false,
+  });
+  assert.equal(plan.operations.length, 3);
+  assert.deepEqual(s.pack(), before);
+  transformSelection(s, { ...r, at: [2, 2, 1], move: false }, { allowExisting: true });
+  assert.ok(s.at([2, 2, 1]));
+  assert.equal(s.at([3, 2, 1]), null);
+  assert.ok(s.at([4, 2, 1]));
+  assert.ok(s.at([31, 2, 1]));
+  s.restore('undo');
+  assert.deepEqual(s.pack().overlay, before.overlay);
+});
+test('world-space compound selections share exact rules in the public AI API', () => {
+  const s = scene();
+  s.origin = [-20, 64, 30];
+  s.originConfirmed = true;
+  const api = new DesignAPI({ getSite: () => s, resources: () => new Resources() });
+  const regions = [
+    { min: [-19, 65, 31], max: [-17, 65, 31], operation: 'replace' },
+    { min: [-18, 65, 31], max: [-18, 65, 31], operation: 'subtract' },
+  ];
+  const r = api.execute({
+    method: 'edit.brush',
+    params: {
+      expectedRevision: 0,
+      space: 'world',
+      points: [
+        [-19, 65, 31],
+        [-18, 65, 31],
+        [-17, 65, 31],
+      ],
+      mode: 'paint',
+      state: { Name: 'minecraft:glass' },
+      mask: { selection: { min: [-19, 65, 31], max: [-17, 65, 31], regions } },
+      policy: { allowExisting: true },
+    },
+  });
+  assert.ok(r.ok, r.error?.message);
+  assert.equal(s.palette[s.at([2, 1, 1]).state].Name, 'minecraft:oak_planks');
+  const moved = api.execute({
+    method: 'selection.transform',
+    params: {
+      expectedRevision: r.revision,
+      space: 'world',
+      min: [-19, 65, 31],
+      max: [-17, 65, 31],
+      regions,
+      at: [-19, 66, 31],
+      policy: { allowExisting: true },
+    },
+  });
+  assert.ok(moved.ok, moved.error?.message);
+  assert.equal(s.at([2, 2, 1]), null);
+  assert.ok(s.at([1, 2, 1]));
+});

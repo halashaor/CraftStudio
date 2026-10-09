@@ -1,7 +1,67 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {bridgeSession,bridgeControls,activeBridgeJob,bridgeJobRunning} from '../src/game-session.js';
-test('read-only or unknown write permission retains read/validate but never enables writes',()=>{for(const writeEnabled of [false,undefined]){const s=bridgeSession({edition:'java',protocol:'craftstudio-bridge/1',writeEnabled});const c=bridgeControls(s,'job');assert.equal(c.read,true);assert.equal(c.validate,true);assert.equal(c.build,false);assert.equal(c.undo,false);assert.equal(c.cancel,false);}assert.equal(bridgeControls(null,null).read,false);});
-test('busy and capability checks describe the active Java connection without implying runtime compatibility',()=>{const s=bridgeSession({minecraft:'1.21.1',edition:'java',protocol:'craftstudio-bridge/1',writeEnabled:true,busy:true,capabilities:['read','apply','job','cancel','undo']});assert.equal(bridgeControls(s,'job').build,false);assert.equal(bridgeControls(s,'job').cancel,true);s.busy=false;assert.equal(bridgeControls(s,null).build,true);assert.equal(bridgeControls(s,null).validate,false);assert.throws(()=>bridgeSession({edition:'bedrock'}),/Java/);assert.throws(()=>bridgeSession({protocol:'wrong'}),/协议/);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  bridgeSession,
+  bridgeControls,
+  activeBridgeJob,
+  bridgeJobRunning,
+} from '../src/integration/game-session.js';
+test('read-only or unknown write permission retains read/validate but never enables writes', () => {
+  for (const writeEnabled of [false, undefined]) {
+    const s = bridgeSession({ edition: 'java', protocol: 'craftstudio-bridge/1', writeEnabled });
+    const c = bridgeControls(s, 'job');
+    assert.equal(c.read, true);
+    assert.equal(c.validate, true);
+    assert.equal(c.build, false);
+    assert.equal(c.undo, false);
+    assert.equal(c.cancel, false);
+  }
+  assert.equal(bridgeControls(null, null).read, false);
+});
+test('busy and capability checks describe the active Java connection without implying runtime compatibility', () => {
+  const s = bridgeSession({
+    minecraft: '1.21.1',
+    edition: 'java',
+    protocol: 'craftstudio-bridge/1',
+    writeEnabled: true,
+    busy: true,
+    capabilities: ['read', 'apply', 'job', 'cancel', 'undo'],
+  });
+  assert.equal(bridgeControls(s, 'job').build, false);
+  assert.equal(bridgeControls(s, 'job').cancel, true);
+  s.busy = false;
+  assert.equal(bridgeControls(s, null).build, true);
+  assert.equal(bridgeControls(s, null).validate, false);
+  assert.throws(() => bridgeSession({ edition: 'bedrock' }), /Java/);
+  assert.throws(() => bridgeSession({ protocol: 'wrong' }), /协议/);
+});
 
-test('active task summaries are bounded and actual building status keeps write controls busy',()=>{const report=activeBridgeJob({id:'job-1',status:'building',placed:12,total:20,restoring:false,token:'do-not-copy'});assert.deepEqual(report,{id:'job-1',status:'building',placed:12,total:20,restoring:false});assert.equal(bridgeJobRunning('building'),true);assert.equal(bridgeJobRunning('completed'),false);assert.equal(activeBridgeJob({id:''}),null);assert.equal(activeBridgeJob({id:'x'.repeat(129)}),null);});
+test('active task summaries are bounded and actual building status keeps write controls busy', () => {
+  const report = activeBridgeJob({
+    id: 'job-1',
+    status: 'building',
+    placed: 12,
+    total: 20,
+    restoring: false,
+    token: 'do-not-copy',
+  });
+  assert.deepEqual(report, {
+    id: 'job-1',
+    status: 'building',
+    placed: 12,
+    total: 20,
+    restoring: false,
+  });
+  assert.equal(bridgeJobRunning('building'), true);
+  assert.equal(bridgeJobRunning('completed'), false);
+  assert.equal(activeBridgeJob({ id: '' }), null);
+  assert.equal(activeBridgeJob({ id: 'x'.repeat(129) }), null);
+});
 
-test('finished tasks retain progress lookup but disable stop',()=>{const s=bridgeSession({writeEnabled:true});assert.equal(bridgeControls(s,'finished').job,true);assert.equal(bridgeControls(s,'finished').cancel,false);s.busy=true;assert.equal(bridgeControls(s,'active').cancel,true);});
+test('finished tasks retain progress lookup but disable stop', () => {
+  const s = bridgeSession({ writeEnabled: true });
+  assert.equal(bridgeControls(s, 'finished').job, true);
+  assert.equal(bridgeControls(s, 'finished').cancel, false);
+  s.busy = true;
+  assert.equal(bridgeControls(s, 'active').cancel, true);
+});

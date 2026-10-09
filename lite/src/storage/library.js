@@ -1,0 +1,237 @@
+const request = (r) =>
+  new Promise((resolve, reject) => {
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+const finished = (t) =>
+  new Promise((resolve, reject) => {
+    t.oncomplete = resolve;
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || Error('本地存储事务取消'));
+  });
+export class LocalLibrary {
+  constructor(factory = globalThis.indexedDB, name = 'craftstudio-lite-v1') {
+    this.factory = factory;
+    this.name = name;
+    this.db = null;
+  }
+  async open() {
+    if (this.db) return this;
+    if (!this.factory) throw Error('浏览器没有提供 IndexedDB；请下载完整工程保存');
+    const r = this.factory.open(this.name, 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      db.createObjectStore('projects', { keyPath: 'id' });
+      const v = db.createObjectStore('versions', { keyPath: ['projectId', 'number'] });
+      v.createIndex('project', 'projectId');
+      db.createObjectStore('sessions', { keyPath: 'id' });
+      db.createObjectStore('bases', { keyPath: 'id' });
+    };
+    this.db = await request(r);
+    return this;
+  }
+  async preference(key, value) {
+    await this.open();
+    const tx = this.db.transaction('sessions', value === undefined ? 'readonly' : 'readwrite'),
+      done = finished(tx),
+      store = tx.objectStore('sessions');
+    let result;
+    if (value === undefined) result = (await request(store.get('prefs:' + key)))?.data;
+    else {
+      store.put({ id: 'prefs:' + key, data: value, updatedAt: new Date().toISOString() });
+      result = value;
+    }
+    await done;
+    return result;
+  }
+  async save(bytes, info) {
+    await this.open();
+    const tx = this.db.transaction(['projects', 'versions'], 'readwrite'),
+      done = finished(tx),
+      projects = tx.objectStore('projects'),
+      versions = tx.objectStore('versions'),
+      id = info.id || crypto.randomUUID(),
+      old = await request(projects.get(id));
+    if (old && info.head !== undefined && old.head !== info.head) {
+      tx.abort();
+      await done.catch(() => {});
+      throw Error('本地工程版本已更新，请重新打开后再保存');
+    }
+    const number = (old?.head || 0) + 1,
+      time = new Date().toISOString();
+    const item = {
+      id,
+      title: info.title,
+      description: info.description || '',
+      tags: info.tags || [],
+      kind: info.kind || 'project',
+      favorite: old?.favorite || false,
+      createdAt: old?.createdAt || time,
+      updatedAt: time,
+      head: number,
+      blocks: info.blocks || 0,
+      size: info.size,
+      deleted: false,
+    };
+    projects.put(item);
+    versions.put({ projectId: id, number, time, note: info.note || '', bytes });
+    await done;
+    return item;
+  }
+  async list({ query = '', kind = '', favorite = false, deleted = false } = {}) {
+    await this.open();
+    const tx = this.db.transaction('projects'),
+      done = finished(tx),
+      items = await request(tx.objectStore('projects').getAll());
+    await done;
+    return items
+      .filter(
+        (i) =>
+          !!i.deleted === deleted &&
+          (!kind || i.kind === kind) &&
+          (!favorite || i.favorite) &&
+          (i.title + ' ' + i.description + ' ' + i.tags.join(' '))
+            .toLowerCase()
+            .includes(query.toLowerCase()),
+      )
+      .sort(
+        (a, b) => Number(b.favorite) - Number(a.favorite) || b.updatedAt.localeCompare(a.updatedAt),
+      );
+  }
+  async get(id, version) {
+    await this.open();
+    const tx = this.db.transaction(['projects', 'versions']),
+      done = finished(tx),
+      item = await request(tx.objectStore('projects').get(id));
+    if (!item || item.deleted) throw Error('工程不存在或在回收站中');
+    const entry = await request(tx.objectStore('versions').get([id, version || item.head]));
+    await done;
+    if (!entry) throw Error('版本不存在');
+    return { item, entry };
+  }
+  async versions(id) {
+    await this.open();
+    const tx = this.db.transaction('versions'),
+      done = finished(tx),
+      entries = await request(tx.objectStore('versions').index('project').getAll(id));
+    await done;
+    return entries.sort((a, b) => b.number - a.number).map(({ bytes, ...v }) => v);
+  }
+  async update(id, changes) {
+    await this.open();
+    const tx = this.db.transaction('projects', 'readwrite'),
+      done = finished(tx),
+      store = tx.objectStore('projects'),
+      item = await request(store.get(id));
+    if (!item) throw Error('工程不存在');
+    for (const key of ['favorite', 'deleted', 'title', 'tags', 'description'])
+      if (key in changes) item[key] = changes[key];
+    item.updatedAt = new Date().toISOString();
+    store.put(item);
+    await done;
+    return item;
+  }
+  async draft(data, projectId) {
+    await this.open();
+    const tx = this.db.transaction(['bases', 'sessions'], 'readwrite'),
+      done = finished(tx),
+      bases = tx.objectStore('bases');
+    if (!(await request(bases.getKey(data.baseKey))))
+      bases.put({ id: data.baseKey, bytes: data.baseline });
+    if (data.assetKey && !(await request(bases.getKey(data.assetKey))))
+      bases.put({ id: data.assetKey, bytes: data.assetBytes });
+    const info = {
+      baseKey: data.baseKey,
+      assetKey: data.assetKey || null,
+      bytes: data.payload,
+      projectId,
+      updatedAt: new Date().toISOString(),
+    };
+    tx.objectStore('sessions').put({ id: 'active', ...info });
+    if (projectId) tx.objectStore('sessions').put({ id: 'draft:' + projectId, ...info });
+    await done;
+  }
+  async resume(id = 'active') {
+    await this.open();
+    const tx = this.db.transaction(['bases', 'sessions']),
+      done = finished(tx),
+      s = await request(tx.objectStore('sessions').get(id));
+    if (!s) {
+      await done;
+      return null;
+    }
+    const base = await request(tx.objectStore('bases').get(s.baseKey)),
+      assets = s.assetKey ? await request(tx.objectStore('bases').get(s.assetKey)) : null;
+    await done;
+    if (!base) throw Error('草稿缺少原始场地，请重新导入文件');
+    if (s.assetKey && !assets) throw Error('草稿缺少资源附件');
+    return { ...s, baseline: base.bytes, assetBytes: assets?.bytes };
+  }
+  async backup() {
+    await this.open();
+    const names = ['projects', 'versions', 'sessions', 'bases'],
+      tx = this.db.transaction(names),
+      done = finished(tx),
+      out = { schema: 'craftstudio-lite-library/1' };
+    for (const n of names) out[n] = await request(tx.objectStore(n).getAll());
+    await done;
+    return out;
+  }
+  async restore(backup) {
+    if (
+      backup.schema !== 'craftstudio-lite-library/1' ||
+      !Array.isArray(backup.projects) ||
+      !Array.isArray(backup.versions)
+    )
+      throw Error('不是支持的工程库备份');
+    const ids = new Set(backup.projects.map((p) => p.id));
+    if (
+      ids.size !== backup.projects.length ||
+      backup.projects.some((p) => typeof p.id !== 'string' || typeof p.title !== 'string') ||
+      backup.versions.some(
+        (v) =>
+          !ids.has(v.projectId) || !Number.isInteger(v.number) || !(v.bytes instanceof Uint8Array),
+      )
+    )
+      throw Error('备份工程与版本记录不完整');
+    await this.open();
+    const names = ['projects', 'versions', 'sessions', 'bases'],
+      tx = this.db.transaction(names, 'readwrite'),
+      done = finished(tx),
+      map = new Map();
+    for (const project of backup.projects) {
+      const existing = await request(tx.objectStore('projects').get(project.id)),
+        id = existing ? crypto.randomUUID() : project.id;
+      map.set(project.id, id);
+      tx.objectStore('projects').put({
+        ...project,
+        id,
+        title: existing ? project.title + ' · 导入副本' : project.title,
+      });
+    }
+    for (const row of backup.versions)
+      tx.objectStore('versions').put({ ...row, projectId: map.get(row.projectId) });
+    for (const row of backup.bases || [])
+      if (!(await request(tx.objectStore('bases').getKey(row.id))))
+        tx.objectStore('bases').put(row);
+    for (const row of backup.sessions || []) {
+      if (row.id?.startsWith('prefs:')) {
+        if (!(await request(tx.objectStore('sessions').get(row.id))))
+          tx.objectStore('sessions').put(row);
+        continue;
+      }
+      if (row.id === 'active') {
+        if (!(await request(tx.objectStore('sessions').get('active'))))
+          tx.objectStore('sessions').put({ ...row, projectId: map.get(row.projectId) || null });
+        continue;
+      }
+      const id = map.get(row.projectId);
+      if (id) tx.objectStore('sessions').put({ ...row, id: 'draft:' + id, projectId: id });
+    }
+    await done;
+  }
+  close() {
+    this.db?.close();
+    this.db = null;
+  }
+}

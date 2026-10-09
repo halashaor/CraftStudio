@@ -1,0 +1,272 @@
+import { encodeWire, decodeWire } from './engine-wire.js';
+export class RemoteEngineWorker {
+  constructor({
+    url,
+    token,
+    key,
+    endpoint,
+    uploadThreshold = 8388608,
+    uploadChunkBytes = 4194304,
+    fetcher = globalThis.fetch,
+  }) {
+    if (
+      !Number.isSafeInteger(uploadThreshold) ||
+      uploadThreshold < 1 ||
+      !Number.isSafeInteger(uploadChunkBytes) ||
+      uploadChunkBytes < 1
+    )
+      throw Error('Invalid upload configuration');
+    this.uploadThreshold = uploadThreshold;
+    this.uploadChunkBytes = uploadChunkBytes;
+    this.url = url;
+    this.endpoint = endpoint || url + '/rpc';
+    this.token = token;
+    this.fetcher = (...args) => fetcher(...args);
+    this.terminated = false;
+    this.tail = Promise.resolve();
+    this.ack = [];
+    this.ready = this.request({ operation: 'open', ...(key ? { key } : {}) }).then((session) => {
+      this.session = session;
+      if (!this.terminated) {
+        const period = Math.max(1000, Math.min(30000, (session.leaseTimeoutMs || 600000) / 3));
+        this.heartbeatTimer = setInterval(() => this.heartbeat().catch(() => {}), period);
+        this.heartbeatTimer?.unref?.();
+      }
+      return session;
+    });
+    this.ready.catch(() => {});
+  }
+  async request(body, { keepalive = false } = {}) {
+    const start = performance.now(),
+      bytes = encodeWire(body),
+      encodeMs = performance.now() - start;
+    if (body.operation === 'call' && bytes.length > this.uploadThreshold)
+      return this.upload(body, bytes);
+    let error;
+    for (let i = 0; i < 2; i++)
+      try {
+        const sent = performance.now(),
+          response = await this.fetcher(this.endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-craftstudio-engine',
+              'X-CraftStudio-Token': this.token,
+            },
+            body: bytes,
+            keepalive,
+          }),
+          headersMs = performance.now() - sent,
+          read = performance.now(),
+          json = response.headers?.get('Content-Type')?.includes('application/json'),
+          raw = json ? await response.json() : await response.arrayBuffer(),
+          readMs = performance.now() - read,
+          decode = performance.now(),
+          value = json ? raw : decodeWire(raw),
+          decodeMs = performance.now() - decode;
+        if (!response.ok || value.error) {
+          const e = Error(value.error || 'Engine transport failed');
+          e.replyReceived = true;
+          throw e;
+        }
+        if (body.trace) {
+          const forwarded = response.headers
+            ?.get('Server-Timing')
+            ?.match(/engine-forward;dur=([\d.]+)/);
+          if (forwarded)
+            value.performance = {
+              ...value.performance,
+              stages: [
+                ...(value.performance?.stages || []),
+                { stage: 'proxy-forward', ms: Number(forwarded[1]) },
+              ],
+            };
+          const url = new URL(this.endpoint, globalThis.location?.href || this.url).href,
+            entry = performance.getEntriesByName?.(url).at(-1);
+          if (
+            entry?.requestStart > 0 &&
+            entry.startTime >= sent &&
+            entry.startTime < sent + 10 &&
+            entry.responseEnd >= entry.requestStart
+          )
+            value.performance = {
+              ...value.performance,
+              stages: [
+                ...(value.performance?.stages || []),
+                { stage: 'network-observed', ms: entry.responseEnd - entry.requestStart },
+              ],
+            };
+        }
+        if (body.trace)
+          value.performance = {
+            ...value.performance,
+            stages: [
+              ...(value.performance?.stages || []),
+              { stage: 'transport-encode', ms: encodeMs, bytes: bytes.length },
+              { stage: 'transport-headers', ms: headersMs },
+              { stage: 'transport-read', ms: readMs },
+              { stage: 'transport-decode', ms: decodeMs },
+            ],
+          };
+        return value;
+      } catch (e) {
+        if (e.replyReceived) throw e;
+        error = e;
+      }
+    throw error;
+  }
+
+  async upload(body, bytes) {
+    const id = crypto.randomUUID(),
+      sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+        .map((n) => n.toString(16).padStart(2, '0'))
+        .join('');
+    try {
+      await this.request({
+        operation: 'uploadStart',
+        lease: body.lease,
+        id,
+        size: bytes.length,
+        sha256,
+      });
+      for (let offset = 0; offset < bytes.length; offset += this.uploadChunkBytes) {
+        if (this.terminated) throw Error('Upload cancelled');
+        await this.request({
+          operation: 'uploadChunk',
+          lease: body.lease,
+          id,
+          offset,
+          bytes: bytes.subarray(offset, Math.min(bytes.length, offset + this.uploadChunkBytes)),
+        });
+        this.onmessage?.({
+          data: {
+            progress:
+              '正在传输文件 · ' +
+              Math.round(
+                (Math.min(bytes.length, offset + this.uploadChunkBytes) / bytes.length) * 100,
+              ) +
+              '%',
+          },
+        });
+      }
+      if (this.terminated) throw Error('Upload cancelled');
+      return await this.request({ operation: 'uploadedCall', lease: body.lease, upload: id });
+    } catch (error) {
+      await this.request({ operation: 'uploadAbort', lease: body.lease, upload: id }).catch(
+        () => {},
+      );
+      throw error;
+    }
+  }
+  async uploadFile(body, file) {
+    const id = crypto.randomUUID();
+    try {
+      await this.request({
+        operation: 'uploadStart',
+        lease: body.lease,
+        id,
+        size: file.size,
+        kind: 'file',
+      });
+      for (let offset = 0; offset < file.size; offset += this.uploadChunkBytes) {
+        if (this.terminated) throw Error('Upload cancelled');
+        const bytes = new Uint8Array(
+            await file
+              .slice(offset, Math.min(file.size, offset + this.uploadChunkBytes))
+              .arrayBuffer(),
+          ),
+          sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+            .map((n) => n.toString(16).padStart(2, '0'))
+            .join('');
+        await this.request({
+          operation: 'uploadChunk',
+          lease: body.lease,
+          id,
+          offset,
+          bytes,
+          sha256,
+        });
+        this.onmessage?.({
+          data: {
+            progress:
+              '正在读取并传输文件 · ' +
+              Math.round((Math.min(file.size, offset + bytes.length) / file.size) * 100) +
+              '%',
+          },
+        });
+      }
+      if (this.terminated) throw Error('Upload cancelled');
+      return await this.request({ ...body, operation: 'uploadedFileCall', upload: id });
+    } catch (error) {
+      await this.request({ operation: 'uploadAbort', lease: body.lease, upload: id }).catch(
+        () => {},
+      );
+      throw error;
+    }
+  }
+  async heartbeat() {
+    const session = await this.ready;
+    if (this.terminated) return;
+    return this.request({ operation: 'heartbeat', lease: session.lease });
+  }
+  postMessage(message) {
+    if (this.terminated) return;
+    const owned = structuredClone(message),
+      queued = owned.trace ? performance.now() : null;
+    const next = this.tail.then(async () => {
+      const session = await this.ready;
+      if (this.terminated) return;
+      const queueMs = queued === null ? null : performance.now() - queued,
+        ack = this.ack.splice(0),
+        body = {
+          operation: 'call',
+          lease: session.lease,
+          id: owned.id,
+          action: owned.action,
+          data: owned.data,
+          ack,
+          ...(owned.trace ? { trace: true } : {}),
+        };
+      let response;
+      if (owned.action === 'import' && owned.data.file instanceof Blob) {
+        const { file, ...data } = owned.data;
+        response = await this.uploadFile({ ...body, data }, file);
+      } else response = await this.request(body);
+      if (this.terminated) return;
+      if (owned.trace)
+        response.performance = {
+          ...response.performance,
+          stages: [
+            ...(response.performance?.stages || []),
+            { stage: 'transport-queue', ms: queueMs },
+          ],
+        };
+      this.ack.push(owned.id);
+      this.onmessage?.({
+        data: {
+          id: owned.id,
+          value: response.value,
+          ...(response.performance ? { performance: response.performance } : {}),
+        },
+      });
+    });
+    this.tail = next.catch((error) => {
+      if (!this.terminated) {
+        if (error.replyReceived) this.ack.push(owned.id);
+        this.onmessage?.({ data: { id: owned.id, error: error.message } });
+      }
+    });
+  }
+  terminate() {
+    if (this.terminated) return;
+    this.terminated = true;
+    clearInterval(this.heartbeatTimer);
+    this.ready
+      .then((session) =>
+        this.request(
+          { operation: 'close', lease: session.lease, cancelReplacements: true },
+          { keepalive: true },
+        ),
+      )
+      .catch(() => {});
+  }
+}

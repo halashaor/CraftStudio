@@ -1,5 +1,37 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {axisConstraint,constrainAxisMove,reachableSnap} from '../src/axis-constraint.js';
-test('world axes and excluded-axis planes retain locked coordinates after geometry snapping',()=>{const start=[1,2,3],point=[5,6,7];assert.deepEqual(constrainAxisMove(start,point,axisConstraint({choice:'X'})),[5,2,3]);assert.deepEqual(constrainAxisMove(start,point,axisConstraint({choice:'YZ'})),[1,6,7]);assert.deepEqual(constrainAxisMove(start,point,axisConstraint()),point);assert.deepEqual(axisConstraint({choice:'Y',locked:true,plane:'xz'}).axes,[]);assert.deepEqual(axisConstraint({choice:'XY',locked:true,plane:'xz'}).axes,['X']);});
-test('inclined locked planes use their own U/V basis while unrestricted movement uses world axes',()=>{const q=Math.SQRT1_2,frame={origin:[0,0,0],u:[q,q,0],v:[0,0,1],normal:[q,-q,0]},state=axisConstraint({choice:'X',frame,locked:true}),moved=constrainAxisMove([0,0,0],[2,0,3],state);assert.equal(state.space,'local');assert.ok(Math.abs(moved[0]-1)<1e-10);assert.ok(Math.abs(moved[1]-1)<1e-10);assert.equal(moved[2],0);assert.equal(axisConstraint({frame,locked:false}).space,'world');assert.deepEqual(axisConstraint({frame,locked:true,choice:'Z'}).axes,[]);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { axisConstraint, constrainAxisMove, reachableSnap } from '../src/sketch/axis-constraint.js';
+test('world axes and excluded-axis planes retain locked coordinates after geometry snapping', () => {
+  const start = [1, 2, 3],
+    point = [5, 6, 7];
+  assert.deepEqual(constrainAxisMove(start, point, axisConstraint({ choice: 'X' })), [5, 2, 3]);
+  assert.deepEqual(constrainAxisMove(start, point, axisConstraint({ choice: 'YZ' })), [1, 6, 7]);
+  assert.deepEqual(constrainAxisMove(start, point, axisConstraint()), point);
+  assert.deepEqual(axisConstraint({ choice: 'Y', locked: true, plane: 'xz' }).axes, []);
+  assert.deepEqual(axisConstraint({ choice: 'XY', locked: true, plane: 'xz' }).axes, ['X']);
+});
+test('inclined locked planes use their own U/V basis while unrestricted movement uses world axes', () => {
+  const q = Math.SQRT1_2,
+    frame = { origin: [0, 0, 0], u: [q, q, 0], v: [0, 0, 1], normal: [q, -q, 0] },
+    state = axisConstraint({ choice: 'X', frame, locked: true }),
+    moved = constrainAxisMove([0, 0, 0], [2, 0, 3], state);
+  assert.equal(state.space, 'local');
+  assert.ok(Math.abs(moved[0] - 1) < 1e-10);
+  assert.ok(Math.abs(moved[1] - 1) < 1e-10);
+  assert.equal(moved[2], 0);
+  assert.equal(axisConstraint({ frame, locked: false }).space, 'world');
+  assert.deepEqual(axisConstraint({ frame, locked: true, choice: 'Z' }).axes, []);
+});
 
-test('snap eligibility rejects unreachable axis and inclined-plane targets before picking',()=>{assert.equal(reachableSnap([1,2,3],[5,2,3],axisConstraint({choice:'X'})),true);assert.equal(reachableSnap([1,2,3],[5,2.25,3],axisConstraint({choice:'X'})),false);const q=Math.SQRT1_2,frame={origin:[0,0,0],u:[q,q,0],v:[0,0,1],normal:[q,-q,0]},u=axisConstraint({choice:'X',frame,locked:true}),plane=axisConstraint({frame,locked:true});assert.equal(reachableSnap([0,0,0],[2,2,0],u),true);assert.equal(reachableSnap([0,0,0],[2,2,1],u),false);assert.equal(reachableSnap([0,0,0],[2,2,1],plane),true);assert.equal(reachableSnap([0,0,0],[3,1,0],plane),false);});
+test('snap eligibility rejects unreachable axis and inclined-plane targets before picking', () => {
+  assert.equal(reachableSnap([1, 2, 3], [5, 2, 3], axisConstraint({ choice: 'X' })), true);
+  assert.equal(reachableSnap([1, 2, 3], [5, 2.25, 3], axisConstraint({ choice: 'X' })), false);
+  const q = Math.SQRT1_2,
+    frame = { origin: [0, 0, 0], u: [q, q, 0], v: [0, 0, 1], normal: [q, -q, 0] },
+    u = axisConstraint({ choice: 'X', frame, locked: true }),
+    plane = axisConstraint({ frame, locked: true });
+  assert.equal(reachableSnap([0, 0, 0], [2, 2, 0], u), true);
+  assert.equal(reachableSnap([0, 0, 0], [2, 2, 1], u), false);
+  assert.equal(reachableSnap([0, 0, 0], [2, 2, 1], plane), true);
+  assert.equal(reachableSnap([0, 0, 0], [3, 1, 0], plane), false);
+});

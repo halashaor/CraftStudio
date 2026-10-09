@@ -1,6 +1,31 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {guideActions} from '../src/guide-actions.js';
-const line=(id,a,b)=>({id,name:id,recipe:{kind:'line'},points:[a,b]});const loop=[line('a',[2,1,2],[10,1,2]),line('b',[10,1,2],[6,1,10]),line('c',[6,1,10],[2,1,2])];
-test('context extrusion resolves joined loop sources independent of order',()=>{const a=guideActions(loop,'b').extrude;assert.deepEqual(a.sourceIds,['a','b','c']);assert.equal(guideActions([...loop].reverse(),'a').extrude.profileId,a.profileId);assert.equal(guideActions(loop,'b').sweep.pathId,'b');assert.equal(guideActions(loop.slice(0,2),'b').extrude.reason.includes('闭合'),true);});
-test('missing or degenerate paths cannot be silently chosen as feature sources',()=>{assert.ok(guideActions([], 'missing').sweep.reason);assert.ok(guideActions([line('same',[2,2,2],[2,2,2])],'same').sweep.reason);assert.ok(guideActions([line('bad',[2,2,2],[NaN,2,2])],'bad').sweep.reason);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { guideActions } from '../src/modeling/guide-actions.js';
+const line = (id, a, b) => ({ id, name: id, recipe: { kind: 'line' }, points: [a, b] });
+const loop = [
+  line('a', [2, 1, 2], [10, 1, 2]),
+  line('b', [10, 1, 2], [6, 1, 10]),
+  line('c', [6, 1, 10], [2, 1, 2]),
+];
+test('context extrusion resolves joined loop sources independent of order', () => {
+  const a = guideActions(loop, 'b').extrude;
+  assert.deepEqual(a.sourceIds, ['a', 'b', 'c']);
+  assert.equal(guideActions([...loop].reverse(), 'a').extrude.profileId, a.profileId);
+  assert.equal(guideActions(loop, 'b').sweep.pathId, 'b');
+  assert.equal(guideActions(loop.slice(0, 2), 'b').extrude.reason.includes('闭合'), true);
+});
+test('missing or degenerate paths cannot be silently chosen as feature sources', () => {
+  assert.ok(guideActions([], 'missing').sweep.reason);
+  assert.ok(guideActions([line('same', [2, 2, 2], [2, 2, 2])], 'same').sweep.reason);
+  assert.ok(guideActions([line('bad', [2, 2, 2], [NaN, 2, 2])], 'bad').sweep.reason);
+});
 
-test('tilted closed loops remain eligible without flattening the source',()=>{const tilted=loop.map(g=>({...g,points:g.points.map(p=>[p[0],p[1]+p[0]/2,p[2]])})),before=structuredClone(tilted);assert.ok(guideActions(tilted,'c').extrude.profileId);assert.deepEqual(tilted,before);});
+test('tilted closed loops remain eligible without flattening the source', () => {
+  const tilted = loop.map((g) => ({
+      ...g,
+      points: g.points.map((p) => [p[0], p[1] + p[0] / 2, p[2]]),
+    })),
+    before = structuredClone(tilted);
+  assert.ok(guideActions(tilted, 'c').extrude.profileId);
+  assert.deepEqual(tilted, before);
+});

@@ -1,20 +1,170 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {tmpdir} from 'node:os';import {join} from 'node:path';import {rmSync} from 'node:fs';import {randomUUID} from 'node:crypto';
-import {EngineWorkspace} from '../../local-engine/workspace.mjs';import {EngineStore} from '../../local-engine/store.mjs';import {emptyProject} from '../src/codec.js';
-const open=async()=>{const e=new EngineWorkspace();await e.call('import',{name:'fixture.json',bytes:new TextEncoder().encode(JSON.stringify(emptyProject())).buffer});return e;};
-const set=async(e,x)=>{const d=await e.call('api',{method:'workspace.describe'});return e.call('api',{id:'edit-'+x,method:'edit.apply',params:{expectedRevision:d.revision,operations:[{type:'set',pos:[x,1,1],state:{Name:'minecraft:bricks'}}]}});};
-test('chunk roots and persistent undo/redo survive a new process and SQLite reopen',async()=>{
- const path=join(tmpdir(),'craftstudio-engine-'+randomUUID()+'.sqlite');let store=new EngineStore(path),e=await open(),other;try{
-  const initial=await e.call('engineCapture',{known:store.known()});store.commit('project',initial,null);await set(e,2);let packet=await e.call('engineCapture',{known:store.known()});assert.equal(packet.blobs.filter(b=>b.id===packet.head.overlay[0][1]).length,1);assert.equal(packet.blobs.some(b=>b.id===packet.head.base),false);store.commit('project',packet,1);const edited=await set(e,3);packet=await e.call('engineCapture',{known:store.known()});assert.equal(packet.blobs.length,1);store.commit('project',packet,2);const oldWorkspace=packet.head.workspaceId;
-  store.close();store=new EngineStore(path);await e.close();other=new EngineWorkspace();await other.call('engineRestore',store.load('project'));let d=await other.call('api',{method:'workspace.describe'});assert.equal(d.workspaceId,oldWorkspace);assert.equal(d.value.history.undo,2);assert.equal(d.revision,edited.revision);const replay=await other.call('api',{id:'edit-3',method:'edit.apply',params:{expectedRevision:edited.revision-1,operations:[{type:'set',pos:[3,1,1],state:{Name:'minecraft:bricks'}}]}});assert.deepEqual(replay,edited);
-  assert.ok((await other.call('api',{method:'history.undo',params:{expectedRevision:d.revision}})).ok);assert.equal((await other.call('api',{method:'scene.getBlocks',params:{positions:[[3,1,1]]}})).value[0].state,null);packet=await other.call('engineCapture',{known:store.known()});assert.equal(packet.blobs.length,0);store.commit('project',packet,3);await other.close();other=new EngineWorkspace();await other.call('engineRestore',store.load('project'));d=await other.call('api',{method:'workspace.describe'});assert.equal(d.value.history.redo,1);assert.ok((await other.call('api',{method:'history.redo',params:{expectedRevision:d.revision}})).ok);assert.equal((await other.call('api',{method:'scene.getBlocks',params:{positions:[[3,1,1]]}})).value[0].state.Name,'minecraft:bricks');
- }finally{await Promise.all([e.close(),other?.close()]);store.close();rmSync(path,{force:true});}
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { EngineWorkspace } from '../../local-engine/workspace.mjs';
+import { EngineStore } from '../../local-engine/store.mjs';
+import { emptyProject } from '../src/minecraft/codec.js';
+const open = async () => {
+  const e = new EngineWorkspace();
+  await e.call('import', {
+    name: 'fixture.json',
+    bytes: new TextEncoder().encode(JSON.stringify(emptyProject())).buffer,
+  });
+  return e;
+};
+const set = async (e, x) => {
+  const d = await e.call('api', { method: 'workspace.describe' });
+  return e.call('api', {
+    id: 'edit-' + x,
+    method: 'edit.apply',
+    params: {
+      expectedRevision: d.revision,
+      operations: [{ type: 'set', pos: [x, 1, 1], state: { Name: 'minecraft:bricks' } }],
+    },
+  });
+};
+test('chunk roots and persistent undo/redo survive a new process and SQLite reopen', async () => {
+  const path = join(tmpdir(), 'craftstudio-engine-' + randomUUID() + '.sqlite');
+  let store = new EngineStore(path),
+    e = await open(),
+    other;
+  try {
+    const initial = await e.call('engineCapture', { known: store.known() });
+    store.commit('project', initial, null);
+    await set(e, 2);
+    let packet = await e.call('engineCapture', { known: store.known() });
+    assert.equal(packet.blobs.filter((b) => b.id === packet.head.overlay[0][1]).length, 1);
+    assert.equal(
+      packet.blobs.some((b) => b.id === packet.head.base),
+      false,
+    );
+    store.commit('project', packet, 1);
+    const edited = await set(e, 3);
+    packet = await e.call('engineCapture', { known: store.known() });
+    assert.equal(packet.blobs.length, 1);
+    store.commit('project', packet, 2);
+    const oldWorkspace = packet.head.workspaceId;
+    store.close();
+    store = new EngineStore(path);
+    await e.close();
+    other = new EngineWorkspace();
+    await other.call('engineRestore', store.load('project'));
+    let d = await other.call('api', { method: 'workspace.describe' });
+    assert.equal(d.workspaceId, oldWorkspace);
+    assert.equal(d.value.history.undo, 2);
+    assert.equal(d.revision, edited.revision);
+    const replay = await other.call('api', {
+      id: 'edit-3',
+      method: 'edit.apply',
+      params: {
+        expectedRevision: edited.revision - 1,
+        operations: [{ type: 'set', pos: [3, 1, 1], state: { Name: 'minecraft:bricks' } }],
+      },
+    });
+    assert.deepEqual(replay, edited);
+    assert.ok(
+      (
+        await other.call('api', {
+          method: 'history.undo',
+          params: { expectedRevision: d.revision },
+        })
+      ).ok,
+    );
+    assert.equal(
+      (await other.call('api', { method: 'scene.getBlocks', params: { positions: [[3, 1, 1]] } }))
+        .value[0].state,
+      null,
+    );
+    packet = await other.call('engineCapture', { known: store.known() });
+    assert.equal(packet.blobs.length, 0);
+    store.commit('project', packet, 3);
+    await other.close();
+    other = new EngineWorkspace();
+    await other.call('engineRestore', store.load('project'));
+    d = await other.call('api', { method: 'workspace.describe' });
+    assert.equal(d.value.history.redo, 1);
+    assert.ok(
+      (
+        await other.call('api', {
+          method: 'history.redo',
+          params: { expectedRevision: d.revision },
+        })
+      ).ok,
+    );
+    assert.equal(
+      (await other.call('api', { method: 'scene.getBlocks', params: { positions: [[3, 1, 1]] } }))
+        .value[0].state.Name,
+      'minecraft:bricks',
+    );
+  } finally {
+    await Promise.all([e.close(), other?.close()]);
+    store.close();
+    rmSync(path, { force: true });
+  }
 });
-test('atomic checkpoint rollback, replay and corrupt payload detection',async()=>{
- const store=new EngineStore(':memory:'),e=await open();try{const initial=await e.call('engineCapture');assert.equal(store.commit('project',initial,null).sequence,1);assert.equal(store.commit('project',initial,null).replayed,true);await set(e,2);const packet=await e.call('engineCapture',{known:store.known()}),before=store.known();assert.throws(()=>store.commit('project',packet,0),/conflict/);assert.deepEqual(store.known(),before);const missing=structuredClone(packet);missing.head.overlay[0][1]='f'.repeat(64);assert.throws(()=>store.commit('project',missing,1),/Missing/);assert.deepEqual(store.known(),before);assert.equal(store.load('project').sequence,1);store.commit('project',packet,1);const older=structuredClone(packet);older.head.revision=0;assert.throws(()=>store.commit('project',older,2),/Outdated/);assert.equal(store.load('project').sequence,2);const id=packet.head.overlay[0][1];store.db.prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?').run(new Uint8Array([1,2,3]),id);assert.throws(()=>store.load('project'),/corrupt/);
- }finally{await e.close();store.close();}
+test('atomic checkpoint rollback, replay and corrupt payload detection', async () => {
+  const store = new EngineStore(':memory:'),
+    e = await open();
+  try {
+    const initial = await e.call('engineCapture');
+    assert.equal(store.commit('project', initial, null).sequence, 1);
+    assert.equal(store.commit('project', initial, null).replayed, true);
+    await set(e, 2);
+    const packet = await e.call('engineCapture', { known: store.known() }),
+      before = store.known();
+    assert.throws(() => store.commit('project', packet, 0), /conflict/);
+    assert.deepEqual(store.known(), before);
+    const missing = structuredClone(packet);
+    missing.head.overlay[0][1] = 'f'.repeat(64);
+    assert.throws(() => store.commit('project', missing, 1), /Missing/);
+    assert.deepEqual(store.known(), before);
+    assert.equal(store.load('project').sequence, 1);
+    store.commit('project', packet, 1);
+    const older = structuredClone(packet);
+    older.head.revision = 0;
+    assert.throws(() => store.commit('project', older, 2), /Outdated/);
+    assert.equal(store.load('project').sequence, 2);
+    const id = packet.head.overlay[0][1];
+    store.db
+      .prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?')
+      .run(new Uint8Array([1, 2, 3]), id);
+    assert.throws(() => store.load('project'), /corrupt/);
+  } finally {
+    await e.close();
+    store.close();
+  }
 });
-test('a project-library writer blocks a shared journal but not a separate engine journal',async()=>{
- const {Worker}=await import('node:worker_threads'),{once}=await import('node:events');const legacy=join(tmpdir(),'craftstudio-legacy-'+randomUUID()+'.sqlite'),engine=join(tmpdir(),'craftstudio-journal-'+randomUUID()+'.sqlite');const oldStore=new EngineStore(legacy),newStore=new EngineStore(engine),e=await open();let writer;
- try{oldStore.db.exec('PRAGMA busy_timeout=20');const packet=await e.call('engineCapture');writer=new Worker(`const {parentPort,workerData}=require('node:worker_threads');const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(workerData);db.exec('BEGIN IMMEDIATE');parentPort.postMessage('locked');parentPort.on('message',()=>{db.exec('ROLLBACK');db.close();parentPort.close();});`,{eval:true,workerData:legacy});await once(writer,'message');assert.throws(()=>oldStore.commit('p',packet,null),/locked/);assert.equal(newStore.commit('p',packet,null).sequence,1);assert.equal(newStore.load('p').head.workspaceId,packet.head.workspaceId);writer.postMessage('release');await once(writer,'exit');
- }finally{if(writer)await writer.terminate();await e.close();oldStore.close();newStore.close();rmSync(legacy,{force:true});rmSync(engine,{force:true});}
+test('a project-library writer blocks a shared journal but not a separate engine journal', async () => {
+  const { Worker } = await import('node:worker_threads'),
+    { once } = await import('node:events');
+  const legacy = join(tmpdir(), 'craftstudio-legacy-' + randomUUID() + '.sqlite'),
+    engine = join(tmpdir(), 'craftstudio-journal-' + randomUUID() + '.sqlite');
+  const oldStore = new EngineStore(legacy),
+    newStore = new EngineStore(engine),
+    e = await open();
+  let writer;
+  try {
+    oldStore.db.exec('PRAGMA busy_timeout=20');
+    const packet = await e.call('engineCapture');
+    writer = new Worker(
+      `const {parentPort,workerData}=require('node:worker_threads');const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(workerData);db.exec('BEGIN IMMEDIATE');parentPort.postMessage('locked');parentPort.on('message',()=>{db.exec('ROLLBACK');db.close();parentPort.close();});`,
+      { eval: true, workerData: legacy },
+    );
+    await once(writer, 'message');
+    assert.throws(() => oldStore.commit('p', packet, null), /locked/);
+    assert.equal(newStore.commit('p', packet, null).sequence, 1);
+    assert.equal(newStore.load('p').head.workspaceId, packet.head.workspaceId);
+    writer.postMessage('release');
+    await once(writer, 'exit');
+  } finally {
+    if (writer) await writer.terminate();
+    await e.close();
+    oldStore.close();
+    newStore.close();
+    rmSync(legacy, { force: true });
+    rmSync(engine, { force: true });
+  }
 });

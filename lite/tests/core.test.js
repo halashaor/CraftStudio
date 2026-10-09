@@ -1,27 +1,212 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import {tag,readNBT,writeNBT,importNBT,exportNBT,emptyProject,stateKey} from '../src/codec.js';
-import {Site} from '../src/site.js';
-import {Resources} from '../src/resources.js';
-import {buildMesh} from '../src/mesh.js';
-import {readReferenceHTML,referenceOperations,inferOrigin,referenceAssets} from '../src/reference.js';
-import {createHash} from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import {
+  tag,
+  readNBT,
+  writeNBT,
+  importNBT,
+  exportNBT,
+  emptyProject,
+  stateKey,
+} from '../src/minecraft/codec.js';
+import { Site } from '../src/core/site.js';
+import { Resources } from '../src/materials/resources.js';
+import { buildMesh } from '../src/rendering/mesh.js';
+import {
+  readReferenceHTML,
+  referenceOperations,
+  inferOrigin,
+  referenceAssets,
+} from '../src/minecraft/reference.js';
+import { createHash } from 'node:crypto';
 
-test('NBT preserves modified UTF-8, supplementary characters and 64-bit typed integers',()=>{const original=tag(10,{text:tag(8,'中文\0🧱'),long:tag(4,'9223372036854775807'),array:tag(12,['-9223372036854775808','1234567890123456789']),byte:tag(1,-128),float:tag(5,1.25),bytes:tag(7,[0,128,255])});assert.deepEqual(readNBT(writeNBT(original)),original);});
-function littleSite(){const p=emptyProject('真实台地');p.size=[4,4,4];p.palette=[{Name:'minecraft:stone'},{Name:'minecraft:oak_planks'},{Name:'minecraft:water'}];p.blocks=[{pos:[0,0,0],state:0},{pos:[1,0,0],state:0},{pos:[1,1,0],state:1},{pos:[2,0,0],state:0},{pos:[2,1,0],state:2}];return new Site(p);}
-test('failed terrain modification is atomic and baseline stays fixed',()=>{const site=littleSite(),before=structuredClone(site.pack());assert.throws(()=>site.operations([{type:'set',pos:[0,0,0],state:{Name:'minecraft:glass'}}]),/地形/);assert.deepEqual(site.pack(),before);});
-test('multiple operations share the staged state and baseline restoration removes delta',()=>{const site=littleSite();site.operations([{type:'set',pos:[3,1,0],state:{Name:'minecraft:glass'}},{type:'erase',min:[3,1,0],max:[3,1,0]}]);assert.equal(site.overlay.size,0);site.operations([{type:'set',pos:[0,0,0],state:{Name:'minecraft:oak_planks'}}],{allowTerrain:true,allowExisting:true});assert.equal(site.diff()[0].category,'ground');site.operations([{type:'set',pos:[0,0,0],state:{Name:'minecraft:stone'}}],{allowTerrain:true,allowExisting:true});assert.equal(site.overlay.size,0);});
-test('existing structures, water and protected regions are not silently changed',()=>{const s=littleSite();assert.throws(()=>s.operations([{type:'erase',min:[1,1,0],max:[1,1,0]}]),/原有建筑/);assert.throws(()=>s.operations([{type:'erase',min:[2,1,0],max:[2,1,0]}]),/河水/);s.protected.push({min:[3,0,0],max:[3,3,3]});assert.throws(()=>s.operations([{type:'set',pos:[3,1,0],state:{Name:'minecraft:glass'}}],{allowTerrain:true,allowExisting:true}),/锁定/);});
-test('site-dependent platform detects slope height and unknown terrain',()=>{const s=littleSite();assert.throws(()=>s.platform([0,0],[0,0],0,{Name:'minecraft:stone'}),/标高/);assert.throws(()=>s.platform([3,0],[3,0],3,{Name:'minecraft:stone'}),/缺少地面/);const proposal=s.platform([0,0],[0,0],3,{Name:'minecraft:oak_planks'});assert.equal(proposal.deepest,2);assert.deepEqual(proposal.operations[1].min,[0,1,0]);assert.deepEqual(proposal.operations[1].max,[0,2,0]);});
-test('terrain context carries actual ground, water and occupied heights without inventing missing cells',()=>{const map=littleSite().heightmap(null,Infinity);assert.deepEqual(map.rows.find(r=>r[0]===2&&r[1]===0),[2,0,0,1,1]);assert.deepEqual(map.rows.find(r=>r[0]===3&&r[1]===0),[3,0,null,null,null]);assert.equal(map.stride,1);});
-test('terrain mesh culls internal solid faces while showing exposed surfaces',()=>{const p=emptyProject();p.size=[2,1,1];p.palette=[{Name:'minecraft:stone'}];p.blocks=[{pos:[0,0,0],state:0},{pos:[1,0,0],state:0}];const mesh=buildMesh(new Site(p),new Resources());assert.equal(mesh.triangles,20);});
-test('demolition view includes originals removed for replacements',()=>{const s=littleSite();s.operations([{type:'set',pos:[0,0,0],state:{Name:'minecraft:glass'}}],{allowTerrain:true,allowExisting:true});const m=buildMesh(s,new Resources(),{mode:'removed'});assert.ok(m.triangles>0);assert.ok(m.buckets.every(b=>b.alpha==='deleted'));});
+test('NBT preserves modified UTF-8, supplementary characters and 64-bit typed integers', () => {
+  const original = tag(10, {
+    text: tag(8, '中文\0🧱'),
+    long: tag(4, '9223372036854775807'),
+    array: tag(12, ['-9223372036854775808', '1234567890123456789']),
+    byte: tag(1, -128),
+    float: tag(5, 1.25),
+    bytes: tag(7, [0, 128, 255]),
+  });
+  assert.deepEqual(readNBT(writeNBT(original)), original);
+});
+function littleSite() {
+  const p = emptyProject('真实台地');
+  p.size = [4, 4, 4];
+  p.palette = [
+    { Name: 'minecraft:stone' },
+    { Name: 'minecraft:oak_planks' },
+    { Name: 'minecraft:water' },
+  ];
+  p.blocks = [
+    { pos: [0, 0, 0], state: 0 },
+    { pos: [1, 0, 0], state: 0 },
+    { pos: [1, 1, 0], state: 1 },
+    { pos: [2, 0, 0], state: 0 },
+    { pos: [2, 1, 0], state: 2 },
+  ];
+  return new Site(p);
+}
+test('failed terrain modification is atomic and baseline stays fixed', () => {
+  const site = littleSite(),
+    before = structuredClone(site.pack());
+  assert.throws(
+    () => site.operations([{ type: 'set', pos: [0, 0, 0], state: { Name: 'minecraft:glass' } }]),
+    /地形/,
+  );
+  assert.deepEqual(site.pack(), before);
+});
+test('multiple operations share the staged state and baseline restoration removes delta', () => {
+  const site = littleSite();
+  site.operations([
+    { type: 'set', pos: [3, 1, 0], state: { Name: 'minecraft:glass' } },
+    { type: 'erase', min: [3, 1, 0], max: [3, 1, 0] },
+  ]);
+  assert.equal(site.overlay.size, 0);
+  site.operations([{ type: 'set', pos: [0, 0, 0], state: { Name: 'minecraft:oak_planks' } }], {
+    allowTerrain: true,
+    allowExisting: true,
+  });
+  assert.equal(site.diff()[0].category, 'ground');
+  site.operations([{ type: 'set', pos: [0, 0, 0], state: { Name: 'minecraft:stone' } }], {
+    allowTerrain: true,
+    allowExisting: true,
+  });
+  assert.equal(site.overlay.size, 0);
+});
+test('existing structures, water and protected regions are not silently changed', () => {
+  const s = littleSite();
+  assert.throws(
+    () => s.operations([{ type: 'erase', min: [1, 1, 0], max: [1, 1, 0] }]),
+    /原有建筑/,
+  );
+  assert.throws(() => s.operations([{ type: 'erase', min: [2, 1, 0], max: [2, 1, 0] }]), /河水/);
+  s.protected.push({ min: [3, 0, 0], max: [3, 3, 3] });
+  assert.throws(
+    () =>
+      s.operations([{ type: 'set', pos: [3, 1, 0], state: { Name: 'minecraft:glass' } }], {
+        allowTerrain: true,
+        allowExisting: true,
+      }),
+    /锁定/,
+  );
+});
+test('site-dependent platform detects slope height and unknown terrain', () => {
+  const s = littleSite();
+  assert.throws(() => s.platform([0, 0], [0, 0], 0, { Name: 'minecraft:stone' }), /标高/);
+  assert.throws(() => s.platform([3, 0], [3, 0], 3, { Name: 'minecraft:stone' }), /缺少地面/);
+  const proposal = s.platform([0, 0], [0, 0], 3, { Name: 'minecraft:oak_planks' });
+  assert.equal(proposal.deepest, 2);
+  assert.deepEqual(proposal.operations[1].min, [0, 1, 0]);
+  assert.deepEqual(proposal.operations[1].max, [0, 2, 0]);
+});
+test('terrain context carries actual ground, water and occupied heights without inventing missing cells', () => {
+  const map = littleSite().heightmap(null, Infinity);
+  assert.deepEqual(
+    map.rows.find((r) => r[0] === 2 && r[1] === 0),
+    [2, 0, 0, 1, 1],
+  );
+  assert.deepEqual(
+    map.rows.find((r) => r[0] === 3 && r[1] === 0),
+    [3, 0, null, null, null],
+  );
+  assert.equal(map.stride, 1);
+});
+test('terrain mesh culls internal solid faces while showing exposed surfaces', () => {
+  const p = emptyProject();
+  p.size = [2, 1, 1];
+  p.palette = [{ Name: 'minecraft:stone' }];
+  p.blocks = [
+    { pos: [0, 0, 0], state: 0 },
+    { pos: [1, 0, 0], state: 0 },
+  ];
+  const mesh = buildMesh(new Site(p), new Resources());
+  assert.equal(mesh.triangles, 20);
+});
+test('demolition view includes originals removed for replacements', () => {
+  const s = littleSite();
+  s.operations([{ type: 'set', pos: [0, 0, 0], state: { Name: 'minecraft:glass' } }], {
+    allowTerrain: true,
+    allowExisting: true,
+  });
+  const m = buildMesh(s, new Resources(), { mode: 'removed' });
+  assert.ok(m.triangles > 0);
+  assert.ok(m.buckets.every((b) => b.alpha === 'deleted'));
+});
 
-const actualPath=(process.env.CRAFTSTUDIO_TEST_NBT||'');
+const actualPath = process.env.CRAFTSTUDIO_TEST_NBT || '';
 let actual;
-test('actual 1.nbt imports 520227 original cells, entities and infers exact world origin',{skip:!process.env.CRAFTSTUDIO_TEST_NBT},async()=>{const bytes=await readFile(actualPath);actual=importNBT(bytes,'1.nbt');assert.equal(actual.blocks.length,520227);assert.deepEqual(actual.size,[130,59,158]);assert.equal(actual.palette.length,875);assert.equal(actual.entities.length,169);const origin=inferOrigin(actual);assert.deepEqual(origin.origin,[1563,46,-557]);assert.equal(origin.votes,169);assert.equal(origin.consistent,true);});
-test('provided V3 reference validates before-states against the actual source and exact deltas',{skip:!process.env.CRAFTSTUDIO_TEST_REFERENCE_HTML},async()=>{if(!actual)actual=importNBT(await readFile(actualPath),'1.nbt');actual.metadata.sourceHash=createHash('sha256').update(await readFile(actualPath)).digest('hex');const site=new Site(actual),html=await readFile((process.env.CRAFTSTUDIO_TEST_REFERENCE_HTML||''),'utf8'),ref=readReferenceHTML(html);const ops=referenceOperations(ref,site);assert.equal(ops.length,34593);site.operations(ops,{allowTerrain:true,allowExisting:true});const stats=site.summary();assert.equal(stats.add,29909);assert.equal(stats.replace,3270);assert.equal(stats.remove,1414);assert.equal(stats.water,4);assert.equal(stats.earth,1398);assert.equal(site.base.blocks.length,520227);const pack=referenceAssets(ref);assert.ok(Object.keys(pack.models).length>=875);assert.ok(pack.images.referenceAtlas.startsWith('data:image/png;base64,'));});
-test('actual source NBT export/import keeps all block entity types and native extra data',{skip:!process.env.CRAFTSTUDIO_TEST_NBT},()=>{assert.ok(actual);const recovered=importNBT(exportNBT(actual),'roundtrip');assert.deepEqual(recovered.blocks,actual.blocks);assert.deepEqual(recovered.entities,actual.entities);assert.deepEqual(recovered.metadata.nativeExtra,actual.metadata.nativeExtra);assert.equal(recovered.dataVersion,3955);});
+test(
+  'actual 1.nbt imports 520227 original cells, entities and infers exact world origin',
+  { skip: !process.env.CRAFTSTUDIO_TEST_NBT },
+  async () => {
+    const bytes = await readFile(actualPath);
+    actual = importNBT(bytes, '1.nbt');
+    assert.equal(actual.blocks.length, 520227);
+    assert.deepEqual(actual.size, [130, 59, 158]);
+    assert.equal(actual.palette.length, 875);
+    assert.equal(actual.entities.length, 169);
+    const origin = inferOrigin(actual);
+    assert.deepEqual(origin.origin, [1563, 46, -557]);
+    assert.equal(origin.votes, 169);
+    assert.equal(origin.consistent, true);
+  },
+);
+test(
+  'provided V3 reference validates before-states against the actual source and exact deltas',
+  { skip: !process.env.CRAFTSTUDIO_TEST_REFERENCE_HTML },
+  async () => {
+    if (!actual) actual = importNBT(await readFile(actualPath), '1.nbt');
+    actual.metadata.sourceHash = createHash('sha256')
+      .update(await readFile(actualPath))
+      .digest('hex');
+    const site = new Site(actual),
+      html = await readFile(process.env.CRAFTSTUDIO_TEST_REFERENCE_HTML || '', 'utf8'),
+      ref = readReferenceHTML(html);
+    const ops = referenceOperations(ref, site);
+    assert.equal(ops.length, 34593);
+    site.operations(ops, { allowTerrain: true, allowExisting: true });
+    const stats = site.summary();
+    assert.equal(stats.add, 29909);
+    assert.equal(stats.replace, 3270);
+    assert.equal(stats.remove, 1414);
+    assert.equal(stats.water, 4);
+    assert.equal(stats.earth, 1398);
+    assert.equal(site.base.blocks.length, 520227);
+    const pack = referenceAssets(ref);
+    assert.ok(Object.keys(pack.models).length >= 875);
+    assert.ok(pack.images.referenceAtlas.startsWith('data:image/png;base64,'));
+  },
+);
+test(
+  'actual source NBT export/import keeps all block entity types and native extra data',
+  { skip: !process.env.CRAFTSTUDIO_TEST_NBT },
+  () => {
+    assert.ok(actual);
+    const recovered = importNBT(exportNBT(actual), 'roundtrip');
+    assert.deepEqual(recovered.blocks, actual.blocks);
+    assert.deepEqual(recovered.entities, actual.entities);
+    assert.deepEqual(recovered.metadata.nativeExtra, actual.metadata.nativeExtra);
+    assert.equal(recovered.dataVersion, 3955);
+  },
+);
 
-test('mesh classification is recomputed for each render instead of retaining stale palette slots',()=>{const site=new Site({...emptyProject(),size:[4,4,4],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,1,1],state:0}]}),resources=new Resources();assert.equal(buildMesh(site,resources).triangles,12);site.palette[0]={Name:'minecraft:cornflower'};assert.equal(buildMesh(site,resources,{plants:false}).triangles,0);site.palette[0]={Name:'minecraft:glass'};const glass=buildMesh(site,resources,{showGround:false});assert.equal(glass.triangles,12);assert.equal(glass.buckets[0].alpha,'transparent');assert.equal(site.overlay.size,0);});
+test('mesh classification is recomputed for each render instead of retaining stale palette slots', () => {
+  const site = new Site({
+      ...emptyProject(),
+      size: [4, 4, 4],
+      palette: [{ Name: 'minecraft:stone' }],
+      blocks: [{ pos: [1, 1, 1], state: 0 }],
+    }),
+    resources = new Resources();
+  assert.equal(buildMesh(site, resources).triangles, 12);
+  site.palette[0] = { Name: 'minecraft:cornflower' };
+  assert.equal(buildMesh(site, resources, { plants: false }).triangles, 0);
+  site.palette[0] = { Name: 'minecraft:glass' };
+  const glass = buildMesh(site, resources, { showGround: false });
+  assert.equal(glass.triangles, 12);
+  assert.equal(glass.buckets[0].alpha, 'transparent');
+  assert.equal(site.overlay.size, 0);
+});

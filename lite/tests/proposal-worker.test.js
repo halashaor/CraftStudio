@@ -1,35 +1,164 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyProject} from '../src/codec.js';
-const replies=new Map();let sequence=0;
-globalThis.self={crypto:globalThis.crypto,postMessage:r=>{if(r.progress)return;const next=replies.get(r.id);replies.delete(r.id);r.error?next.reject(Error(r.error)):next.resolve(r.value);}};
+import { emptyProject } from '../src/minecraft/codec.js';
+const replies = new Map();
+let sequence = 0;
+globalThis.self = {
+  crypto: globalThis.crypto,
+  postMessage: (r) => {
+    if (r.progress) return;
+    const next = replies.get(r.id);
+    replies.delete(r.id);
+    r.error ? next.reject(Error(r.error)) : next.resolve(r.value);
+  },
+};
 await import('../src/worker.js');
-const call=(action,data={})=>new Promise((resolve,reject)=>{const id=++sequence;replies.set(id,{resolve,reject});self.onmessage({data:{id,action,data}});});
-const rpc=(method,params={})=>call('api',{method,params});
-test('worker proposals pin identity/revision, preserve deletion and allow one-undo acceptance',async()=>{
- const project={...emptyProject(),size:[20,20,20],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,0,1],state:0}]};
- await call('import',{name:'fixture.craft.json',bytes:new TextEncoder().encode(JSON.stringify(project)).buffer});
- const before=await rpc('workspace.describe');
- const operations=[{type:'erase',min:[1,0,1],max:[1,0,1]},{type:'set',pos:[3,1,3],state:{Name:'custom:detail'}}];
- const first=await rpc('proposal.prepare',{expectedRevision:before.revision,operations});assert.ok(first.ok,first.error?.message);assert.equal(first.revision,before.revision);
- assert.equal((await rpc('edit.brush',{expectedRevision:before.revision,points:[[4,1,4]],state:{Name:'minecraft:bricks'}})).error.code,'PREVIEW_ACTIVE');
- const second=await rpc('proposal.prepare',{expectedRevision:before.revision,operations});assert.ok(second.ok);assert.notEqual(first.value.id,second.value.id);
- assert.equal((await rpc('proposal.commit',{expectedRevision:before.revision,proposalId:first.value.id,policy:{allowTerrain:true,allowExisting:true}})).ok,false);
- const inspected=await rpc('proposal.inspect',{limit:1});assert.equal(inspected.value.total,2);assert.equal(inspected.value.operations[0].state,null);
- const rejected=await rpc('proposal.commit',{expectedRevision:before.revision,proposalId:second.value.id,policy:{}});assert.equal(rejected.ok,false);assert.equal((await rpc('workspace.describe')).revision,before.revision);
- const adopted=await rpc('proposal.commit',{expectedRevision:before.revision,proposalId:second.value.id,policy:{allowTerrain:true,allowExisting:true}});assert.ok(adopted.ok,adopted.error?.message);assert.equal(adopted.revision,before.revision+1);
- const cells=await rpc('scene.getBlocks',{positions:[[1,0,1],[3,1,3]]});assert.equal(cells.value[0].state,null);assert.equal(cells.value[1].state.Name,'custom:detail');
- await rpc('history.undo',{expectedRevision:adopted.revision});const restored=await rpc('scene.getBlocks',{positions:[[1,0,1],[3,1,3]]});assert.equal(restored.value[0].state.Name,'minecraft:stone');assert.equal(restored.value[1].state,null);
- const base=await rpc('workspace.describe');const cancel=await rpc('proposal.prepare',{expectedRevision:base.revision,operations});await call('undo');assert.equal((await rpc('workspace.describe')).revision,base.revision);assert.equal((await rpc('proposal.inspect')).ok,false);
- const stale=await rpc('proposal.prepare',{expectedRevision:base.revision,operations});await call('origin',{origin:[4,64,4],confirmed:true});assert.equal((await rpc('proposal.commit',{expectedRevision:base.revision+1,proposalId:stale.value.id,policy:{allowTerrain:true,allowExisting:true}})).error.code,'REVISION_CONFLICT');
- await rpc('proposal.cancel',{proposalId:stale.value.id});
- const selection=await call('selectionPreview',{min:[1,0,1],max:[1,0,1]});await call('origin',{origin:[5,64,5],confirmed:true});await assert.rejects(call('studio',{command:'transform',min:[1,0,1],max:[1,0,1],at:[5,0,5],move:true,expectedRevision:selection.revision,workspaceId:selection.workspaceId,policy:{allowTerrain:true,allowExisting:true}}));
+const call = (action, data = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++sequence;
+    replies.set(id, { resolve, reject });
+    self.onmessage({ data: { id, action, data } });
+  });
+const rpc = (method, params = {}) => call('api', { method, params });
+test('worker proposals pin identity/revision, preserve deletion and allow one-undo acceptance', async () => {
+  const project = {
+    ...emptyProject(),
+    size: [20, 20, 20],
+    palette: [{ Name: 'minecraft:stone' }],
+    blocks: [{ pos: [1, 0, 1], state: 0 }],
+  };
+  await call('import', {
+    name: 'fixture.craft.json',
+    bytes: new TextEncoder().encode(JSON.stringify(project)).buffer,
+  });
+  const before = await rpc('workspace.describe');
+  const operations = [
+    { type: 'erase', min: [1, 0, 1], max: [1, 0, 1] },
+    { type: 'set', pos: [3, 1, 3], state: { Name: 'custom:detail' } },
+  ];
+  const first = await rpc('proposal.prepare', { expectedRevision: before.revision, operations });
+  assert.ok(first.ok, first.error?.message);
+  assert.equal(first.revision, before.revision);
+  assert.equal(
+    (
+      await rpc('edit.brush', {
+        expectedRevision: before.revision,
+        points: [[4, 1, 4]],
+        state: { Name: 'minecraft:bricks' },
+      })
+    ).error.code,
+    'PREVIEW_ACTIVE',
+  );
+  const second = await rpc('proposal.prepare', { expectedRevision: before.revision, operations });
+  assert.ok(second.ok);
+  assert.notEqual(first.value.id, second.value.id);
+  assert.equal(
+    (
+      await rpc('proposal.commit', {
+        expectedRevision: before.revision,
+        proposalId: first.value.id,
+        policy: { allowTerrain: true, allowExisting: true },
+      })
+    ).ok,
+    false,
+  );
+  const inspected = await rpc('proposal.inspect', { limit: 1 });
+  assert.equal(inspected.value.total, 2);
+  assert.equal(inspected.value.operations[0].state, null);
+  const rejected = await rpc('proposal.commit', {
+    expectedRevision: before.revision,
+    proposalId: second.value.id,
+    policy: {},
+  });
+  assert.equal(rejected.ok, false);
+  assert.equal((await rpc('workspace.describe')).revision, before.revision);
+  const adopted = await rpc('proposal.commit', {
+    expectedRevision: before.revision,
+    proposalId: second.value.id,
+    policy: { allowTerrain: true, allowExisting: true },
+  });
+  assert.ok(adopted.ok, adopted.error?.message);
+  assert.equal(adopted.revision, before.revision + 1);
+  const cells = await rpc('scene.getBlocks', {
+    positions: [
+      [1, 0, 1],
+      [3, 1, 3],
+    ],
+  });
+  assert.equal(cells.value[0].state, null);
+  assert.equal(cells.value[1].state.Name, 'custom:detail');
+  await rpc('history.undo', { expectedRevision: adopted.revision });
+  const restored = await rpc('scene.getBlocks', {
+    positions: [
+      [1, 0, 1],
+      [3, 1, 3],
+    ],
+  });
+  assert.equal(restored.value[0].state.Name, 'minecraft:stone');
+  assert.equal(restored.value[1].state, null);
+  const base = await rpc('workspace.describe');
+  const cancel = await rpc('proposal.prepare', { expectedRevision: base.revision, operations });
+  await call('undo');
+  assert.equal((await rpc('workspace.describe')).revision, base.revision);
+  assert.equal((await rpc('proposal.inspect')).ok, false);
+  const stale = await rpc('proposal.prepare', { expectedRevision: base.revision, operations });
+  await call('origin', { origin: [4, 64, 4], confirmed: true });
+  assert.equal(
+    (
+      await rpc('proposal.commit', {
+        expectedRevision: base.revision + 1,
+        proposalId: stale.value.id,
+        policy: { allowTerrain: true, allowExisting: true },
+      })
+    ).error.code,
+    'REVISION_CONFLICT',
+  );
+  await rpc('proposal.cancel', { proposalId: stale.value.id });
+  const selection = await call('selectionPreview', { min: [1, 0, 1], max: [1, 0, 1] });
+  await call('origin', { origin: [5, 64, 5], confirmed: true });
+  await assert.rejects(
+    call('studio', {
+      command: 'transform',
+      min: [1, 0, 1],
+      max: [1, 0, 1],
+      at: [5, 0, 5],
+      move: true,
+      expectedRevision: selection.revision,
+      workspaceId: selection.workspaceId,
+      policy: { allowTerrain: true, allowExisting: true },
+    }),
+  );
 });
-test('reference HTML import binds its newly created proposal after the import revision advances',async()=>{
- const project={...emptyProject(),size:[20,20,20],metadata:{sourceHash:'fixture'},palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,0,1],state:0}]};
- await call('import',{name:'fixture.craft.json',bytes:new TextEncoder().encode(JSON.stringify(project)).buffer});
- const ref={source_sha256:'fixture',title:'Reference',origin:[0,64,0],palette:[{name:'minecraft:stone',properties:{}}],changes:[[1,0,1,0,-1]],atlas_tiles:{}};
- const html='<script id="scene" type="application/json">'+JSON.stringify(ref)+'</script>';
- const result=await call('import',{name:'fixture.html',bytes:new TextEncoder().encode(html).buffer});assert.equal(result.proposal.revision,result.revision);assert.equal(result.proposal.workspaceId,result.workspaceId);
- await call('accept',{proposalId:result.proposal.id,policy:{allowTerrain:true,allowExisting:true}});assert.equal((await rpc('scene.getBlocks',{positions:[[1,0,1]]})).value[0].state,null);
+test('reference HTML import binds its newly created proposal after the import revision advances', async () => {
+  const project = {
+    ...emptyProject(),
+    size: [20, 20, 20],
+    metadata: { sourceHash: 'fixture' },
+    palette: [{ Name: 'minecraft:stone' }],
+    blocks: [{ pos: [1, 0, 1], state: 0 }],
+  };
+  await call('import', {
+    name: 'fixture.craft.json',
+    bytes: new TextEncoder().encode(JSON.stringify(project)).buffer,
+  });
+  const ref = {
+    source_sha256: 'fixture',
+    title: 'Reference',
+    origin: [0, 64, 0],
+    palette: [{ name: 'minecraft:stone', properties: {} }],
+    changes: [[1, 0, 1, 0, -1]],
+    atlas_tiles: {},
+  };
+  const html = '<script id="scene" type="application/json">' + JSON.stringify(ref) + '</script>';
+  const result = await call('import', {
+    name: 'fixture.html',
+    bytes: new TextEncoder().encode(html).buffer,
+  });
+  assert.equal(result.proposal.revision, result.revision);
+  assert.equal(result.proposal.workspaceId, result.workspaceId);
+  await call('accept', {
+    proposalId: result.proposal.id,
+    policy: { allowTerrain: true, allowExisting: true },
+  });
+  assert.equal((await rpc('scene.getBlocks', { positions: [[1, 0, 1]] })).value[0].state, null);
 });

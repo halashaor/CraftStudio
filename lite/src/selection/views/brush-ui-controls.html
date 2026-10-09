@@ -1,0 +1,63 @@
+<label
+  >画笔用途<select id="brush-mode">
+    <option value="draw">绘制新方块</option>
+    <option value="paint">涂改已有方块</option>
+  </select></label
+><label id="brush-plane-label"
+  >绘制平面<select id="brush-plane">
+    <option value="auto">自动（避免贴边视角）</option>
+    <option value="surface">沿起笔表面</option>
+    <option value="view">面向视图的轴面</option>
+    <option value="xz">水平 XZ</option>
+    <option value="xy">立面 XY</option>
+    <option value="yz">立面 YZ</option>
+  </select></label
+>
+<div id="brush-paint-options" hidden>
+  <label class="check"
+    ><input id="brush-retain-shape" type="checkbox" checked />保留楼梯、半砖等形态</label
+  ><label class="check"
+    ><input id="brush-preserve-props" type="checkbox" checked />保留朝向与连接状态</label
+  >
+</div>
+<details>
+  <summary>作用范围条件</summary>
+  <label class="check"><input id="brush-in-selection" type="checkbox" />仅当前选择</label
+  ><label class="check"><input id="brush-surface" type="checkbox" />仅外露表面</label
+  ><label class="check"><input id="brush-match-picked" type="checkbox" />仅起笔时取样的材料</label
+  ><label class="check"><input id="brush-empty" type="checkbox" checked />仅空位（绘制）</label>
+  <div class="row">
+    <label
+      >局部 Y 下限<input
+        id="brush-min-y"
+        type="number"
+        min="0"
+        max="4095"
+        placeholder="不限" /></label
+    ><label
+      >局部 Y 上限<input id="brush-max-y" type="number" min="0" max="4095" placeholder="不限"
+    /></label>
+  </div>
+</details>
+<p id="brush-conditions" class="small"></p>
+<details>
+  <summary>画笔预设</summary>
+  <input id="brush-preset-search" placeholder="查找预设" aria-label="查找画笔预设" /><select
+    id="brush-preset"
+  >
+    <option value="">选择预设</option></select
+  ><input id="brush-preset-name" placeholder="例如：屋顶表面涂改" />
+  <div class="row">
+    <button id="brush-save-preset">保存预设</button><button id="brush-load-preset">载入预设</button>
+  </div>
+  <div class="row">
+    <button id="brush-rename-preset">重命名</button><button id="brush-delete-preset">删除</button
+    ><button id="brush-undo-delete" disabled>撤销删除</button>
+  </div>
+  <div class="row">
+    <button id="brush-export-presets">导出预设</button
+    ><button id="brush-import-presets">导入预设</button
+    ><input id="brush-presets-file" type="file" accept=".json" hidden />
+  </div>
+</details>
+<p class="small">涂改不填空气或流体，缺少形态变体会保留原方块。操作仍尊重场地与对象保护。</p>

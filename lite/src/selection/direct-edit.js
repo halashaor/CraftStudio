@@ -1,0 +1,733 @@
+import { memberCoordinates } from './selection-preview.js';
+import { PreviewHistory } from '../runtime/preview-history.js';
+import { dimensionInput } from '../ui/dimension-expression.js';
+import {
+  nativeControlTarget,
+  textEditing,
+  dialogOwnsKeyboard,
+  nativeEnterTarget,
+} from '../ui/keyboard-context.js';
+import { TransformControls } from '../../../web/vendor/TransformControls.js';
+export function directEdit({
+  THREE,
+  $,
+  scene,
+  getCamera,
+  renderer,
+  navigation,
+  requestRender,
+  call,
+  refresh,
+  render,
+  markDirty,
+  policy,
+  studio,
+  hasSelection,
+  notice,
+  cast,
+  hitCell,
+  getSummary,
+}) {
+  const parent = new THREE.Group(),
+    proxy = new THREE.Group(),
+    offset = new THREE.Group();
+  parent.add(proxy);
+  proxy.add(offset);
+  scene.add(parent);
+  const control = new TransformControls(getCamera(), renderer.domElement);
+  control.setTranslationSnap(1);
+  control.setRotationSnap(Math.PI / 2);
+  control.setSpace('world');
+  control.setSize(0.85);
+  scene.add(control.getHelper());
+  let active = null,
+    ghost = null,
+    loading = false,
+    applying = false,
+    clipboard = null,
+    checkToken = 0,
+    checkTimer = null,
+    session = 0;
+  const bar = document.createElement('div');
+  bar.id = 'direct-edit-bar';
+  bar.hidden = true;
+  bar.innerHTML = `<strong id="direct-edit-label"></strong><span id="direct-edit-hint"></span><div class="direct-fields"><label id="direct-space-label">操作柄参照<select id="direct-space"><option value="world">世界坐标</option><option value="local">随预览旋转</option></select></label><label>ΔX<input id="direct-dx" type="number" value="0" step="1"></label><label>ΔY<input id="direct-dy" type="number" value="0" step="1"></label><label>ΔZ<input id="direct-dz" type="number" value="0" step="1"></label><label id="direct-overlap-label" hidden>重叠处理<select id="direct-overlap"><option value="empty">避开已有方块</option><option value="overwrite">覆盖目标方块</option><option value="replace">只替换已有方块</option></select></label><button id="direct-quarter">转 90°</button><button id="direct-apply" class="primary">确定 ↵</button><button id="direct-cancel">取消 Esc</button></div>`;
+  $('scene').append(bar);
+  function dispose() {
+    if (ghost) {
+      ghost.traverse((m) => {
+        if (m.isMesh) {
+          m.geometry.dispose();
+          m.material.dispose();
+        }
+      });
+      offset.remove(ghost);
+      ghost = null;
+    }
+  }
+  let pointer = null,
+    navigationHeld = false,
+    copying = null,
+    copyToken = 0,
+    dragPointerId = null,
+    loadingContext = null;
+  const history = new PreviewHistory(),
+    fieldStarts = new Map(),
+    expressionBindings = new Map();
+  let dragStart = null;
+  function loadingState(value) {
+    loading = value;
+    bar.setAttribute('aria-busy', String(value));
+    for (const id of [
+      'direct-dx',
+      'direct-dy',
+      'direct-dz',
+      'direct-quarter',
+      'direct-overlap',
+      'direct-space',
+    ])
+      $(id).disabled = value;
+    $('direct-apply').disabled = value || applying;
+    syncPreviewHistory();
+  }
+  const capture = () => ({
+    position: proxy.position.toArray(),
+    quaternion: proxy.quaternion.toArray(),
+    overlap: $('direct-overlap').value,
+    floating: !!active?.floating,
+    space: control.space,
+  });
+  function historyState() {
+    return {
+      active: !!active || loading,
+      undo:
+        history.undo.length > 0 ||
+        control.dragging ||
+        ['direct-dx', 'direct-dy', 'direct-dz'].some((id) => $(id).dataset.expressionPending),
+      redo: history.redo.length > 0,
+    };
+  }
+  function syncPreviewHistory() {
+    const s = historyState();
+    bar.dataset.localHistory = [history.undo.length, history.redo.length, s.undo].join(':');
+  }
+  function record(before) {
+    if (active && before) {
+      history.record(before, capture());
+      syncPreviewHistory();
+    }
+  }
+  function restoreFrame(frame) {
+    fieldStarts.clear();
+    control.setSpace(frame.space || 'world');
+    $('direct-space').value = control.space;
+    proxy.position.fromArray(frame.position);
+    proxy.quaternion.fromArray(frame.quaternion);
+    $('direct-overlap').value = frame.overlap;
+    active.floating = frame.floating;
+    if (active.floating) control.detach();
+    else control.attach(proxy);
+    update();
+    syncPreviewHistory();
+  }
+  function previewHistory(direction) {
+    if (!active) return false;
+    if (applying) {
+      notice('正在提交当前变换，请稍候');
+      return true;
+    }
+    if (control.dragging) {
+      if (direction === 'undo') endDrag(true);
+      return true;
+    }
+    const pending = ['direct-dx', 'direct-dy', 'direct-dz'].filter(
+      (id) => $(id).dataset.expressionPending,
+    );
+    if (pending.length) {
+      for (const id of pending) {
+        expressionBindings.get(id).restore();
+        $(id).dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      fieldStarts.clear();
+      syncPreviewHistory();
+      return true;
+    }
+    const frame = history.step(direction, capture());
+    if (frame) restoreFrame(frame);
+    else notice(direction === 'undo' ? '当前预览没有更早的调整' : '当前预览没有可重做的调整');
+    return true;
+  }
+
+  function endDrag(restore = false) {
+    if (!control.dragging) return;
+    if (restore && control.object) control.reset();
+    control.pointerUp(null);
+    control.disconnect();
+    control.connect();
+    if (dragPointerId !== null) {
+      try {
+        if (renderer.domElement.hasPointerCapture(dragPointerId))
+          renderer.domElement.releasePointerCapture(dragPointerId);
+      } catch {}
+      dragPointerId = null;
+    }
+    requestRender();
+  }
+  renderer.domElement.addEventListener('pointerdown', (e) => (dragPointerId = e.pointerId), true);
+  renderer.domElement.addEventListener('pointercancel', () => endDrag(true));
+  renderer.domElement.addEventListener('lostpointercapture', () => endDrag(true));
+  window.addEventListener('keydown', (e) => {
+    if (dialogOwnsKeyboard()) return;
+    if (e.code === 'Space' && !textEditing(document.activeElement)) navigationHeld = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') navigationHeld = false;
+  });
+  window.addEventListener('blur', () => {
+    navigationHeld = false;
+    endDrag(true);
+  });
+  function pointerAnchor(e) {
+    const hit = cast?.(e);
+    if (hit && !hit.object.userData.readOnly) return hitCell(hit, true).pos;
+    const rect = renderer.domElement.getBoundingClientRect(),
+      ray = new THREE.Raycaster();
+    ray.setFromCamera(
+      new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        1 - ((e.clientY - rect.top) / rect.height) * 2,
+      ),
+      getCamera(),
+    );
+    const y = active?.min?.[1] ?? studio.getSelection().min[1],
+      point = ray.ray.intersectPlane(
+        new THREE.Plane(new THREE.Vector3(0, 1, 0), -y),
+        new THREE.Vector3(),
+      );
+    return point?.toArray().map(Math.floor) || null;
+  }
+  function locate(e) {
+    if (!active?.floating || applying) return;
+    const at = pointerAnchor(e);
+    if (!at || at.some((n) => n < 0 || n >= 4096)) return;
+    const v = values();
+    proxy.position.set(...at.map((n, a) => n + v.extent[a] / 2 - parent.position.getComponent(a)));
+    update();
+  }
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    pointer = { clientX: e.clientX, clientY: e.clientY };
+    if (!e.buttons && !e.altKey && !navigationHeld) locate(e);
+  });
+  renderer.domElement.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (!active?.floating || e.button !== 0 || e.altKey || navigationHeld || applying) return;
+      const before = capture();
+      locate(e);
+      active.floating = false;
+      control.attach(proxy);
+      update();
+      record(before);
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    },
+    true,
+  );
+  function cancel() {
+    if (applying) return;
+    session++;
+    loadingContext = null;
+    loadingState(false);
+    checkToken++;
+    clearTimeout(checkTimer);
+    endDrag();
+    control.detach();
+    active = null;
+    history.clear();
+    fieldStarts.clear();
+    dragStart = null;
+    syncPreviewHistory();
+    bar.hidden = true;
+    dispose();
+    navigation(true);
+    requestRender();
+  }
+  function values() {
+    if (!active) return null;
+    const turn = ((Math.round(-proxy.rotation.y / (Math.PI / 2)) % 4) + 4) % 4,
+      extent = turn % 2 ? [active.size[2], active.size[1], active.size[0]] : active.size,
+      center = parent.position.clone().add(proxy.position),
+      at = center.toArray().map((n, a) => Math.round(n - extent[a] / 2));
+    return { turn, at, extent };
+  }
+  function update(skipInput = null) {
+    if (!active) return;
+    bar.dataset.transformSpace = control.space;
+    const v = values(),
+      center = parent.position.clone().add(proxy.position),
+      correction = new THREE.Vector3(
+        ...v.at.map((n, a) => n + v.extent[a] / 2 - center.getComponent(a)),
+      );
+    offset.position.copy(correction.applyQuaternion(proxy.quaternion.clone().invert()));
+    for (const [a, id] of ['direct-dx', 'direct-dy', 'direct-dz'].entries())
+      if (id !== skipInput && !$(id).dataset.expressionPending)
+        $(id).value = Math.round(proxy.position.getComponent(a));
+    $('direct-edit-hint').textContent =
+      active.mode === 'rotate'
+        ? '旋转 ' + v.turn * 90 + '° · 按 90° 吸附'
+        : '操作柄：' +
+          (control.space === 'world' ? '世界坐标' : '随预览旋转') +
+          ' · ΔX/Y/Z 始终为世界位移 · 每格吸附 · 视口 Enter 确认';
+    if (active.mode === 'paste') {
+      clearTimeout(checkTimer);
+      const stamp = ++checkToken;
+      checkTimer = setTimeout(async () => {
+        try {
+          const r = await call('pasteCheck', {
+            prefab: active.prefab,
+            at: v.at,
+            turn: v.turn,
+            overlap: $('direct-overlap').value,
+            policy: policy(),
+          });
+          if (stamp === checkToken && active)
+            $('direct-edit-hint').textContent =
+              (active.floating ? '移动鼠标定位 · 左键锁定 · ' : '拖动微调 · ') +
+              `放置 ${r.place} · 覆盖 ${r.replace} · 跳过 ${r.skip}` +
+              (r.locked ? ' · ' + r.locked + ' 处保护冲突' : '');
+        } catch (e) {
+          if (stamp === checkToken && active) $('direct-edit-hint').textContent = e.message;
+        }
+      }, 120);
+    }
+    bar.dataset.at = v.at.join(',');
+    bar.dataset.phase = active.floating ? 'position' : 'adjust';
+    if (active.floating)
+      $('direct-edit-hint').textContent = '移动鼠标定位 · 左键锁定位置 · Enter 确认 / Esc 取消';
+    requestRender();
+  }
+  control.addEventListener('change', () => {
+    control.camera = getCamera();
+    update();
+  });
+  control.addEventListener('dragging-changed', (e) => {
+    bar.dataset.dragging = String(e.value);
+    if (e.value) dragStart = capture();
+    else dragStart = null;
+    navigation(!e.value);
+    syncPreviewHistory();
+  });
+  control.addEventListener('mouseUp', () => {
+    update();
+    record(dragStart);
+    dragStart = null;
+  });
+  async function begin(mode, packet = null) {
+    if (loading || applying) return;
+    if (!packet && !hasSelection()) {
+      notice('先点击一个方块、对象，或框选需要编辑的部分');
+      return;
+    }
+    cancel();
+    const own = session;
+    loadingContext = getSummary?.();
+    loadingState(true);
+    chooseSelection();
+    bar.hidden = false;
+    bar.dataset.phase = 'loading';
+    $('direct-edit-label').textContent =
+      '正在准备' + { move: '移动', copy: '复制', rotate: '旋转', paste: '粘贴' }[mode] + '预览';
+    $('direct-edit-hint').textContent = '可继续查看场景；Esc 或取消放弃准备。';
+    try {
+      const r = packet
+          ? { min: packet.at, max: packet.at.map((n, a) => n + packet.prefab.size[a] - 1) }
+          : studio.getSelection(),
+        data = await call('selectionPreview', {
+          geometryOnly: true,
+          compactMembers: true,
+          ...(packet ? { prefab: packet.prefab } : r),
+          ...(loadingContext
+            ? { workspaceId: loadingContext.workspaceId, expectedRevision: loadingContext.revision }
+            : {}),
+        });
+      if (own !== session) return;
+      if (!data.count) {
+        notice('选择里没有可操作的方块');
+        cancel();
+        return;
+      }
+      active = {
+        ...r,
+        mode,
+        revision: data.revision,
+        workspaceId: data.workspaceId,
+        floating: mode === 'paste',
+        size: data.size,
+        relativeMembers: data.members,
+        ...(packet ? { prefab: packet.prefab } : {}),
+      };
+      parent.position.set(...r.min.map((n, a) => n + data.size[a] / 2));
+      proxy.position.set(0, 0, 0);
+      proxy.rotation.set(0, 0, 0);
+      offset.position.set(0, 0, 0);
+      ghost = new THREE.Group();
+      ghost.position.set(...data.size.map((n) => -n / 2));
+      for (const b of data.buckets) {
+        const g = new THREE.BufferGeometry();
+        for (const [k, array, n] of [
+          ['position', b.positions, 3],
+          ['normal', b.normals, 3],
+        ])
+          g.setAttribute(k, new THREE.BufferAttribute(array, n));
+        ghost.add(
+          new THREE.Mesh(
+            g,
+            new THREE.MeshLambertMaterial({
+              color: mode === 'copy' ? 0x76d7c2 : 0x82b6ff,
+              transparent: true,
+              opacity: 0.72,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+            }),
+          ),
+        );
+      }
+      offset.add(ghost);
+      control.camera = getCamera();
+      control.setMode(mode === 'rotate' ? 'rotate' : 'translate');
+      control.setSpace('world');
+      $('direct-space').value = 'world';
+      $('direct-space-label').hidden = mode === 'rotate';
+      control.showX = mode !== 'rotate';
+      control.showZ = mode !== 'rotate';
+      control.showY = true;
+      if (!active.floating) control.attach(proxy);
+      bar.hidden = false;
+      $('direct-edit-label').textContent = {
+        move: '移动选择',
+        copy: '复制选择',
+        rotate: '旋转选择',
+        paste: '粘贴预览',
+      }[mode];
+      $('direct-quarter').hidden = false;
+      $('direct-overlap-label').hidden = mode !== 'paste';
+      for (const id of ['direct-dx', 'direct-dy', 'direct-dz'])
+        $(id).closest('label').hidden = mode === 'rotate';
+      for (const id of ['direct-dx', 'direct-dy', 'direct-dz']) {
+        delete $(id).dataset.expressionPending;
+        $(id).removeAttribute('aria-invalid');
+        $(id).setCustomValidity('');
+      }
+      $('direct-apply').disabled = false;
+      update();
+      syncPreviewHistory();
+      if (active.floating && pointer) locate(pointer);
+    } catch (e) {
+      if (own === session) {
+        notice(e.message, true);
+        cancel();
+      }
+    } finally {
+      if (own === session) {
+        loadingContext = null;
+        loadingState(false);
+      }
+    }
+  }
+  function chooseSelection() {
+    window.dispatchEvent(new Event('craftstudio-transform-start'));
+    document.querySelector('[data-tool="inspect"]').click();
+  }
+  for (const [a, id] of ['direct-dx', 'direct-dy', 'direct-dz'].entries()) {
+    const input = $(id);
+    expressionBindings.set(
+      id,
+      dimensionInput(input, {
+        pending: (_, message) => {
+          if (active) {
+            $('direct-apply').disabled = true;
+            $('direct-edit-hint').textContent = message;
+            syncPreviewHistory();
+          }
+        },
+        resolved: () => {
+          $('direct-apply').disabled =
+            applying ||
+            ['direct-dx', 'direct-dy', 'direct-dz'].some((id) => $(id).dataset.expressionPending);
+          syncPreviewHistory();
+        },
+      }),
+    );
+    input.addEventListener('focus', () => {
+      if (active) fieldStarts.set(id, capture());
+    });
+    input.addEventListener('blur', () => {
+      if (active && !input.dataset.expressionPending) {
+        record(fieldStarts.get(id));
+        fieldStarts.delete(id);
+      }
+    });
+    input.oninput = () => {
+      if (!active || input.dataset.expressionPending) return;
+      const value = Number(input.value);
+      if (!Number.isFinite(value)) return;
+      proxy.position.setComponent(a, Math.round(value));
+      update(id);
+    };
+    input.onchange = () => {
+      if (!active || input.dataset.expressionPending) return;
+      input.value = String(Math.round(proxy.position.getComponent(a)));
+      update();
+      record(fieldStarts.get(id));
+      fieldStarts.set(id, capture());
+    };
+  }
+  $('direct-overlap').addEventListener('focus', () => {
+    if (active) fieldStarts.set('overlap', capture());
+  });
+  $('direct-overlap').onchange = () => {
+    update();
+    record(fieldStarts.get('overlap'));
+    fieldStarts.set('overlap', capture());
+  };
+  $('direct-quarter').onclick = () => {
+    const before = capture();
+    proxy.rotation.y -= Math.PI / 2;
+    update();
+    record(before);
+  };
+  $('direct-cancel').onclick = cancel;
+  async function apply() {
+    if (!active || applying) return;
+    if (['direct-dx', 'direct-dy', 'direct-dz'].some((id) => $(id).dataset.expressionPending)) {
+      notice('请先完成位移计算式或按 Esc 恢复原值');
+      return;
+    }
+    const snapshot = active,
+      v = values();
+    if (v.at.some((n) => n < 0 || n >= 4096)) {
+      notice('目标超出当前场景范围，请把选择移回画布');
+      return;
+    }
+    if (snapshot.mode !== 'paste' && v.at.every((n, a) => n === snapshot.min[a]) && !v.turn) {
+      notice('还没有改变位置，可以拖动箭头或输入位移');
+      return;
+    }
+    applying = true;
+    control.enabled = false;
+    $('direct-apply').disabled = true;
+    try {
+      refresh(
+        await call(
+          'studio',
+          snapshot.mode === 'paste'
+            ? {
+                expectedRevision: snapshot.revision,
+                workspaceId: snapshot.workspaceId,
+                command: 'paste',
+                prefab: snapshot.prefab,
+                at: v.at,
+                turn: v.turn,
+                overlap: $('direct-overlap').value,
+                policy: policy(),
+              }
+            : {
+                expectedRevision: snapshot.revision,
+                workspaceId: snapshot.workspaceId,
+                command: 'transform',
+                min: snapshot.min,
+                max: snapshot.max,
+                at: v.at,
+                members: snapshot.members,
+                regions: snapshot.regions,
+                move: snapshot.mode !== 'copy',
+                turn: v.turn,
+                policy: policy(),
+              },
+        ),
+      );
+      await render();
+      markDirty();
+      applying = false;
+      cancel();
+      const members = Array.from(
+        memberCoordinates(
+          snapshot.relativeMembers || snapshot.prefab?.blocks.map((b) => b.pos) || [],
+        ),
+        (pos) => {
+          let [x, y, z] = pos,
+            [w, , l] = snapshot.size;
+          for (let t = 0; t < v.turn; t++) {
+            [x, z] = [l - 1 - z, x];
+            [w, l] = [l, w];
+          }
+          return [x, y, z].map((n, a) => n + v.at[a]);
+        },
+      );
+      studio.selectRange(
+        { min: v.at, max: v.at.map((n, a) => n + v.extent[a] - 1), members },
+        'replace',
+      );
+      notice(
+        snapshot.mode === 'paste'
+          ? '已粘贴，可一次撤销'
+          : snapshot.mode === 'copy'
+            ? '已复制，可继续移动新选择'
+            : snapshot.mode === 'rotate'
+              ? '已旋转，可一次撤销'
+              : '已移动，可一次撤销',
+      );
+    } catch (e) {
+      notice(e.message, true);
+    } finally {
+      applying = false;
+      control.enabled = true;
+      $('direct-apply').disabled = false;
+    }
+  }
+  $('direct-space').onchange = () => {
+    if (!active || applying) return;
+    endDrag(true);
+    const before = capture();
+    control.setSpace($('direct-space').value);
+    update();
+    record(before);
+  };
+  $('direct-apply').onclick = apply;
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (dialogOwnsKeyboard()) return;
+      if (e.target.closest?.('[data-shortcut-scope=commands]')) return;
+      if (e.isComposing) return;
+      if (loading && !active) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          cancel();
+        }
+        return;
+      }
+      if (!active) return;
+      const focused = document.activeElement;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && nativeControlTarget(focused))
+        return;
+      if (e.key === 'Enter' && nativeEnterTarget(focused)) return;
+      if (
+        bar.contains(focused) &&
+        ((e.key === 'Enter' && focused.closest?.('input,button,select')) ||
+          (e.key === 'Escape' && focused.matches('[data-dimension-expression]')))
+      )
+        return;
+      if (
+        textEditing(document.activeElement) &&
+        e.key !== 'Escape' &&
+        !(e.key === 'Enter' && bar.contains(document.activeElement))
+      )
+        return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (control.dragging) {
+          endDrag(true);
+          notice('已撤回本次拖动，可继续调整；再次按 Esc 取消操作');
+        } else cancel();
+      }
+      if (
+        e.key === 'Enter' ||
+        (e.ctrlKey && e.key.toLowerCase() === 'v' && active.mode === 'paste')
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        apply();
+      }
+    },
+    true,
+  );
+  async function copy() {
+    if (!hasSelection()) {
+      notice('先选择需要复制的方块或对象');
+      return;
+    }
+    const token = ++copyToken,
+      selection = structuredClone(studio.getSelection());
+    clipboard = null;
+    copying = (async () => {
+      try {
+        const context = getSummary?.(),
+          prefab = await call('copySelection', {
+            ...selection,
+            ...(context
+              ? { workspaceId: context.workspaceId, expectedRevision: context.revision }
+              : {}),
+          });
+        if (token !== copyToken) return;
+        clipboard = { prefab, at: [...selection.min] };
+        notice('已复制 ' + prefab.blocks.length + ' 个方块，Ctrl+V 预览粘贴');
+      } catch (e) {
+        notice(e.message, true);
+      } finally {
+        if (token === copyToken) copying = null;
+      }
+    })();
+    return copying;
+  }
+  async function paste() {
+    if (applying) return;
+    let waited = false;
+    if (copying) {
+      cancel();
+      const own = session;
+      loadingContext = getSummary?.();
+      loadingState(true);
+      bar.hidden = false;
+      bar.dataset.phase = 'loading';
+      $('direct-edit-label').textContent = '正在准备粘贴预览';
+      $('direct-edit-hint').textContent = '正在读取复制内容；Esc 或取消放弃准备。';
+      await copying;
+      if (own !== session) return;
+      loadingContext = null;
+      loadingState(false);
+      waited = true;
+    }
+    if (!clipboard) {
+      if (waited) cancel();
+      notice('先用 Ctrl+C 复制选择');
+      return;
+    }
+    if (loading) cancel();
+    const at = pointer ? pointerAnchor(pointer) || clipboard.at : [...clipboard.at];
+    await begin('paste', { prefab: clipboard.prefab, at });
+  }
+  return {
+    begin,
+    cancel,
+    copy,
+    paste,
+    isActive: () => !!active || loading,
+    isBusy: () => applying,
+    hasClipboard: () => !!clipboard || !!copying,
+    previewHistory,
+    historyState,
+    ensureFresh: (s) => {
+      if (
+        loading &&
+        !active &&
+        loadingContext &&
+        (loadingContext.revision !== s.revision || loadingContext.workspaceId !== s.workspaceId)
+      ) {
+        cancel();
+        notice('场景已更新，选择预览准备已取消');
+      }
+      if (
+        active &&
+        !applying &&
+        (active.revision !== s.revision || active.workspaceId !== s.workspaceId)
+      ) {
+        cancel();
+        notice('场景已更新，旧变换预览已取消；可重新选择继续设计');
+      }
+    },
+    updateCamera: () => (control.camera = getCamera()),
+  };
+}

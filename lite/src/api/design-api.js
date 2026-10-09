@@ -1,0 +1,635 @@
+import { paletteMutation } from '../materials/material-palettes.js';
+import { collectionMutation, listedCollections } from '../components/collections.js';
+import { viewMutation, listedViews } from '../view/saved-views.js';
+import { generationLinks } from '../modeling/generation-links.js';
+import { measurementMutation, listedMeasurements } from '../measurement/measurement.js';
+import { curveStation, planeMutation, listedPlanes } from '../sketch/plane-library.js';
+function localizeSelection(s, origin) {
+  if (!s) return;
+  for (const key of ['min', 'max']) if (s[key]) s[key] = s[key].map((n, a) => n - origin[a]);
+  if (s.members)
+    s.members = s.members.map((pos) => {
+      if (!Array.isArray(pos)) throw Error('世界坐标成员需要 XYZ 数组');
+      return pos.map((n, a) => n - origin[a]);
+    });
+  if (s.regions) for (const r of s.regions) localizeSelection(r, origin);
+}
+import { brushPlan } from '../selection/tool-mask.js';
+import { catalogue } from '../materials/asset-catalog.js';
+import { Site, coordKey, chunkKey, coords } from '../core/site.js';
+import { stateKey } from '../minecraft/codec.js';
+import { transformSelection, selectionCellValues } from '../modeling/studio.js';
+const fail = (code, message, details = {}) => {
+  const e = Error(message);
+  e.code = code;
+  e.details = details;
+  throw e;
+};
+const placement = (site, pos, b) => {
+  if (b) return 'block';
+  const m = site.base.metadata?.placementMask;
+  if (!m || pos.some((n, a) => n < 0 || n >= m.size[a])) return 'empty';
+  const index = pos[0] + m.size[0] * (pos[2] + m.size[2] * pos[1]);
+  for (const [key, label] of [
+    ['skipRuns', 'skip'],
+    ['eraseRuns', 'erase'],
+  ]) {
+    const runs = m[key] || [];
+    let lo = 0,
+      hi = runs.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1,
+        [start, count] = runs[mid];
+      if (index < start) hi = mid - 1;
+      else if (index >= start + count) lo = mid + 1;
+      else return label;
+    }
+  }
+  return 'empty';
+};
+const same = (a, b, paletteA, paletteB) =>
+  (!a && !b) ||
+  (!!a &&
+    !!b &&
+    stateKey(paletteA[a.state]) === stateKey(paletteB[b.state]) &&
+    JSON.stringify(a.nbt || null) === JSON.stringify(b.nbt || null));
+export class DesignAPI {
+  constructor({ getSite, resources, onChange = () => {} }) {
+    this.getSite = getSite;
+    this.resources = resources;
+    this.onChange = onChange;
+    this.revision = 0;
+    this.workspaceId = crypto.randomUUID();
+    this.transactions = new Map();
+    this.receipts = new Map();
+  }
+  changed(replaced = false) {
+    this.revision++;
+    if (replaced) {
+      this.workspaceId = crypto.randomUUID();
+      this.transactions.clear();
+      this.receipts.clear();
+    }
+    this.onChange();
+  }
+  bounds(site, p) {
+    const local = (v) => (p.space === 'world' ? v.map((n, a) => n - site.origin[a]) : v);
+    if (p.space === 'world' && !site.originConfirmed)
+      fail('ORIGIN_UNKNOWN', '请先确认世界坐标原点');
+    const min = local(p.min || [0, 0, 0]),
+      max = local(p.max || site.size.map((n) => n - 1));
+    if (
+      min.length !== 3 ||
+      max.length !== 3 ||
+      [...min, ...max].some((n) => !Number.isInteger(n) || n < 0 || n >= 4096) ||
+      min.some((n, a) => n > max[a])
+    )
+      fail('INVALID_BOUNDS', '需要有效的整数选区');
+    return { min, max };
+  }
+  guard(p) {
+    if (p.expectedRevision !== this.revision)
+      fail('REVISION_CONFLICT', '场景已经更新，请重新读取后继续', {
+        expected: p.expectedRevision ?? null,
+        actual: this.revision,
+      });
+    if (p.workspaceId && p.workspaceId !== this.workspaceId)
+      fail('WORKSPACE_CHANGED', '工程已切换，请重新读取');
+  }
+  operations(site, p) {
+    if (!Array.isArray(p.operations)) fail('INVALID_OPERATIONS', '需要 operations 数组');
+    return p.operations.map((op) => {
+      const o = structuredClone(op);
+      if (o.state && !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(o.state.Name || ''))
+        fail('INVALID_STATE', '方块 ID 需要有效的 namespace:block');
+      if (o.nbt && (o.nbt.t !== 10 || !o.nbt.v || typeof o.nbt.v !== 'object'))
+        fail('INVALID_NBT', '方块实体需要类型化 Compound NBT');
+      if (p.space === 'world') {
+        if (!site.originConfirmed) fail('ORIGIN_UNKNOWN', '请先确认世界原点');
+        for (const k of ['pos', 'min', 'max'])
+          if (o[k]) o[k] = o[k].map((n, a) => n - site.origin[a]);
+      }
+      if (o.type === 'set' && o.expect !== undefined) {
+        const b = site.at(o.pos),
+          state = b ? site.palette[b.state] : null;
+        if (
+          JSON.stringify(state && stateKey(state)) !==
+          JSON.stringify(o.expect && stateKey(o.expect))
+        )
+          fail('CELL_CONFLICT', '目标方块与读取时不同', { pos: o.pos, actual: state });
+      }
+      return o;
+    });
+  }
+  region(site, p) {
+    const { min, max } = this.bounds(site, p),
+      limit = Math.min(20000, Math.max(1, p.limit || 4096)),
+      start = p.cursor === undefined ? 0 : Number(p.cursor);
+    if (!Number.isSafeInteger(start) || start < 0) fail('INVALID_CURSOR', '无效游标');
+    const size = max.map((n, a) => n - min[a] + 1),
+      volume = size.reduce((a, b) => a * b, 1);
+    let i = start;
+    const blocks = [];
+    if (p.includeAir) {
+      while (i < volume && blocks.length < limit) {
+        const pos = [
+            i % size[0],
+            Math.floor(i / (size[0] * size[2])),
+            Math.floor(i / size[0]) % size[2],
+          ].map((n, a) => n + min[a]),
+          b = site.at(pos);
+        blocks.push({
+          pos,
+          state: b ? site.palette[b.state] : null,
+          placement: placement(site, pos, b),
+          ...(b?.nbt ? { nbt: b.nbt } : {}),
+        });
+        i++;
+      }
+    } else {
+      const cells = [];
+      for (const k of new Set([...site.baseChunks.keys(), ...site.overlayChunks.keys()])) {
+        const chunk = k.split(',').map(Number);
+        if (chunk.some((n, a) => n < Math.floor(min[a] / 16) || n > Math.floor(max[a] / 16)))
+          continue;
+        const map = new Map(site.baseChunks.get(k) || []);
+        for (const [key, b] of site.overlayChunks.get(k) || [])
+          if (b.state < 0) map.delete(key);
+          else map.set(key, b);
+        for (const b of map.values())
+          if (b.pos.every((n, a) => n >= min[a] && n <= max[a])) cells.push(b);
+      }
+      cells.sort((a, b) => a.pos[1] - b.pos[1] || a.pos[2] - b.pos[2] || a.pos[0] - b.pos[0]);
+      for (const b of cells.slice(start, start + limit))
+        blocks.push({ pos: b.pos, state: site.palette[b.state], ...(b.nbt ? { nbt: b.nbt } : {}) });
+      i = start + blocks.length;
+      return {
+        min,
+        max,
+        space: 'local',
+        worldOrigin: site.origin,
+        blocks,
+        nextCursor: i < cells.length ? String(i) : null,
+        total: cells.length,
+        complete: i >= cells.length,
+      };
+    }
+    return {
+      min,
+      max,
+      space: 'local',
+      worldOrigin: site.origin,
+      blocks,
+      nextCursor: i < volume ? String(i) : null,
+      total: volume,
+      complete: i >= volume,
+    };
+  }
+  commit(candidate) {
+    const live = this.getSite(),
+      ops = [];
+    for (const k of new Set([...live.overlay.keys(), ...candidate.overlay.keys()])) {
+      const pos = coords(k),
+        a = live.at(pos),
+        b = candidate.at(pos);
+      if (!same(a, b, live.palette, candidate.palette))
+        ops.push({
+          type: 'set',
+          pos,
+          state: b ? candidate.palette[b.state] : null,
+          nbt: b?.nbt || null,
+          reason: 'AI 自由设计事务',
+        });
+    }
+    live.operations(ops, { allowTerrain: true, allowExisting: true });
+    if (!ops.length && JSON.stringify(live.design) !== JSON.stringify(candidate.design)) {
+      live.undo.push({
+        overlay: live.overlay,
+        size: [...live.size],
+        design: structuredClone(live.design),
+      });
+      live.redo = [];
+    }
+    live.design = structuredClone(candidate.design);
+    this.changed();
+    return { changed: ops.length, summary: live.summary() };
+  }
+  execute(request) {
+    try {
+      if (!request || typeof request !== 'object' || Array.isArray(request))
+        fail('INVALID_REQUEST', '请求需要 JSON 对象');
+      if (request.schema && request.schema !== 'craftstudio-design/1')
+        fail('UNSUPPORTED_SCHEMA', '不支持的接口版本');
+      const p = request.params || {},
+        method = request.method,
+        live = this.getSite(),
+        id = request.id,
+        fingerprint = JSON.stringify({ method, params: p });
+      if (id && this.receipts.has(id)) {
+        const previous = this.receipts.get(id);
+        if (previous.fingerprint !== fingerprint)
+          fail('REQUEST_ID_REUSED', '同一请求 ID 不能用于不同操作');
+        return structuredClone(previous.result);
+      }
+      let value,
+        mutated = false;
+      const tx = p.transactionId ? this.transactions.get(p.transactionId) : null;
+      if (p.transactionId && !tx) fail('TRANSACTION_NOT_FOUND', '事务不存在或已结束');
+      const site = tx?.site || live;
+      if (
+        typeof method === 'string' &&
+        method.startsWith('workplanes.') &&
+        p.space !== undefined &&
+        !['local', 'world'].includes(p.space)
+      )
+        fail('INVALID_SPACE', '平面坐标空间需要 local 或 world');
+      if (
+        !tx &&
+        p.expectedRevision !== undefined &&
+        [
+          'scene.readRegion',
+          'scene.getBlocks',
+          'terrain.readColumns',
+          'materials.collect',
+          'objects.list',
+          'palettes.list',
+          'collections.list',
+          'workplanes.list',
+          'workplanes.atCurve',
+        ].includes(method)
+      )
+        this.guard(p);
+      if (method === 'workspace.describe')
+        value = {
+          protocol: 'craftstudio-design/1',
+          workspaceId: this.workspaceId,
+          revision: this.revision,
+          history: { undo: live.undo.length, redo: live.redo.length },
+          size: live.size,
+          origin: live.origin,
+          originConfirmed: live.originConfirmed,
+          limits: { localCoordinate: [0, 4095], readPage: 20000 },
+          methods: [
+            'scene.readRegion',
+            'scene.getBlocks',
+            'terrain.readColumns',
+            'materials.search',
+            'materials.collect',
+            'edit.apply',
+            'edit.brush',
+            'transaction.begin',
+            'transaction.apply',
+            'transaction.inspect',
+            'transaction.commit',
+            'transaction.abort',
+            'measurements.list',
+            'measurements.put',
+            'measurements.remove',
+            'views.list',
+            'views.put',
+            'views.remove',
+            'generation.links',
+            'objects.list',
+            'objects.put',
+            'palettes.list',
+            'collections.list',
+            'collections.put',
+            'collections.remove',
+            'palettes.put',
+            'palettes.remove',
+            'workplanes.list',
+            'workplanes.atCurve',
+            'workplanes.put',
+            'workplanes.remove',
+            'selection.transform',
+            'history.undo',
+            'history.redo',
+          ],
+          principles: [
+            '方块 ID 不限于已有调色板',
+            '所有生成器可绕过',
+            '读返回精确方块；空值不代表未知地形是平地',
+            '事务分批提交不限制建筑规模；单个坐标范围有限',
+          ],
+          motion: 'create-native-preview',
+          blueprint: live.base.metadata?.placementMask
+            ? {
+                schema: live.base.metadata.placementMask.schema,
+                size: live.base.metadata.placementMask.size,
+                skipCount: live.base.metadata.placementMask.skipCount,
+                eraseCount: live.base.metadata.placementMask.eraseCount,
+              }
+            : null,
+        };
+      else if (method === 'scene.readRegion') value = this.region(site, p);
+      else if (method === 'scene.getBlocks') {
+        if (!Array.isArray(p.positions)) fail('INVALID_POSITIONS', '需要 positions 数组');
+        if (p.positions.length > 20000) fail('PAGE_TOO_LARGE', '请分页读取');
+        value = p.positions.map((pos) => {
+          const r = this.bounds(site, { min: pos, max: pos, space: p.space }),
+            b = site.at(r.min);
+          return {
+            pos: r.min,
+            state: b ? site.palette[b.state] : null,
+            placement: placement(site, r.min, b),
+            ...(b?.nbt ? { nbt: b.nbt } : {}),
+          };
+        });
+      } else if (method === 'terrain.readColumns') {
+        const { min, max } = this.bounds(site, p),
+          limit = Math.min(20000, p.limit || 4096),
+          width = max[0] - min[0] + 1,
+          total = width * (max[2] - min[2] + 1),
+          start = Number(p.cursor || 0),
+          rows = [];
+        if (!Number.isSafeInteger(start) || start < 0 || limit < 1)
+          fail('INVALID_CURSOR', '无效分页参数');
+        for (let i = start; i < Math.min(total, start + limit); i++) {
+          const x = min[0] + (i % width),
+            z = min[2] + Math.floor(i / width);
+          rows.push({ x, z, ...site.column(x, z) });
+        }
+        value = {
+          rows,
+          nextCursor: start + rows.length < total ? String(start + rows.length) : null,
+          exact: true,
+          source: 'original',
+        };
+      } else if (method === 'workplanes.list')
+        value = { items: listedPlanes(site, p.space), space: p.space || 'local' };
+      else if (method === 'workplanes.atCurve') {
+        const guide = site.design.guides?.find((g) => g.id === p.guideId);
+        if (!guide) fail('GUIDE_NOT_FOUND', '请选择已保存的路径');
+        value = {
+          ...curveStation(guide.points, p.station ?? 0.5),
+          source: {
+            kind: 'curve-station',
+            guideId: guide.id,
+            station: p.station ?? 0.5,
+            mode: 'snapshot',
+          },
+          space: p.space || 'local',
+        };
+        if (p.space === 'world') {
+          if (!site.originConfirmed) fail('ORIGIN_UNKNOWN', '请先确认世界原点');
+          value.frame.origin = value.frame.origin.map((n, a) => n + site.origin[a]);
+        }
+      } else if (method === 'measurements.list')
+        value = { items: listedMeasurements(site, p.space), space: p.space || 'local' };
+      else if (method === 'materials.collect') {
+        if (p.space !== undefined && !['local', 'world'].includes(p.space))
+          fail('INVALID_SPACE', '素材选区需要 local 或 world 坐标');
+        const q = structuredClone(p);
+        if (q.space === 'world') {
+          if (!site.originConfirmed) fail('ORIGIN_UNKNOWN', '请先确认世界坐标原点');
+          localizeSelection(q, site.origin);
+          q.space = 'local';
+        }
+        const bounds = this.bounds(site, q),
+          ids = new Map();
+        let blockCount = 0;
+        for (const b of selectionCellValues(site, bounds.min, bounds.max, {
+          keys: q.members,
+          regions: q.regions,
+          all: !!q.all,
+        })) {
+          blockCount++;
+          ids.set(b.state, (ids.get(b.state) || 0) + 1);
+        }
+        const counts = new Map();
+        for (const [id, count] of ids) {
+          const state = site.palette[id],
+            key = stateKey(state),
+            entry = counts.get(key);
+          if (entry) entry.count += count;
+          else counts.set(key, { state: structuredClone(state), count });
+        }
+        value = {
+          blockCount,
+          states: [...counts.values()].sort(
+            (a, b) => b.count - a.count || stateKey(a.state).localeCompare(stateKey(b.state)),
+          ),
+        };
+      } else if (method === 'materials.search')
+        value = {
+          items: this.resources()
+            .catalogue(p.query || '')
+            .slice(p.offset || 0, (p.offset || 0) + Math.min(p.limit || 100, 1000)),
+          existing: site.palette.filter((s) => s.Name.includes(p.query || '')).slice(0, 1000),
+          restricted: false,
+        };
+      else if (method === 'views.list')
+        value = { items: listedViews(site, p.space), space: p.space || 'local' };
+      else if (method === 'generation.links') value = generationLinks(site.design);
+      else if (method === 'palettes.list')
+        value = structuredClone(site.design.materialPalettes || []);
+      else if (method === 'collections.list') value = listedCollections(site);
+      else if (method === 'objects.list')
+        value = site.design.objects.map((o) => ({
+          ...o,
+          cells: o.cells?.map(coords),
+          animation: site.design.animations[o.id] || null,
+        }));
+      else if (method === 'transaction.begin') {
+        this.guard(p);
+        const transactionId = crypto.randomUUID();
+        this.transactions.set(transactionId, {
+          site: live.fork(),
+          baseRevision: this.revision,
+          policy: p.policy || { allowTerrain: false, allowExisting: false },
+        });
+        value = { transactionId, baseRevision: this.revision };
+      } else if (method === 'transaction.abort') {
+        if (!tx) fail('TRANSACTION_REQUIRED', '需要事务 ID');
+        this.transactions.delete(p.transactionId);
+        value = { aborted: true };
+      } else if (method === 'transaction.inspect') {
+        if (!tx) fail('TRANSACTION_REQUIRED', '需要事务 ID');
+        value = {
+          baseRevision: tx.baseRevision,
+          summary: site.summary(),
+          changes: site
+            .diff()
+            .slice(p.offset || 0, (p.offset || 0) + Math.min(p.limit || 4096, 20000)),
+        };
+      } else if (method === 'transaction.apply') {
+        if (!tx) fail('TRANSACTION_REQUIRED', '需要事务 ID');
+        site.operations(this.operations(site, p), tx.policy);
+        value = { staged: true, summary: site.summary() };
+      } else if (method === 'transaction.commit') {
+        if (!tx) fail('TRANSACTION_REQUIRED', '需要事务 ID');
+        this.guard({ ...p, expectedRevision: tx.baseRevision });
+        value = this.commit(site);
+        this.transactions.delete(p.transactionId);
+        mutated = true;
+      } else if (
+        [
+          'views.put',
+          'views.remove',
+          'measurements.put',
+          'measurements.remove',
+          'edit.apply',
+          'edit.brush',
+          'objects.put',
+          'collections.put',
+          'collections.remove',
+          'palettes.put',
+          'palettes.remove',
+          'workplanes.put',
+          'workplanes.remove',
+          'selection.transform',
+        ].includes(method)
+      ) {
+        if (!tx) this.guard(p);
+        const target = site.fork(),
+          policy = tx?.policy || p.policy || { allowTerrain: false, allowExisting: false };
+        if (method === 'edit.brush') {
+          const q = structuredClone(p);
+          if (!Array.isArray(q.points)) fail('INVALID_OPERATIONS', '需要 points 数组');
+          if (q.space === 'world') {
+            if (!target.originConfirmed) fail('ORIGIN_UNKNOWN', '请先确认世界原点');
+            q.points = q.points.map((pos) => pos.map((n, a) => n - target.origin[a]));
+            if (q.mask) {
+              for (const key of ['minY', 'maxY'])
+                if (q.mask[key] !== undefined) q.mask[key] -= target.origin[1];
+              if (q.mask.selection) localizeSelection(q.mask.selection, target.origin);
+            }
+          }
+          if (!Array.isArray(q.points)) fail('INVALID_OPERATIONS', '需要 points 数组');
+          if (q.state)
+            this.operations(target, {
+              operations: [{ type: 'set', pos: q.points[0] || [0, 0, 0], state: q.state }],
+            });
+          const plan = brushPlan(
+            target,
+            q,
+            new Map(catalogue(target, this.resources()).map((i) => [i.id, i])),
+          );
+          target.operations(plan.operations, policy);
+          value = { filtered: plan.filtered, warnings: plan.warnings };
+        }
+        if (method === 'palettes.put' || method === 'palettes.remove')
+          value = paletteMutation(target, method, p);
+        if (method === 'collections.put' || method === 'collections.remove')
+          value = collectionMutation(target, method, p);
+        if (method === 'views.put' || method === 'views.remove')
+          value = viewMutation(target, method, p);
+        if (method === 'measurements.put' || method === 'measurements.remove')
+          value = measurementMutation(target, method, p);
+        if (method === 'workplanes.put' || method === 'workplanes.remove')
+          value = planeMutation(target, method, p);
+        if (method === 'edit.apply') target.operations(this.operations(target, p), policy);
+        if (method === 'selection.transform') {
+          const q = structuredClone(p);
+          if (q.space === 'world') {
+            if (!target.originConfirmed) fail('ORIGIN_UNKNOWN', '请确认世界原点');
+            localizeSelection(q, target.origin);
+            q.at = q.at.map((n, a) => n - target.origin[a]);
+          }
+          transformSelection(target, q, policy);
+        }
+        if (method === 'objects.put') {
+          const object = structuredClone(p.object);
+          if (!object?.name || !Array.isArray(object.cells) || !object.cells.length)
+            fail('INVALID_OBJECT', '对象需要名称和任意方块坐标 cells');
+          const points =
+            p.space === 'world'
+              ? object.cells.map((pos) => pos.map((n, a) => n - target.origin[a]))
+              : object.cells;
+          if (p.space === 'world' && !target.originConfirmed)
+            fail('ORIGIN_UNKNOWN', '请确认世界原点');
+          for (const pos of points) this.bounds(target, { min: pos, max: pos });
+          if (
+            object.collectionId &&
+            !target.design.collections?.some((c) => c.id === object.collectionId)
+          )
+            fail('INVALID_COLLECTION', '对象集合已不存在');
+          object.id = object.id || crypto.randomUUID();
+          object.min = [0, 1, 2].map((a) => Math.min(...points.map((p) => p[a])));
+          object.max = [0, 1, 2].map((a) => Math.max(...points.map((p) => p[a])));
+          object.cells = points.map((p) => coordKey(...p));
+          const index = target.design.objects.findIndex((o) => o.id === object.id);
+          if (index < 0) target.design.objects.push(object);
+          else target.design.objects[index] = object;
+          if (p.animation)
+            fail(
+              'CREATE_MANAGED_ANIMATION',
+              '运动由 Create 方块与装置数据自动决定，不需要单独动画参数',
+            );
+        }
+        if (tx) {
+          tx.site = target;
+          value = {
+            ...(method === 'edit.brush' ||
+            method.startsWith('workplanes.') ||
+            method.startsWith('measurements.') ||
+            method.startsWith('views.') ||
+            method.startsWith('collections.') ||
+            method.startsWith('palettes.')
+              ? value
+              : {}),
+            staged: true,
+            summary: target.summary(),
+          };
+        } else {
+          value = {
+            ...this.commit(target),
+            ...(method === 'edit.brush' ||
+            method.startsWith('workplanes.') ||
+            method.startsWith('measurements.') ||
+            method.startsWith('views.') ||
+            method.startsWith('collections.') ||
+            method.startsWith('palettes.')
+              ? value
+              : {}),
+          };
+          mutated = true;
+        }
+      } else if (method === 'history.undo' || method === 'history.redo') {
+        this.guard(p);
+        live.restore(method.endsWith('undo') ? 'undo' : 'redo');
+        this.changed();
+        value = live.summary();
+        mutated = true;
+      } else fail('UNKNOWN_METHOD', '未知设计接口', { method });
+      const result = {
+        schema: 'craftstudio-design/1',
+        id: id ?? null,
+        ok: true,
+        workspaceId: this.workspaceId,
+        revision: this.revision,
+        value,
+      };
+      if (
+        id &&
+        (mutated ||
+          [
+            'transaction.begin',
+            'transaction.apply',
+            'transaction.abort',
+            'objects.put',
+            'collections.put',
+            'collections.remove',
+            'palettes.put',
+            'palettes.remove',
+            'workplanes.put',
+            'workplanes.remove',
+            'selection.transform',
+          ].includes(method))
+      ) {
+        this.receipts.set(id, { fingerprint, result: structuredClone(result) });
+        if (this.receipts.size > 256) this.receipts.delete(this.receipts.keys().next().value);
+      }
+      return result;
+    } catch (e) {
+      return {
+        schema: 'craftstudio-design/1',
+        id: request?.id ?? null,
+        ok: false,
+        workspaceId: this.workspaceId,
+        revision: this.revision,
+        error: { code: e.code || 'EDIT_REJECTED', message: e.message, details: e.details || {} },
+      };
+    }
+  }
+}

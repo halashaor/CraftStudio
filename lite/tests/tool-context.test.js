@@ -1,2 +1,40 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {EngineWorkspace} from '../../local-engine/workspace.mjs';import {emptyProject} from '../src/codec.js';
-test('tool context survives portable scene reopening and distinguishes edits on the same baseline',async()=>{const e=new EngineWorkspace(),other=new EngineWorkspace();try{await e.call('import',{name:'scene.json',bytes:new TextEncoder().encode(JSON.stringify({...emptyProject('Scene'),size:[8,8,8]})).buffer});const before=await e.call('toolContext'),bytes=await e.call('compressed');await other.call('import',{name:'copy.craftlite',bytes:bytes.buffer});const reopened=await other.call('toolContext');assert.equal(reopened.key,before.key);assert.notEqual(reopened.workspaceId,before.workspaceId);let d=await other.call('api',{method:'workspace.describe'});await other.call('api',{method:'edit.apply',params:{expectedRevision:d.revision,operations:[{type:'set',pos:[2,1,2],state:{Name:'minecraft:stone'}}]}});assert.notEqual((await other.call('toolContext')).key,before.key);d=await other.call('api',{method:'workspace.describe'});await other.call('api',{method:'history.undo',params:{expectedRevision:d.revision}});assert.notEqual((await other.call('toolContext')).key,before.key,'palette metadata remains changed after undo and binding must remain conservative');}finally{await e.close();await other.close();}});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { EngineWorkspace } from '../../local-engine/workspace.mjs';
+import { emptyProject } from '../src/minecraft/codec.js';
+test('tool context survives portable scene reopening and distinguishes edits on the same baseline', async () => {
+  const e = new EngineWorkspace(),
+    other = new EngineWorkspace();
+  try {
+    await e.call('import', {
+      name: 'scene.json',
+      bytes: new TextEncoder().encode(JSON.stringify({ ...emptyProject('Scene'), size: [8, 8, 8] }))
+        .buffer,
+    });
+    const before = await e.call('toolContext'),
+      bytes = await e.call('compressed');
+    await other.call('import', { name: 'copy.craftlite', bytes: bytes.buffer });
+    const reopened = await other.call('toolContext');
+    assert.equal(reopened.key, before.key);
+    assert.notEqual(reopened.workspaceId, before.workspaceId);
+    let d = await other.call('api', { method: 'workspace.describe' });
+    await other.call('api', {
+      method: 'edit.apply',
+      params: {
+        expectedRevision: d.revision,
+        operations: [{ type: 'set', pos: [2, 1, 2], state: { Name: 'minecraft:stone' } }],
+      },
+    });
+    assert.notEqual((await other.call('toolContext')).key, before.key);
+    d = await other.call('api', { method: 'workspace.describe' });
+    await other.call('api', { method: 'history.undo', params: { expectedRevision: d.revision } });
+    assert.notEqual(
+      (await other.call('toolContext')).key,
+      before.key,
+      'palette metadata remains changed after undo and binding must remain conservative',
+    );
+  } finally {
+    await e.close();
+    await other.close();
+  }
+});

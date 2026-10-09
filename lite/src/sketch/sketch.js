@@ -1,0 +1,88 @@
+import { guideSnapTargets } from './object-snaps.js';
+import { validateFrame, sketchLocal, sketchWorld, toPlane } from './workplane.js';
+const axes = { xz: [0, 2, 1], xy: [0, 1, 2], yz: [2, 1, 0] };
+export function constrainSketch(config) {
+  if (config.workplane) {
+    const f = validateFrame(config.workplane),
+      before = config.points.map((p) => sketchLocal(p, f)),
+      local = {
+        ...config,
+        workplane: null,
+        plane: 'xz',
+        points: before.map((p) => [...p]),
+        referencePoints: config.referencePoints?.map((p) => sketchLocal(p, f)),
+      };
+    if (config.planeLock && config.kind !== 'box') for (const p of local.points) p[1] = 0;
+    const result = constrainSketch(local),
+      scale = config.points.reduce(
+        (value, p) => p.reduce((m, n) => Math.max(m, Math.abs(n)), value),
+        Math.max(1, ...f.origin.map(Math.abs)),
+      ),
+      roundoff = 32 * Number.EPSILON * scale;
+    return {
+      ...config,
+      points: result.points.map((p, i) =>
+        p.every((n, a) => Math.abs(n - before[i][a]) <= roundoff)
+          ? [...config.points[i]]
+          : sketchWorld(p, f),
+      ),
+    };
+  }
+  const c = { ...config, points: config.points.map((p) => [...p]) },
+    p = c.points,
+    [a, b, n] = axes[c.plane || 'xz'],
+    step = Number(c.snap ?? 0.5);
+  if (![0, 0.5, 1].includes(step)) throw Error('吸附精度应为半格、整格或自由');
+  if (step && !c.snapApplied)
+    for (const q of p) for (let i = 0; i < 3; i++) q[i] = Math.round(q[i] / step) * step;
+  if (c.planeLock && c.kind !== 'box') for (const q of p) q[n] = p[0][n];
+  const rule = c.constraint || 'free';
+  if (c.kind === 'line') {
+    const start = p[0],
+      end = p.at(-1);
+    if (rule === 'horizontal') end[b] = start[b];
+    if (rule === 'vertical') end[a] = start[a];
+    if (['parallel', 'perpendicular'].includes(rule)) {
+      const r = c.referencePoints;
+      if (!r?.length || r.length < 2) throw Error('请选择一条参考直线');
+      let dx = r.at(-1)[a] - r[0][a],
+        dy = r.at(-1)[b] - r[0][b],
+        l = Math.hypot(dx, dy);
+      if (l < 1e-6) throw Error('参考线没有方向');
+      if (rule === 'perpendicular') [dx, dy] = [-dy, dx];
+      const length = Math.hypot(end[a] - start[a], end[b] - start[b]),
+        sign = (end[a] - start[a]) * dx + (end[b] - start[b]) * dy < 0 ? -1 : 1;
+      end[a] = start[a] + (dx / l) * length * sign;
+      end[b] = start[b] + (dy / l) * length * sign;
+    }
+  } else if (c.kind === 'bezier' && rule === 'symmetric' && p.length === 4) {
+    const center = p[0].map((v, i) => (v + p[3][i]) / 2);
+    p[2] = p[1].map((v, i) => 2 * center[i] - v);
+  } else if (rule !== 'free') throw Error('此约束适用于直线或四点贝塞尔曲线');
+  return c;
+}
+export function snapSketchPoint(
+  point,
+  { step = 0.5, guides = [], threshold = 0.75, enabled = true, frame = null, locked = false } = {},
+) {
+  if (frame) {
+    frame = validateFrame(frame);
+    let q = sketchLocal(point, frame);
+    q = q.map((n) => (step ? Math.round(n / step) * step : n));
+    if (locked) q[1] = 0;
+    point = sketchWorld(q, frame);
+    step = 0;
+  }
+  let result = point.map((n) => (step ? Math.round(n / step) * step : n));
+  if (!enabled) return result;
+  let best = threshold;
+  for (const { point: p } of guideSnapTargets(guides)) {
+    if (frame && locked && Math.abs(toPlane(p, frame)[2]) > 1e-4) continue;
+    const d = Math.hypot(...p.map((n, a) => n - point[a]));
+    if (d < best) {
+      best = d;
+      result = [...p];
+    }
+  }
+  return result;
+}

@@ -1,0 +1,199 @@
+import { LocalLibrary } from './library.js';
+export function encodeLocal(value) {
+  if (value instanceof Uint8Array) {
+    let text = '';
+    for (let i = 0; i < value.length; i += 32768)
+      text += String.fromCharCode(...value.subarray(i, i + 32768));
+    return { $bytes: btoa(text) };
+  }
+  if (Array.isArray(value)) return value.map(encodeLocal);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, encodeLocal(v)]),
+    );
+  return value;
+}
+export function decodeLocal(value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.keys(value).length === 1 &&
+    typeof value.$bytes === 'string'
+  )
+    return Uint8Array.from(atob(value.$bytes), (c) => c.charCodeAt(0));
+  if (Array.isArray(value)) return value.map(decodeLocal);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, decodeLocal(v)]));
+  return value;
+}
+export async function detectDesktop(location = globalThis.location, fetcher = globalThis.fetch) {
+  if (
+    !location ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ||
+    !['http:', 'https:'].includes(location.protocol)
+  )
+    return null;
+  const bases = [''];
+  if (location.protocol === 'http:' && location.port === '18765')
+    bases.push('http://' + location.hostname + ':18767');
+  for (const baseUrl of bases)
+    try {
+      const response = await fetcher(baseUrl + '/api/desktop/info', {
+        signal: AbortSignal.timeout(2500),
+      });
+      if (!response.ok) continue;
+      const info = await response.json();
+      if (info.protocol === 'craftstudio-desktop/1' && info.token) return { ...info, baseUrl };
+    } catch {}
+  return null;
+}
+
+export class ServerLibrary {
+  constructor(info, fetcher = globalThis.fetch) {
+    this.info = info;
+    this.fetcher = (...args) => fetcher(...args);
+  }
+  async request(method, args, retry = true) {
+    args = [...args];
+    while (args.length && args.at(-1) === undefined) args.pop();
+    const response = await this.fetcher((this.info.baseUrl || '') + '/api/desktop/library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CraftStudio-Token': this.info.token },
+      body: JSON.stringify({
+        method,
+        args: encodeLocal(args.map((v) => (v === undefined ? null : v))),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      if (retry && data.error?.includes('令牌无效')) {
+        const info = await detectDesktop(globalThis.location, this.fetcher);
+        if (info) {
+          this.info = info;
+          return this.request(method, args, false);
+        }
+      }
+      throw Error(data.error || '本地服务保存失败');
+    }
+    return decodeLocal(data.value);
+  }
+  close() {}
+}
+for (const name of [
+  'preference',
+  'save',
+  'list',
+  'get',
+  'versions',
+  'update',
+  'draft',
+  'resume',
+  'backup',
+  'restore',
+  'baselineManifest',
+  'baselineChunks',
+  'workspaceHead',
+  'workspaceCheckpoint',
+  'workspaceChunks',
+  'workspaceExport',
+  'draftCheckpoint',
+])
+  ServerLibrary.prototype[name] = function (...args) {
+    return this.request(name, args);
+  };
+export class UnifiedLibrary {
+  constructor(factory = globalThis.indexedDB, name = 'craftstudio-lite-v1') {
+    this.browser = new LocalLibrary(factory, name);
+    this.store = null;
+    this.desktop = null;
+    this.ready = null;
+    this.migration = null;
+  }
+  async open() {
+    if (this.ready) return this.ready;
+    this.ready = (async () => {
+      this.desktop = await detectDesktop();
+      if (!this.desktop) {
+        await this.browser.open();
+        this.store = this.browser;
+        return this;
+      }
+      this.store = new ServerLibrary(this.desktop);
+      try {
+        await this.browser.open();
+        let id = await this.browser.preference('desktop-source-id');
+        if (!id) {
+          id = crypto.randomUUID();
+          await this.browser.preference('desktop-source-id', id);
+        }
+        if (!(await this.store.preference('migrated:' + id))) {
+          const backup = await this.browser.backup(),
+            result = await this.store.restore(backup),
+            draft = await this.browser.resume();
+          if (draft && !(await this.store.resume()))
+            await this.store.draft(
+              {
+                baseKey: draft.baseKey,
+                baseline: draft.baseline,
+                assetKey: draft.assetKey,
+                assetBytes: draft.assetBytes,
+                payload: draft.bytes,
+              },
+              result.mapping[draft.projectId] || draft.projectId,
+            );
+          await this.store.preference('migrated:' + id, true);
+          this.migration = backup.projects.length;
+        }
+      } catch (e) {
+        this.migrationError = e.message;
+      }
+      return this;
+    })();
+    return this.ready;
+  }
+  close() {
+    this.browser.close();
+    this.store?.close();
+  }
+}
+for (const name of [
+  'preference',
+  'save',
+  'list',
+  'get',
+  'versions',
+  'update',
+  'draft',
+  'resume',
+  'backup',
+  'restore',
+])
+  UnifiedLibrary.prototype[name] = async function (...args) {
+    await this.open();
+    return this.store[name](...args);
+  };
+
+for (const name of ['baselineManifest', 'baselineChunks'])
+  UnifiedLibrary.prototype[name] = async function (...args) {
+    await this.open();
+    if (!this.desktop?.capabilities?.includes('baseline-chunks/1'))
+      throw Error('区块读取需要新版完整本地服务；Lite 仍使用文件式编辑');
+    return this.store[name](...args);
+  };
+
+for (const name of ['workspaceHead', 'workspaceCheckpoint', 'workspaceChunks', 'workspaceExport'])
+  UnifiedLibrary.prototype[name] = async function (...args) {
+    await this.open();
+    if (!this.desktop?.capabilities?.includes('workspace-chunks/1'))
+      throw Error('当前服务不支持增量区块检查点');
+    return this.store[name](...args);
+  };
+
+UnifiedLibrary.prototype.draftCheckpoint = async function (...args) {
+  await this.open();
+  if (!(this.store?.info || this.desktop)?.capabilities?.includes('checkpoint-draft/1'))
+    throw Error('当前服务不支持检查点草稿');
+  return this.store.draftCheckpoint(...args);
+};

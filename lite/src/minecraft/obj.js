@@ -1,0 +1,51 @@
+// Data-only OBJ/MTL decoding. No custom Java model loader is executed.
+export function parseMTL(text) {
+  const materials = {};
+  let current = '';
+  for (const line of text.split(/\r?\n/)) {
+    const s = line.trim().split(/\s+/);
+    if (s[0] === 'newmtl') {
+      current = s.slice(1).join(' ');
+      materials[current] = null;
+    }
+    if (s[0] === 'map_Kd' && current) materials[current] = s.slice(1).join(' ');
+  }
+  return materials;
+}
+export function parseOBJ(text, materials, texture, flipV = false) {
+  const vertices = [],
+    uvs = [],
+    normals = [],
+    triangles = [];
+  let material = '';
+  const index = (n, length) => (n < 0 ? length + n : n - 1);
+  for (const line of text.split(/\r?\n/)) {
+    const s = line.trim().split(/\s+/);
+    if (s[0] === 'v') vertices.push(s.slice(1, 4).map(Number));
+    else if (s[0] === 'vt') uvs.push(s.slice(1, 3).map(Number));
+    else if (s[0] === 'vn') normals.push(s.slice(1, 4).map(Number));
+    else if (s[0] === 'usemtl') material = s.slice(1).join(' ');
+    else if (s[0] === 'f') {
+      const corners = s.slice(1).map((token) => {
+        const v = token.split('/').map(Number),
+          p = vertices[index(v[0], vertices.length)];
+        if (!p || p.some((n) => !Number.isFinite(n))) throw Error('OBJ 面顶点无效');
+        return {
+          p,
+          uv: v[1] ? uvs[index(v[1], uvs.length)] : [0, 0],
+          n: v[2] ? normals[index(v[2], normals.length)] : null,
+        };
+      });
+      for (let i = 1; i < corners.length - 1; i++) {
+        const face = [corners[0], corners[i], corners[i + 1]];
+        triangles.push({
+          positions: face.map((v) => v.p),
+          uv: face.map((v) => [v.uv[0], flipV ? 1 - v.uv[1] : v.uv[1]]),
+          normals: face.every((v) => v.n) ? face.map((v) => v.n) : null,
+          texture: texture(materials[material] || material),
+        });
+      }
+    }
+  }
+  return triangles;
+}

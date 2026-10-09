@@ -286,6 +286,12 @@ const result = await window.CraftStudio.request({
 
 ## 开发与构建
 
+源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。
+
+在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
+
+
+
 安装 Node.js 22.13 或更高版本，然后执行：
 
 ```sh

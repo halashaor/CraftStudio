@@ -1,0 +1,357 @@
+import { coordKey } from '../core/site.js';
+const faces = {
+  east: [
+    [1, 0, 1],
+    [1, 0, 0],
+    [1, 1, 0],
+    [1, 1, 1],
+  ],
+  west: [
+    [0, 0, 0],
+    [0, 0, 1],
+    [0, 1, 1],
+    [0, 1, 0],
+  ],
+  up: [
+    [0, 1, 1],
+    [1, 1, 1],
+    [1, 1, 0],
+    [0, 1, 0],
+  ],
+  down: [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 0, 1],
+    [0, 0, 1],
+  ],
+  south: [
+    [0, 0, 1],
+    [1, 0, 1],
+    [1, 1, 1],
+    [0, 1, 1],
+  ],
+  north: [
+    [1, 0, 0],
+    [0, 0, 0],
+    [0, 1, 0],
+    [1, 1, 0],
+  ],
+};
+const normals = {
+  east: [1, 0, 0],
+  west: [-1, 0, 0],
+  up: [0, 1, 0],
+  down: [0, -1, 0],
+  south: [0, 0, 1],
+  north: [0, 0, -1],
+};
+function rotate(v, axis, angle, origin = [0.5, 0.5, 0.5]) {
+  const a = (angle * Math.PI) / 180,
+    c = Math.cos(a),
+    s = Math.sin(a),
+    p = v.map((n, i) => n - origin[i]);
+  let out;
+  if (axis === 'y') out = [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
+  else if (axis === 'x') out = [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c];
+  else out = [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]];
+  return out.map((n, i) => n + origin[i]);
+}
+function rgb(hex) {
+  return [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+}
+export function color(name) {
+  if (/white_concrete|quartz/.test(name)) return rgb(0xe7e5db);
+  if (/cherry/.test(name) && !/leaves/.test(name)) return rgb(0xc697a1);
+  if (/dark_oak/.test(name)) return rgb(0x654735);
+  if (/white_sail/.test(name)) return rgb(0xe7e3d4);
+  if (/black_sail/.test(name)) return rgb(0x343b3b);
+  if (/water/.test(name)) return rgb(0x5b9bc6);
+  if (/cherry_leaves/.test(name)) return rgb(0xd8a5bf);
+  if (/leaves|grass|moss/.test(name)) return rgb(0x88a175);
+  if (/dirt|mud/.test(name)) return rgb(0x82634c);
+  if (/limestone|calcite|marble|diorite/.test(name)) return rgb(0xcec9b2);
+  if (/copper/.test(name)) return rgb(0xb98b65);
+  if (/oak|wood|log|plank/.test(name)) return rgb(0xa48460);
+  if (/sand/.test(name)) return rgb(0xd0bc91);
+  if (/glass|ice/.test(name)) return rgb(0xacccd1);
+  if (/stone|andesite|ore|gravel/.test(name)) return rgb(0x949799);
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return [0.35 + (h & 127) / 500, 0.35 + ((h >> 8) & 127) / 500, 0.35 + ((h >> 16) & 127) / 500];
+}
+export function buildMesh(
+  site,
+  resources,
+  {
+    mode = 'after',
+    cut = 4095,
+    plants = true,
+    showGround = true,
+    showExisting = true,
+    progress = 4095,
+    chunk = null,
+    excludeWholeKinetics = false,
+    hidden = [],
+    animated = [],
+    isolateKeys = null,
+    geometryOnly = false,
+  } = {},
+) {
+  const ranges = [...hidden, ...animated].map((r) => ({
+      ...r,
+      members: r.cells ? new Set(r.cells) : null,
+    })),
+    inRange = (pos) =>
+      ranges.some(
+        (r) =>
+          (!r.members || r.members.has(coordKey(...pos))) &&
+          pos.every((n, a) => n >= r.min[a] && n <= r.max[a]),
+      );
+  const original = chunk ? site.baseChunks.get(chunk) || new Map() : site.cells,
+    overlay = chunk ? site.overlayChunks.get(chunk) || new Map() : site.overlay;
+  const cells = mode === 'before' ? original : new Map(original);
+  if (mode !== 'before')
+    for (const [k, b] of overlay)
+      if (b.state < 0) cells.delete(k);
+      else if (b.pos[1] <= progress) cells.set(k, b);
+  const removed =
+    mode === 'removed' || mode === 'diff'
+      ? [...overlay]
+          .filter(([k, b]) => site.cells.has(k) && (mode === 'removed' || b.state < 0))
+          .map(([k]) => site.cells.get(k))
+      : [];
+  const lookup = (pos) => {
+    if (pos.some((v) => v < 0 || v >= 4096) || (isolateKeys && !isolateKeys.has(coordKey(...pos))))
+      return null;
+    const k = coordKey(...pos);
+    if (mode === 'before') return site.cells.get(k);
+    const b = site.overlay.get(k);
+    if (b && b.pos[1] <= progress) return b.state < 0 ? null : b;
+    return site.cells.get(k);
+  };
+  const buckets = new Map(),
+    models = new Map(),
+    blockTraits = new Map();
+  const traits = (i) => {
+    if (!blockTraits.has(i)) {
+      const name = site.palette[i].Name;
+      blockTraits.set(i, {
+        name,
+        isPlant: /leaves|sapling|grass(?!_block)|petals|flower|fern|vine/.test(name),
+        isGround:
+          /:(stone|andesite|diorite|granite|dirt|grass_block|gravel|sand|clay|deepslate|tuff|bedrock|water)$/.test(
+            name,
+          ) || /_ore$/.test(name),
+        color: color(name),
+      });
+    }
+    return blockTraits.get(i);
+  };
+  const model = (i) => {
+    if (!models.has(i)) models.set(i, resources.model(site.palette[i]));
+    return models.get(i);
+  };
+  const add = (b, deleted = false) => {
+    if (
+      (isolateKeys && !isolateKeys.has(coordKey(...b.pos))) ||
+      b.pos[1] > cut ||
+      (mode !== 'before' && inRange(b.pos))
+    )
+      return;
+    const { name, isPlant, isGround } = traits(b.state);
+    if (
+      (!plants && isPlant) ||
+      (!showGround && isGround) ||
+      (!showExisting &&
+        !isGround &&
+        !isPlant &&
+        site.cells.has(coordKey(...b.pos)) &&
+        !site.overlay.has(coordKey(...b.pos)))
+    )
+      return;
+    const changed = site.overlay.get(coordKey(...b.pos)),
+      status = deleted
+        ? 'remove'
+        : changed
+          ? site.cells.has(coordKey(...b.pos))
+            ? 'replace'
+            : 'add'
+          : 'keep';
+    if (mode === 'removed' && !deleted) return;
+    const m = model(b.state),
+      baseColor =
+        mode === 'diff' || deleted
+          ? rgb(
+              status === 'remove'
+                ? 0xd56c62
+                : status === 'replace'
+                  ? 0xe2b76c
+                  : status === 'add'
+                    ? 0x6ac5a4
+                    : 0x88978e,
+            )
+          : traits(b.state).color;
+    if (
+      excludeWholeKinetics &&
+      !deleted &&
+      [
+        'create:shaft',
+        'create:cogwheel',
+        'create:large_cogwheel',
+        'create:large_water_wheel',
+      ].includes(name) &&
+      mode !== 'removed'
+    )
+      return;
+    for (const part of m.parts)
+      for (const tri of part.triangles || []) {
+        const verts = tri.positions.map((p) => {
+            let v = [...p];
+            if (part.x) v = rotate(v, 'x', -part.x);
+            if (part.y) v = rotate(v, 'y', -part.y);
+            return v.map((n, a) => n + b.pos[a]);
+          }),
+          a = verts[1].map((n, i) => n - verts[0][i]),
+          c = verts[2].map((n, i) => n - verts[0][i]),
+          n = [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]],
+          length = Math.hypot(...n) || 1;
+        for (let i = 0; i < 3; i++) n[i] /= length;
+        const texture = mode === 'diff' || deleted ? null : tri.texture,
+          key = (texture || 'color') + '|' + (deleted ? 'deleted' : m.alpha || 'opaque');
+        if (!buckets.has(key))
+          buckets.set(key, {
+            texture,
+            alpha: deleted ? 'deleted' : m.alpha || 'opaque',
+            positions: [],
+            normals: [],
+            colors: [],
+            uv: [],
+          });
+        const bucket = buckets.get(key);
+        for (let i = 0; i < 3; i++) {
+          bucket.positions.push(...verts[i]);
+          bucket.normals.push(...n);
+          if (!geometryOnly) {
+            bucket.colors.push(...(texture ? [1, 1, 1] : baseColor));
+            bucket.uv.push(...(tri.uv?.[i] || [0, 0]));
+          }
+        }
+      }
+    for (const part of m.parts)
+      for (const e of part.elements) {
+        const lo = e.from.map((n) => n / 16),
+          hi = e.to.map((n) => n / 16);
+        for (const [direction, face] of Object.entries(e.faces || {})) {
+          const normal = normals[direction];
+          if (!normal) continue;
+          if (!deleted && /:water$/.test(name)) {
+            const adjacent = b.pos.map((v, a) => v + normal[a]),
+              neighbor = lookup(adjacent);
+            if (
+              neighbor &&
+              site.palette[neighbor.state].Name === name &&
+              adjacent[1] <= cut &&
+              showGround
+            )
+              continue;
+          }
+          if (m.full && !deleted && !part.x && !part.y && !e.rotation) {
+            const adjacent = b.pos.map((v, a) => v + normal[a]);
+            if (adjacent[1] <= cut) {
+              const neighbor = lookup(adjacent);
+              if (neighbor) {
+                const { name: neighborName, isPlant, isGround } = traits(neighbor.state),
+                  shown =
+                    (plants || !isPlant) &&
+                    (showGround || !isGround) &&
+                    (showExisting ||
+                      isPlant ||
+                      isGround ||
+                      site.overlay.has(coordKey(...adjacent)));
+                if (shown && !inRange(adjacent)) {
+                  const nm = model(neighbor.state);
+                  if (nm.full && nm.alpha === 'opaque') continue;
+                  if (
+                    nm.full &&
+                    m.alpha === 'transparent' &&
+                    site.palette[neighbor.state].Name === name
+                  )
+                    continue;
+                }
+              }
+            }
+          }
+          const verts = faces[direction].map((v) => v.map((n, i) => (n ? hi[i] : lo[i])));
+          for (let i = 0; i < 4; i++) {
+            let v = verts[i];
+            if (e.rotation) {
+              const origin = e.rotation.origin.map((n) => n / 16);
+              if (e.rotation.rescale) {
+                const ratio = 1 / Math.cos((e.rotation.angle * Math.PI) / 180);
+                v = v.map((n, a) =>
+                  a === 'xyz'.indexOf(e.rotation.axis) ? n : origin[a] + (n - origin[a]) * ratio,
+                );
+              }
+              v = rotate(v, e.rotation.axis, e.rotation.angle, origin);
+            }
+            if (part.x) v = rotate(v, 'x', -part.x);
+            if (part.y) v = rotate(v, 'y', -part.y);
+            verts[i] = v.map((n, a) => n + b.pos[a]);
+          }
+          const a = verts[1].map((n, i) => n - verts[0][i]),
+            c = verts[2].map((n, i) => n - verts[0][i]),
+            n = [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]],
+            length = Math.hypot(...n) || 1;
+          for (let i = 0; i < 3; i++) n[i] /= length;
+          const texture = mode === 'diff' || deleted ? null : face.texture,
+            key = (texture || 'color') + '|' + (deleted ? 'deleted' : m.alpha || 'opaque');
+          if (!buckets.has(key))
+            buckets.set(key, {
+              texture,
+              alpha: deleted ? 'deleted' : m.alpha || 'opaque',
+              positions: [],
+              normals: [],
+              colors: [],
+              uv: [],
+            });
+          const bucket = buckets.get(key);
+          const uv = face.uv || [0, 0, 16, 16],
+            [u0, v0, u1, v1] = uv.map((v) => v / 16),
+            corners = [
+              [u0, 1 - v1],
+              [u1, 1 - v1],
+              [u1, 1 - v0],
+              [u0, 1 - v0],
+            ],
+            turn = (face.rotation || 0) / 90;
+          const tint = face.tintindex !== undefined ? rgb(0x94b978) : [1, 1, 1];
+          const col = texture ? tint : baseColor;
+          for (const i of [0, 1, 2, 0, 2, 3]) {
+            bucket.positions.push(...verts[i]);
+            bucket.normals.push(...n);
+            if (!geometryOnly) {
+              bucket.colors.push(...col);
+              bucket.uv.push(...corners[(i + turn) % 4]);
+            }
+          }
+        }
+      }
+  };
+  if (mode !== 'removed') for (const b of cells.values()) add(b);
+  for (const b of removed) add(b, true);
+  const result = [...buckets.values()].map((b) => ({
+    texture: b.texture,
+    alpha: b.alpha,
+    positions: new Float32Array(b.positions),
+    normals: new Float32Array(b.normals),
+    ...(geometryOnly ? {} : { colors: new Float32Array(b.colors), uv: new Float32Array(b.uv) }),
+  }));
+  const issues = [];
+  for (const [i, m] of models)
+    for (const issue of m.issues) issues.push(site.palette[i].Name + '：' + issue);
+  return {
+    buckets: result,
+    issues: [...new Set(issues)],
+    triangles: result.reduce((n, b) => n + b.positions.length / 9, 0),
+  };
+}

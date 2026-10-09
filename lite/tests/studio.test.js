@@ -1,18 +1,187 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Site} from '../src/site.js';
-import {emptyProject,importNBT,exportNBT} from '../src/codec.js';
-import {builder,selection,insertPrefab,insertOperations,rotateState,transformSelection,buildOnSite,cropProject,semantic} from '../src/studio.js';
-import {exportSponge} from '../src/sponge.js';
-import {ChunkMesher} from '../src/chunk-mesh.js';
-import {Resources} from '../src/resources.js';
-import {coordKey} from '../src/site.js';
-const make=()=>new Site({...emptyProject(),size:[40,30,40]});
-test('selection transforms directional states and arrays without editing the baseline',()=>{const s=make();s.operations([{type:'set',pos:[2,3,4],state:{Name:'minecraft:oak_stairs',Properties:{facing:'north',shape:'inner_left',half:'bottom'}}}]);const p=selection(s,[2,3,4],[4,4,5]);const ops=insertOperations(p,[10,3,10],{turn:1,mirror:true,count:2,step:[5,0,0]});assert.equal(ops[0].state.Properties.facing,'east');assert.equal(ops[0].state.Properties.shape,'inner_right');s.operations(ops);assert.equal(s.cells.size,0);assert.equal(s.overlay.size,3);transformSelection(s,{min:[2,3,4],max:[4,4,5],at:[20,3,20],move:true},{});assert.equal(s.at([2,3,4]),null);s.restore('undo');assert.ok(s.at([2,3,4]));});
-test('generators create voxel geometry for houses roofs stairs arches walls and paths',()=>{for(const kind of ['house','windmill','wall','roof','stairs','arch','path']){const p=builder(kind,{at:[2,3,2],width:13,depth:11,height:5});assert.ok(p.operations.length>10,kind);assert.ok(p.operations.every(o=>o.pos.every(Number.isInteger)));}assert.equal(rotateState({Name:'minecraft:oak_log',Properties:{axis:'x'}},1).Properties.axis,'z');});
-test('objects prefabs cameras and animation settings survive portable save and undo',()=>{const s=make();s.base.blocks=[];s.columns=new Map();for(let x=0;x<30;x++)for(let z=0;z<30;z++)s.columns.set(x+4096*z,{ground:0,top:0,water:null});const o=buildOnSite(s,'windmill',{at:[2,3,2],width:13,depth:11,height:5},{});s.design.cameras.push({name:'入口',position:[1,2,3],target:[4,5,6]});s.design.prefabs.push(selection(s,o.min,o.max));const restored=Site.unpack(s.pack());assert.deepEqual(restored.design,s.design);assert.ok(restored.design.animations[o.id]);const crop=cropProject(s,o.min,o.max);assert.equal(crop.entities.length,0);assert.ok(importNBT(exportNBT(crop)).blocks.length>100);s.restore('undo');assert.equal(s.design.objects.length,0);assert.equal(s.overlay.size,0);});
-test('object locks protect edits and semantic changes are scoped to one object',()=>{const s=make();s.design.objects.push({id:'a',min:[1,1,1],max:[2,2,2],locked:true});assert.throws(()=>s.operations([{type:'set',pos:[1,1,1],state:{Name:'minecraft:stone'}}]),/锁定/);s.design.objects[0].locked=false;s.operations([{type:'set',pos:[1,1,1],state:{Name:'minecraft:stone'}}]);const ops=semantic(s,[{type:'restyle',id:'a',from:'minecraft:stone',state:{Name:'minecraft:bricks'}}]);assert.equal(ops.length,1);assert.deepEqual(ops[0].pos,[1,1,1]);});
-test('Sponge V3 export preserves directional blocks and voxel positions',()=>{const s=make();s.operations(builder('house',{at:[2,2,2],width:7,depth:5,height:4}).operations);const p=s.project(),restored=importNBT(exportSponge(p));assert.equal(restored.blocks.length,p.blocks.length);assert.deepEqual(restored.blocks.map(b=>[b.pos,restored.palette[b.state]]),p.blocks.map(b=>[b.pos,p.palette[b.state]]).sort((a,b)=>a[0][1]-b[0][1]||a[0][2]-b[0][2]||a[0][0]-b[0][0]));});
-test('moving an object moves its animation and undo restores both',()=>{const s=make();s.operations([{type:'fill',min:[1,1,1],max:[3,3,3],state:{Name:'minecraft:bricks'}}]);s.design.objects.push({id:'obj',name:'obj',min:[1,1,1],max:[3,3,3]});s.design.animations.obj={type:'rotate',min:[1,1,1],max:[3,3,3],center:[2.5,2.5,2.5],rpm:12};transformSelection(s,{min:[1,1,1],max:[3,3,3],at:[10,2,10],move:true,turn:1},{});assert.deepEqual(s.design.objects[0].min,[10,2,10]);assert.deepEqual(s.design.animations.obj.center,[11.5,3.5,11.5]);s.restore('undo');assert.deepEqual(s.design.objects[0].min,[1,1,1]);assert.deepEqual(s.design.animations.obj.center,[2.5,2.5,2.5]);});
-test('object membership protects terrain inside its bounding box during hide and move',()=>{const s=new Site({...emptyProject(),size:[40,30,40],palette:[{Name:'minecraft:stone'}],blocks:[{pos:[1,0,1],state:0}]});s.operations([{type:'set',pos:[1,1,1],state:{Name:'minecraft:bricks'}}]);s.design.objects.push({id:'o',name:'o',min:[0,0,0],max:[3,3,3],cells:[coordKey(1,1,1)]});const m=new ChunkMesher(),r=new Resources();m.render(s,r,{});const hidden=m.render(s,r,{hidden:[s.design.objects[0]]});assert.equal(hidden.reset,false);assert.equal(hidden.triangles,12);assert.equal(selection(s,[0,0,0],[3,3,3]).blocks.length,1);transformSelection(s,{min:[0,0,0],max:[3,3,3],at:[20,3,20],move:true},{});assert.ok(s.at([1,0,1]));assert.equal(s.at([1,1,1]),null);assert.ok(s.at([21,4,21]));});
-test('prefab reuse carries relative animation into a new location and orientation',()=>{const s=make();insertPrefab(s,{schema:'craftstudio-prefab/1',name:'风车',size:[3,3,1],blocks:[{pos:[1,1,0],state:{Name:'create:white_sail'}}],animation:{type:'rotate',axis:'z',center:[1.5,1.5,.5],min:[0,0,0],max:[2,2,0],rpm:-12}},[10,3,10],{turn:1},{});const id=s.design.objects[0].id;assert.equal(s.design.animations[id].axis,'x');assert.deepEqual(s.design.animations[id].center,[10.5,4.5,11.5]);const p=selection(s,s.design.objects[0].min,s.design.objects[0].max);assert.ok(p.animation);assert.equal(p.blocks.length,1);});
+import { Site } from '../src/core/site.js';
+import { emptyProject, importNBT, exportNBT } from '../src/minecraft/codec.js';
+import {
+  builder,
+  selection,
+  insertPrefab,
+  insertOperations,
+  rotateState,
+  transformSelection,
+  buildOnSite,
+  cropProject,
+  semantic,
+} from '../src/modeling/studio.js';
+import { exportSponge } from '../src/minecraft/sponge.js';
+import { ChunkMesher } from '../src/rendering/chunk-mesh.js';
+import { Resources } from '../src/materials/resources.js';
+import { coordKey } from '../src/core/site.js';
+const make = () => new Site({ ...emptyProject(), size: [40, 30, 40] });
+test('selection transforms directional states and arrays without editing the baseline', () => {
+  const s = make();
+  s.operations([
+    {
+      type: 'set',
+      pos: [2, 3, 4],
+      state: {
+        Name: 'minecraft:oak_stairs',
+        Properties: { facing: 'north', shape: 'inner_left', half: 'bottom' },
+      },
+    },
+  ]);
+  const p = selection(s, [2, 3, 4], [4, 4, 5]);
+  const ops = insertOperations(p, [10, 3, 10], {
+    turn: 1,
+    mirror: true,
+    count: 2,
+    step: [5, 0, 0],
+  });
+  assert.equal(ops[0].state.Properties.facing, 'east');
+  assert.equal(ops[0].state.Properties.shape, 'inner_right');
+  s.operations(ops);
+  assert.equal(s.cells.size, 0);
+  assert.equal(s.overlay.size, 3);
+  transformSelection(s, { min: [2, 3, 4], max: [4, 4, 5], at: [20, 3, 20], move: true }, {});
+  assert.equal(s.at([2, 3, 4]), null);
+  s.restore('undo');
+  assert.ok(s.at([2, 3, 4]));
+});
+test('generators create voxel geometry for houses roofs stairs arches walls and paths', () => {
+  for (const kind of ['house', 'windmill', 'wall', 'roof', 'stairs', 'arch', 'path']) {
+    const p = builder(kind, { at: [2, 3, 2], width: 13, depth: 11, height: 5 });
+    assert.ok(p.operations.length > 10, kind);
+    assert.ok(p.operations.every((o) => o.pos.every(Number.isInteger)));
+  }
+  assert.equal(
+    rotateState({ Name: 'minecraft:oak_log', Properties: { axis: 'x' } }, 1).Properties.axis,
+    'z',
+  );
+});
+test('objects prefabs cameras and animation settings survive portable save and undo', () => {
+  const s = make();
+  s.base.blocks = [];
+  s.columns = new Map();
+  for (let x = 0; x < 30; x++)
+    for (let z = 0; z < 30; z++) s.columns.set(x + 4096 * z, { ground: 0, top: 0, water: null });
+  const o = buildOnSite(s, 'windmill', { at: [2, 3, 2], width: 13, depth: 11, height: 5 }, {});
+  s.design.cameras.push({ name: '入口', position: [1, 2, 3], target: [4, 5, 6] });
+  s.design.prefabs.push(selection(s, o.min, o.max));
+  const restored = Site.unpack(s.pack());
+  assert.deepEqual(restored.design, s.design);
+  assert.ok(restored.design.animations[o.id]);
+  const crop = cropProject(s, o.min, o.max);
+  assert.equal(crop.entities.length, 0);
+  assert.ok(importNBT(exportNBT(crop)).blocks.length > 100);
+  s.restore('undo');
+  assert.equal(s.design.objects.length, 0);
+  assert.equal(s.overlay.size, 0);
+});
+test('object locks protect edits and semantic changes are scoped to one object', () => {
+  const s = make();
+  s.design.objects.push({ id: 'a', min: [1, 1, 1], max: [2, 2, 2], locked: true });
+  assert.throws(
+    () => s.operations([{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:stone' } }]),
+    /锁定/,
+  );
+  s.design.objects[0].locked = false;
+  s.operations([{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:stone' } }]);
+  const ops = semantic(s, [
+    { type: 'restyle', id: 'a', from: 'minecraft:stone', state: { Name: 'minecraft:bricks' } },
+  ]);
+  assert.equal(ops.length, 1);
+  assert.deepEqual(ops[0].pos, [1, 1, 1]);
+});
+test('Sponge V3 export preserves directional blocks and voxel positions', () => {
+  const s = make();
+  s.operations(builder('house', { at: [2, 2, 2], width: 7, depth: 5, height: 4 }).operations);
+  const p = s.project(),
+    restored = importNBT(exportSponge(p));
+  assert.equal(restored.blocks.length, p.blocks.length);
+  assert.deepEqual(
+    restored.blocks.map((b) => [b.pos, restored.palette[b.state]]),
+    p.blocks
+      .map((b) => [b.pos, p.palette[b.state]])
+      .sort((a, b) => a[0][1] - b[0][1] || a[0][2] - b[0][2] || a[0][0] - b[0][0]),
+  );
+});
+test('moving an object moves its animation and undo restores both', () => {
+  const s = make();
+  s.operations([
+    { type: 'fill', min: [1, 1, 1], max: [3, 3, 3], state: { Name: 'minecraft:bricks' } },
+  ]);
+  s.design.objects.push({ id: 'obj', name: 'obj', min: [1, 1, 1], max: [3, 3, 3] });
+  s.design.animations.obj = {
+    type: 'rotate',
+    min: [1, 1, 1],
+    max: [3, 3, 3],
+    center: [2.5, 2.5, 2.5],
+    rpm: 12,
+  };
+  transformSelection(
+    s,
+    { min: [1, 1, 1], max: [3, 3, 3], at: [10, 2, 10], move: true, turn: 1 },
+    {},
+  );
+  assert.deepEqual(s.design.objects[0].min, [10, 2, 10]);
+  assert.deepEqual(s.design.animations.obj.center, [11.5, 3.5, 11.5]);
+  s.restore('undo');
+  assert.deepEqual(s.design.objects[0].min, [1, 1, 1]);
+  assert.deepEqual(s.design.animations.obj.center, [2.5, 2.5, 2.5]);
+});
+test('object membership protects terrain inside its bounding box during hide and move', () => {
+  const s = new Site({
+    ...emptyProject(),
+    size: [40, 30, 40],
+    palette: [{ Name: 'minecraft:stone' }],
+    blocks: [{ pos: [1, 0, 1], state: 0 }],
+  });
+  s.operations([{ type: 'set', pos: [1, 1, 1], state: { Name: 'minecraft:bricks' } }]);
+  s.design.objects.push({
+    id: 'o',
+    name: 'o',
+    min: [0, 0, 0],
+    max: [3, 3, 3],
+    cells: [coordKey(1, 1, 1)],
+  });
+  const m = new ChunkMesher(),
+    r = new Resources();
+  m.render(s, r, {});
+  const hidden = m.render(s, r, { hidden: [s.design.objects[0]] });
+  assert.equal(hidden.reset, false);
+  assert.equal(hidden.triangles, 12);
+  assert.equal(selection(s, [0, 0, 0], [3, 3, 3]).blocks.length, 1);
+  transformSelection(s, { min: [0, 0, 0], max: [3, 3, 3], at: [20, 3, 20], move: true }, {});
+  assert.ok(s.at([1, 0, 1]));
+  assert.equal(s.at([1, 1, 1]), null);
+  assert.ok(s.at([21, 4, 21]));
+});
+test('prefab reuse carries relative animation into a new location and orientation', () => {
+  const s = make();
+  insertPrefab(
+    s,
+    {
+      schema: 'craftstudio-prefab/1',
+      name: '风车',
+      size: [3, 3, 1],
+      blocks: [{ pos: [1, 1, 0], state: { Name: 'create:white_sail' } }],
+      animation: {
+        type: 'rotate',
+        axis: 'z',
+        center: [1.5, 1.5, 0.5],
+        min: [0, 0, 0],
+        max: [2, 2, 0],
+        rpm: -12,
+      },
+    },
+    [10, 3, 10],
+    { turn: 1 },
+    {},
+  );
+  const id = s.design.objects[0].id;
+  assert.equal(s.design.animations[id].axis, 'x');
+  assert.deepEqual(s.design.animations[id].center, [10.5, 4.5, 11.5]);
+  const p = selection(s, s.design.objects[0].min, s.design.objects[0].max);
+  assert.ok(p.animation);
+  assert.equal(p.blocks.length, 1);
+});

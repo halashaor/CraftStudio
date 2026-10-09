@@ -1,5 +1,152 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {curveStation} from '../src/plane-library.js';import {faceFrame,dot,validateFrame} from '../src/workplane.js';import {DesignAPI} from '../src/foundation.js';import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';import {Resources} from '../src/resources.js';
-function setup(){const s=new Site(emptyProject());s.design.guides=[{id:'rail',name:'Rail',points:[[2,3,2],[12,3,2],[12,3,12]],recipe:{kind:'line'}}];s.origin=[-20,64,40];s.originConfirmed=true;return{s,api:new DesignAPI({getSite:()=>s,resources:()=>new Resources()})};}
-test('curve stations use arc length and transported orthogonal frames without arbitrary reference-axis flips',()=>{const pts=[[0,0,0],[10,0,0],[10,0,10]],a=curveStation(pts,.25),b=curveStation(pts,.75);assert.deepEqual(a.frame.origin,[5,0,0]);assert.deepEqual(b.frame.origin,[10,0,5]);assert.deepEqual(a.frame.normal,[1,0,0]);assert.deepEqual(b.frame.normal,[0,0,1]);assert.equal(a.totalLength,20);assert.equal(b.distance,15);validateFrame(b.frame);const curve=Array.from({length:101},(_,i)=>[Math.sin(i/100),i/100,Math.cos(i/100)]);let old=null;for(let t=0;t<=100;t++){const f=curveStation(curve,t/100).frame;validateFrame(f);if(old)assert.ok(dot(old.u,f.u)>.99);old=f;}assert.throws(()=>curveStation([[1,1,1],[1,1,1]]),/长度/);assert.throws(()=>curveStation(pts,2),/比例/);});
-test('plane CRUD shares revisions, replay, world coordinates, undo and portable persistence without editing voxels',()=>{const {s,api}=setup(),before=s.pack().base;const frame=faceFrame([-18,67,42],[0,1,0]),r=api.execute({id:'save',method:'workplanes.put',params:{expectedRevision:0,space:'world',plane:{name:'Facade',frame}}});assert.ok(r.ok,r.error?.message);assert.deepEqual(r.value.plane.frame.origin,[2,3,2]);assert.equal(api.execute({id:'save',method:'workplanes.put',params:{expectedRevision:0,space:'world',plane:{name:'Facade',frame}}}).revision,r.revision);const id=r.value.plane.id;assert.equal(api.execute({method:'workplanes.put',params:{expectedRevision:0,plane:{name:'Other',frame:faceFrame([2,3,2],[1,0,0])}}}).ok,false);const world=api.execute({method:'workplanes.list',params:{space:'world'}});assert.deepEqual(world.value.items[0].frame.origin,frame.origin);assert.deepEqual(s.pack().base,before);assert.equal(s.overlay.size,0);const saved=Site.unpack(s.pack());assert.equal(saved.design.workplanes[0].id,id);const removed=api.execute({method:'workplanes.remove',params:{expectedRevision:r.revision,id}});assert.ok(removed.ok);assert.equal(s.design.workplanes.length,0);api.execute({method:'history.undo',params:{expectedRevision:removed.revision}});assert.equal(s.design.workplanes[0].id,id);});
-test('plane transactions and station queries share the same workspace authority',()=>{const {s,api}=setup(),station=api.execute({method:'workplanes.atCurve',params:{guideId:'rail',station:.75,expectedRevision:0}});assert.ok(station.ok);assert.deepEqual(station.value.frame.origin,[12,3,7]);assert.equal(api.revision,0);assert.equal(s.undo.length,0);const tx=api.execute({method:'transaction.begin',params:{expectedRevision:0}}).value.transactionId;const staged=api.execute({method:'workplanes.put',params:{transactionId:tx,plane:{name:'Station',frame:station.value.frame,source:station.value.source}}});assert.ok(staged.ok);assert.equal(s.design.workplanes,undefined);assert.equal(api.execute({method:'workplanes.list',params:{transactionId:tx}}).value.items.length,1);assert.ok(api.execute({method:'transaction.commit',params:{transactionId:tx}}).ok);assert.equal(s.design.workplanes[0].source.mode,'snapshot');assert.equal(api.execute({method:'workplanes.list',params:{space:'wrong'}}).error.code,'INVALID_SPACE');const rev=api.revision;assert.equal(api.execute({method:'workplanes.put',params:{expectedRevision:rev,plane:{name:'Unsupported',frame:station.value.frame,source:{mode:'follow'}}}}).ok,false);assert.equal(api.revision,rev);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { curveStation } from '../src/sketch/plane-library.js';
+import { faceFrame, dot, validateFrame } from '../src/sketch/workplane.js';
+import { DesignAPI } from '../src/api/design-api.js';
+import { Site } from '../src/core/site.js';
+import { emptyProject } from '../src/minecraft/codec.js';
+import { Resources } from '../src/materials/resources.js';
+function setup() {
+  const s = new Site(emptyProject());
+  s.design.guides = [
+    {
+      id: 'rail',
+      name: 'Rail',
+      points: [
+        [2, 3, 2],
+        [12, 3, 2],
+        [12, 3, 12],
+      ],
+      recipe: { kind: 'line' },
+    },
+  ];
+  s.origin = [-20, 64, 40];
+  s.originConfirmed = true;
+  return { s, api: new DesignAPI({ getSite: () => s, resources: () => new Resources() }) };
+}
+test('curve stations use arc length and transported orthogonal frames without arbitrary reference-axis flips', () => {
+  const pts = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 0, 10],
+    ],
+    a = curveStation(pts, 0.25),
+    b = curveStation(pts, 0.75);
+  assert.deepEqual(a.frame.origin, [5, 0, 0]);
+  assert.deepEqual(b.frame.origin, [10, 0, 5]);
+  assert.deepEqual(a.frame.normal, [1, 0, 0]);
+  assert.deepEqual(b.frame.normal, [0, 0, 1]);
+  assert.equal(a.totalLength, 20);
+  assert.equal(b.distance, 15);
+  validateFrame(b.frame);
+  const curve = Array.from({ length: 101 }, (_, i) => [
+    Math.sin(i / 100),
+    i / 100,
+    Math.cos(i / 100),
+  ]);
+  let old = null;
+  for (let t = 0; t <= 100; t++) {
+    const f = curveStation(curve, t / 100).frame;
+    validateFrame(f);
+    if (old) assert.ok(dot(old.u, f.u) > 0.99);
+    old = f;
+  }
+  assert.throws(
+    () =>
+      curveStation([
+        [1, 1, 1],
+        [1, 1, 1],
+      ]),
+    /长度/,
+  );
+  assert.throws(() => curveStation(pts, 2), /比例/);
+});
+test('plane CRUD shares revisions, replay, world coordinates, undo and portable persistence without editing voxels', () => {
+  const { s, api } = setup(),
+    before = s.pack().base;
+  const frame = faceFrame([-18, 67, 42], [0, 1, 0]),
+    r = api.execute({
+      id: 'save',
+      method: 'workplanes.put',
+      params: { expectedRevision: 0, space: 'world', plane: { name: 'Facade', frame } },
+    });
+  assert.ok(r.ok, r.error?.message);
+  assert.deepEqual(r.value.plane.frame.origin, [2, 3, 2]);
+  assert.equal(
+    api.execute({
+      id: 'save',
+      method: 'workplanes.put',
+      params: { expectedRevision: 0, space: 'world', plane: { name: 'Facade', frame } },
+    }).revision,
+    r.revision,
+  );
+  const id = r.value.plane.id;
+  assert.equal(
+    api.execute({
+      method: 'workplanes.put',
+      params: {
+        expectedRevision: 0,
+        plane: { name: 'Other', frame: faceFrame([2, 3, 2], [1, 0, 0]) },
+      },
+    }).ok,
+    false,
+  );
+  const world = api.execute({ method: 'workplanes.list', params: { space: 'world' } });
+  assert.deepEqual(world.value.items[0].frame.origin, frame.origin);
+  assert.deepEqual(s.pack().base, before);
+  assert.equal(s.overlay.size, 0);
+  const saved = Site.unpack(s.pack());
+  assert.equal(saved.design.workplanes[0].id, id);
+  const removed = api.execute({
+    method: 'workplanes.remove',
+    params: { expectedRevision: r.revision, id },
+  });
+  assert.ok(removed.ok);
+  assert.equal(s.design.workplanes.length, 0);
+  api.execute({ method: 'history.undo', params: { expectedRevision: removed.revision } });
+  assert.equal(s.design.workplanes[0].id, id);
+});
+test('plane transactions and station queries share the same workspace authority', () => {
+  const { s, api } = setup(),
+    station = api.execute({
+      method: 'workplanes.atCurve',
+      params: { guideId: 'rail', station: 0.75, expectedRevision: 0 },
+    });
+  assert.ok(station.ok);
+  assert.deepEqual(station.value.frame.origin, [12, 3, 7]);
+  assert.equal(api.revision, 0);
+  assert.equal(s.undo.length, 0);
+  const tx = api.execute({ method: 'transaction.begin', params: { expectedRevision: 0 } }).value
+    .transactionId;
+  const staged = api.execute({
+    method: 'workplanes.put',
+    params: {
+      transactionId: tx,
+      plane: { name: 'Station', frame: station.value.frame, source: station.value.source },
+    },
+  });
+  assert.ok(staged.ok);
+  assert.equal(s.design.workplanes, undefined);
+  assert.equal(
+    api.execute({ method: 'workplanes.list', params: { transactionId: tx } }).value.items.length,
+    1,
+  );
+  assert.ok(api.execute({ method: 'transaction.commit', params: { transactionId: tx } }).ok);
+  assert.equal(s.design.workplanes[0].source.mode, 'snapshot');
+  assert.equal(
+    api.execute({ method: 'workplanes.list', params: { space: 'wrong' } }).error.code,
+    'INVALID_SPACE',
+  );
+  const rev = api.revision;
+  assert.equal(
+    api.execute({
+      method: 'workplanes.put',
+      params: {
+        expectedRevision: rev,
+        plane: { name: 'Unsupported', frame: station.value.frame, source: { mode: 'follow' } },
+      },
+    }).ok,
+    false,
+  );
+  assert.equal(api.revision, rev);
+});

@@ -1,0 +1,45 @@
+<div class="asset-search">
+  <input id="asset-query" placeholder="搜索方块名称或用途" aria-label="搜索素材" /><button
+    id="asset-add-resource"
+    title="选择自己的资源文件"
+  >
+    ＋ 资源
+  </button>
+</div>
+<div class="asset-filters">
+  <select id="asset-source" aria-label="素材来源">
+    <option value="all">所有已选来源</option></select
+  ><select id="asset-color" aria-label="颜色特征">
+    <option value="all">所有色系</option>
+    <option value="light">浅色</option>
+    <option value="dark">深色</option>
+    <option value="warm">暖色</option>
+    <option value="blue">蓝色</option>
+    <option value="green">绿色</option>
+    <option value="neutral">中性色</option>
+  </select>
+</div>
+<div class="asset-catalog-header">
+  <span>分类目录</span><button id="asset-new-category">＋ 自建分类</button>
+</div>
+<div id="asset-categories" class="asset-categories"></div>
+<div class="asset-results">
+  <span id="asset-count"></span><button id="asset-manage">管理分类</button>
+</div>
+<div
+  id="asset-grid"
+  class="asset-grid"
+  role="group"
+  aria-label="素材卡片，方向键浏览，Home 和 End 定位行首行尾"
+></div>
+<div class="asset-pages">
+  <button id="asset-prev">上一页</button><span id="asset-page"></span
+  ><button id="asset-next">下一页</button>
+</div>
+<details class="asset-data">
+  <summary>分类库备份</summary>
+  <button id="asset-export-prefs">导出分类与收藏</button
+  ><label
+    >导入分类库<input id="asset-import-prefs" type="file" accept=".craftassets.json,.json"
+  /></label>
+</details>

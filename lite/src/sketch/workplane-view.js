@@ -1,0 +1,70 @@
+import { fromPlane } from './workplane.js';
+export function workplaneView(THREE, scene, requestRender) {
+  let gridVisible = true,
+    gridNode = null;
+  const root = new THREE.Group();
+  scene.add(root);
+  function clear() {
+    gridNode = null;
+    for (const n of [...root.children]) {
+      root.remove(n);
+      n.geometry.dispose();
+      n.material.dispose();
+    }
+    requestRender();
+  }
+  function draw(frame, points = []) {
+    clear();
+    if (frame) {
+      const line = [],
+        at = (u, v) => fromPlane([u, v, 0], frame);
+      for (let i = -8; i <= 8; i++) {
+        line.push(...at(i, -8), ...at(i, 8), ...at(-8, i), ...at(8, i));
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(line, 3));
+      gridNode = new THREE.LineSegments(
+        g,
+        new THREE.LineBasicMaterial({
+          color: 0x7ca4c4,
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: false,
+        }),
+      );
+      gridNode.visible = gridVisible;
+      root.add(gridNode);
+      for (const [axis, color] of [
+        [frame.u, 0xf08b82],
+        [frame.v, 0x89d6a1],
+        [frame.normal, 0x8dabff],
+      ]) {
+        const g = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(...frame.origin),
+          new THREE.Vector3(...frame.origin.map((n, i) => n + axis[i] * 3)),
+        ]);
+        root.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, depthTest: false })));
+      }
+    }
+    for (const p of points) {
+      const n = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffcd75, depthTest: false }),
+      );
+      n.position.set(...p);
+      root.add(n);
+    }
+    requestRender();
+  }
+  return {
+    clear,
+    draw,
+    visible: () => gridVisible,
+    toggle() {
+      gridVisible = !gridVisible;
+      if (gridNode) gridNode.visible = gridVisible;
+      requestRender();
+      return gridVisible;
+    },
+  };
+}

@@ -1,0 +1,614 @@
+import { dimensionInput } from '../ui/dimension-expression.js';
+import { PreviewHistory } from '../runtime/preview-history.js';
+import {
+  guideSnapTargets,
+  guideSnapSegments,
+  nearbyIntersections,
+  nearestScreenSnap,
+} from '../sketch/object-snaps.js';
+import { measurementMetrics } from './measurement.js';
+import { textEditing, dialogOwnsKeyboard, nativeEnterTarget } from '../ui/keyboard-context.js';
+export function measurementUI({
+  THREE,
+  $,
+  scene,
+  renderer,
+  cast,
+  getSummary,
+  getCamera,
+  beforeOpen,
+  call,
+  refresh,
+  render,
+  markDirty,
+  notice,
+  requestRender,
+  highlightSources = () => {},
+}) {
+  const panel = document.createElement('section');
+  panel.id = 'measurement-panel';
+  panel.hidden = true;
+  panel.className = 'workspace-task-panel';
+  panel.innerHTML =
+    '<div class="construction-header"><strong>测量</strong><button id="measurement-close">结束</button></div><label>类型<select id="measurement-kind"><option value="distance">两点间距 / 高差</option><option value="angle">三点夹角</option><option value="path">折线累计长度</option></select></label><label>名称<input id="measurement-name" value="场地测量"></label><label class="check"><input id="measurement-geometry-snap" type="checkbox" checked>草图端点 / 中点 / 中心 / 交点吸附</label><p id="measurement-snap-feedback" class="small"></p><label>网格吸附<select id="measurement-snap"><option value="0.5">半格 · 半砖高度</option><option value="1">整格</option><option value="0">表面位置 · 不吸附</option></select></label><p id="measurement-stage">点取起点，再点取终点</p><div id="measurement-points"></div><pre id="measurement-report" aria-live="polite"></pre><p class="small">单位为格；第二点为夹角顶点，三维内角为 0–180°。折线按点取线段累计，不是材料数量。标注保存当前位置快照。</p><div class="row"><button id="measurement-back">退回上一点</button><button id="measurement-restart">重新取点</button><button id="measurement-save" class="primary" disabled>保存标注</button></div>';
+  $('scene').append(panel);
+  const saved = document.createElement('section');
+  saved.className = 'inspector-section';
+  saved.id = 'measurement-saved';
+  saved.hidden = true;
+  saved.innerHTML =
+    '<h3>测量标注</h3><label class="check"><input id="measurement-visible" type="checkbox" checked>显示已保存标注</label><div id="measurement-list"></div>';
+  $('cad-selected-properties').after(saved);
+  const temporary = new THREE.Group(),
+    persistent = new THREE.Group();
+  scene.add(temporary, persistent);
+  let active = false,
+    points = [],
+    editingId = null,
+    signature = '',
+    workspaceId = null,
+    navigationHeld = false,
+    saving = false,
+    down = null;
+  const snapMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0x55dfdc, depthTest: false, depthWrite: false }),
+  );
+  snapMarker.visible = false;
+  scene.add(snapMarker);
+  let snapTargets = [],
+    snapSegments = [],
+    guideSignature = '',
+    sourceFeedback = false;
+  snapMarker.onBeforeRender = (r, sc, camera) => {
+    const height = Math.max(1, r.domElement.clientHeight),
+      perPixel = camera.isOrthographicCamera
+        ? (camera.top - camera.bottom) / camera.zoom / height
+        : (2 *
+            camera.position.distanceTo(snapMarker.position) *
+            Math.tan((camera.fov * Math.PI) / 360)) /
+          height;
+    snapMarker.scale.setScalar(perPixel * 6);
+  };
+  function showSnap(target) {
+    const ids = target ? target.sourceIds || [target.guideId] : [];
+    if (target || sourceFeedback) highlightSources(ids);
+    sourceFeedback = !!target;
+    panel.dataset.snapSources = ids.filter(Boolean).join(',');
+    snapMarker.visible = !!target;
+    if (target) snapMarker.position.set(...target.point);
+    $('measurement-snap-feedback').textContent = target
+      ? { endpoint: '端点', midpoint: '中点', center: '中心', intersection: '交点' }[target.kind] +
+        ' · ' +
+        target.name
+      : '';
+    requestRender();
+  }
+  $('measurement-geometry-snap').title = '按住 Ctrl 暂停草图吸附；精确坐标不重新取整';
+  $('measurement-geometry-snap').onchange = () => showSnap(null);
+  $('show-construction-guides')?.addEventListener('change', () => showSnap(null));
+  const number = (n) => Number(n.toFixed(3)).toLocaleString(),
+    kind = () => $('measurement-kind').value,
+    limit = () => (kind() === 'path' ? Infinity : kind() === 'angle' ? 3 : 2);
+  const coordinateBindings = new Map();
+  const pendingCoordinate = () =>
+    [...coordinateBindings.keys()].find(
+      (input) => input.isConnected && input.dataset.expressionPending,
+    );
+  function ready() {
+    if (pendingCoordinate()) return false;
+    try {
+      measurementMetrics(points, kind());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function labelText(p, type) {
+    const m = measurementMetrics(p, type);
+    return type === 'angle'
+      ? number(m.angleDegrees) + '°'
+      : number(type === 'path' ? m.totalLength : m.distance) + ' 格';
+  }
+  function pointName(i) {
+    return kind() === 'angle'
+      ? ['第一端点', '顶点', '第二端点'][i]
+      : kind() === 'path'
+        ? '点 ' + (i + 1)
+        : i
+          ? '终点'
+          : '起点';
+  }
+  function dispose(group) {
+    for (const node of [...group.children]) {
+      group.remove(node);
+      node.traverse((o) => {
+        o.geometry?.dispose();
+        if (o.material) {
+          for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+            m.map?.dispose();
+            m.dispose();
+          }
+        }
+      });
+    }
+  }
+  function draw(group, positions, color, type = kind()) {
+    dispose(group);
+    if (!positions.length) return;
+    for (const pos of positions) {
+      const node = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 8, 6),
+        new THREE.MeshBasicMaterial({ color, depthTest: false }),
+      );
+      node.position.set(...pos);
+      group.add(node);
+    }
+    if (positions.length < 2) return;
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(positions.map((p) => new THREE.Vector3(...p))),
+      new THREE.LineBasicMaterial({ color, depthTest: false }),
+    );
+    group.add(line);
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    let text;
+    try {
+      text = labelText(positions, type === 'angle' && positions.length < 3 ? 'distance' : type);
+    } catch {
+      return;
+    }
+    ctx.font = '26px sans-serif';
+    canvas.width = Math.max(96, Math.ceil(ctx.measureText(text).width) + 24);
+    ctx.fillStyle = 'rgba(28,39,53,.9)';
+    ctx.fillRect(0, 0, canvas.width, 64);
+    ctx.fillStyle = '#f1f6ff';
+    ctx.font = '26px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, canvas.width / 2, 42);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(canvas),
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    sprite.position.set(
+      ...(type === 'angle'
+        ? positions[1]
+        : type === 'path'
+          ? positions[Math.floor(positions.length / 2)]
+          : positions[0].map((n, a) => (n + positions[1][a]) / 2)),
+    );
+    sprite.onBeforeRender = (r, sc, camera) => {
+      const height = Math.max(1, r.domElement.clientHeight),
+        perPixel = camera.isOrthographicCamera
+          ? (camera.top - camera.bottom) / camera.zoom / height
+          : (2 *
+              camera.position.distanceTo(sprite.position) *
+              Math.tan((camera.fov * Math.PI) / 360)) /
+            height;
+      sprite.scale.set((perPixel * canvas.width) / 2, perPixel * 32, 1);
+    };
+    group.add(sprite);
+  }
+  function report(preview = points) {
+    $('measurement-save').disabled = !ready() || saving;
+    $('measurement-back').disabled = !points.length || saving;
+    try {
+      const m = measurementMetrics(preview, kind());
+      $('measurement-report').textContent =
+        kind() === 'angle'
+          ? `三维夹角  ${number(m.angleDegrees)}°\n两条角边  ${m.armLengths.map(number).join(' / ')} 格`
+          : kind() === 'path'
+            ? `折线总长  ${number(m.totalLength)} 格\n线段数量  ${m.segmentCount}\n首尾直距  ${number(m.chordLength)} 格\n总上升 / 下降  ${number(m.ascent)} / ${number(m.descent)} 格\n首尾高差 ΔY  ${number(m.rise)} 格`
+            : `直线间距  ${number(m.distance)} 格\n水平间距  ${number(m.horizontal)} 格\n高差 ΔY   ${number(m.rise)} 格\nΔX / ΔZ   ${number(m.delta[0])} / ${number(m.delta[2])} 格\n轴向总距  ${number(m.manhattan)} 格\n坡度      ${m.slopePercent === null ? (m.distance ? '垂直' : '两点重合') : number(m.slopePercent) + '%'} · ${number(m.pitchDegrees)}°`;
+    } catch (e) {
+      $('measurement-report').textContent =
+        points.length >= limit()
+          ? e.message
+          : kind() === 'angle'
+            ? '依次点取第一端点、顶点、第二端点'
+            : kind() === 'path'
+              ? '连续点取，至少两点后可保存'
+              : '点取两处实际位置后显示距离与高差';
+    }
+  }
+  const previewSteps = new PreviewHistory();
+  const capture = () => ({
+    points: structuredClone(points),
+    name: $('measurement-name').value,
+    editingId,
+  });
+  function record(before) {
+    if (active && !saving) previewSteps.record(before, capture());
+    syncHistory();
+  }
+  function historyState() {
+    return {
+      active,
+      undo: previewSteps.undo.length > 0 || !!pendingCoordinate(),
+      redo: previewSteps.redo.length > 0,
+    };
+  }
+  function syncHistory() {
+    panel.dataset.localHistory =
+      previewSteps.undo.length + ':' + previewSteps.redo.length + ':' + !!pendingCoordinate();
+  }
+  function previewHistory(direction) {
+    if (!active) return false;
+    if (saving) {
+      notice('正在保存标注，请稍候');
+      return true;
+    }
+    const pending = pendingCoordinate();
+    if (pending) {
+      coordinateBindings.get(pending).restore();
+      pending.dispatchEvent(new Event('input', { bubbles: true }));
+      syncHistory();
+      return true;
+    }
+    const frame = previewSteps.step(direction, capture());
+    if (frame) {
+      points = structuredClone(frame.points);
+      editingId = frame.editingId;
+      $('measurement-name').value = frame.name;
+      updatePoints();
+    } else notice(direction === 'undo' ? '测量预览没有更早的步骤' : '测量预览没有可重做的步骤');
+    return true;
+  }
+  function updatePoints() {
+    syncHistory();
+    pointRows();
+    report();
+    draw(temporary, points, 0xffcf72);
+    $('measurement-stage').textContent =
+      kind() === 'path'
+        ? '连续点取 · 保存结束 · 可退回上一点'
+        : points.length >= limit()
+          ? '可修改坐标或保存标注'
+          : kind() === 'angle'
+            ? ['点取第一端点', '点取顶点（角的中心）', '点取第二端点'][points.length]
+            : points.length
+              ? '点取终点 · 鼠标移动实时显示间距'
+              : '点取起点，再点取终点';
+    requestRender();
+  }
+
+  function pointRows() {
+    coordinateBindings.clear();
+    const host = $('measurement-points');
+    host.replaceChildren(
+      ...points.map((pos, i) => {
+        const row = document.createElement('div');
+        row.className = 'cad-vector';
+        const name = document.createElement('strong');
+        name.textContent = pointName(i);
+        row.append(name);
+        for (let a = 0; a < 3; a++) {
+          const label = document.createElement('label');
+          label.textContent = 'XYZ'[a];
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.step = '.5';
+          input.value = pos[a];
+          input.setAttribute('aria-label', pointName(i) + ' ' + 'XYZ'[a]);
+          let before = null;
+          input.onfocus = () => (before = capture());
+          input.onchange = () => {
+            if (before && !input.dataset.expressionPending) {
+              record(before);
+              before = capture();
+            }
+          };
+          input.onblur = () => {
+            if (before && !input.dataset.expressionPending) {
+              record(before);
+              before = null;
+            }
+          };
+          input.oninput = () => {
+            if (!points[i] || input.dataset.expressionPending || input.value === '') return;
+            const value = Number(input.value);
+            if (!Number.isFinite(value)) return;
+            points[i][a] = value;
+            draw(temporary, points, 0xffcf72);
+            report();
+            requestRender();
+          };
+          label.append(input);
+          coordinateBindings.set(
+            input,
+            dimensionInput(input, {
+              pending: (_, message) => {
+                $('measurement-save').disabled = true;
+                $('measurement-report').textContent = message;
+                syncHistory();
+              },
+              resolved: () => {
+                report();
+                syncHistory();
+              },
+            }),
+          );
+          row.append(label);
+        }
+        return row;
+      }),
+    );
+  }
+  function close() {
+    if (saving) return;
+    showSnap(null);
+    active = false;
+    previewSteps.clear();
+    syncHistory();
+    down = null;
+    panel.hidden = true;
+    points = [];
+    editingId = null;
+    dispose(temporary);
+    const s = getSummary();
+    $('cad-empty').hidden = !!(
+      s?.sourceBlocks ||
+      s?.changes ||
+      s?.design?.guides?.length ||
+      s?.design?.measurements?.length
+    );
+    requestRender();
+  }
+  function start(item = null) {
+    if (saving) return;
+    try {
+      beforeOpen();
+    } catch (e) {
+      notice(e.message, true);
+      return;
+    }
+    active = true;
+    previewSteps.clear();
+    syncHistory();
+    $('cad-empty').hidden = true;
+    editingId = item?.id || null;
+    points = item ? structuredClone(item.points) : [];
+    $('measurement-kind').value = item?.kind || 'distance';
+    $('measurement-name').value = item?.name || '场地测量';
+    panel.hidden = false;
+    $('measurement-stage').textContent = item ? '修改坐标，或重新取点' : '点取起点，再点取终点';
+    updatePoints();
+    renderer.domElement.focus({ preventScroll: true });
+    requestRender();
+  }
+  function pick(e) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    ) {
+      showSnap(null);
+      return null;
+    }
+    const options = {
+        pointer: [e.clientX, e.clientY],
+        project: (point) => {
+          const q = new THREE.Vector3(...point).project(getCamera());
+          return [
+            rect.left + ((q.x + 1) * rect.width) / 2,
+            rect.top + ((1 - q.y) * rect.height) / 2,
+            q.z,
+          ];
+        },
+      },
+      target =
+        $('measurement-geometry-snap').checked &&
+        !e.ctrlKey &&
+        $('show-construction-guides')?.checked
+          ? nearestScreenSnap(
+              [...snapTargets, ...nearbyIntersections(snapSegments, options)],
+              options,
+            )
+          : null;
+    showSnap(target);
+    if (target) return target.point;
+    const hit = cast(e);
+    if (!hit) return null;
+    const step = Number($('measurement-snap').value),
+      pos = hit.point.toArray();
+    return pos.map((n) => (step ? Math.round(n / step) * step : n));
+  }
+
+  renderer.domElement.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (!active || saving || e.button !== 0 || e.altKey || navigationHeld) return;
+      down = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    },
+    true,
+  );
+  renderer.domElement.addEventListener(
+    'pointerup',
+    (e) => {
+      if (!active || saving || e.button !== 0 || e.altKey || navigationHeld) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (
+        !down ||
+        down.pointerId !== e.pointerId ||
+        Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5
+      ) {
+        down = null;
+        return;
+      }
+      down = null;
+      const pos = pick(e);
+      if (!pos) return;
+      const before = capture();
+      if (points.length >= limit()) points = [];
+      points.push(pos);
+      updatePoints();
+      record(before);
+    },
+    true,
+  );
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (!active || saving || points.length >= limit() || e.buttons || e.altKey || navigationHeld)
+      return;
+    const pos = pick(e);
+    if (pos && points.length) {
+      draw(temporary, [...points, pos], 0xffcf72);
+      report([...points, pos]);
+      requestRender();
+    }
+  });
+  renderer.domElement.addEventListener('pointercancel', () => (down = null));
+  window.addEventListener('blur', () => {
+    down = null;
+    navigationHeld = false;
+  });
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (dialogOwnsKeyboard()) return;
+      if (e.target.closest?.('[data-shortcut-scope=commands]') || e.isComposing) return;
+      if (e.code === 'Space' && !textEditing(document.activeElement)) navigationHeld = true;
+      if (active && e.key === 'Escape') {
+        if (e.target?.dataset.dimensionExpression === 'true') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        close();
+      }
+      if (active && e.key === 'Enter' && !nativeEnterTarget(document.activeElement) && ready()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        $('measurement-save').click();
+      }
+    },
+    true,
+  );
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') navigationHeld = false;
+  });
+  async function change(method, params) {
+    const s = getSummary(),
+      r = await call('api', {
+        method,
+        params: { expectedRevision: s.revision, workspaceId: s.workspaceId, ...params },
+      });
+    if (!r.ok) throw Error(r.error.message);
+    refresh(await call('summary'));
+    await render();
+    markDirty();
+    return r;
+  }
+  let nameStart = null;
+  $('measurement-name').onfocus = () => (nameStart = capture());
+  $('measurement-name').onblur = () => {
+    if (nameStart) {
+      record(nameStart);
+      nameStart = null;
+    }
+  };
+  $('measurement-kind').onchange = () => {
+    if (saving) return;
+    points = [];
+    editingId = null;
+    previewSteps.clear();
+    updatePoints();
+  };
+  $('measurement-back').onclick = () => {
+    if (saving) return;
+    const before = capture();
+    points.pop();
+    updatePoints();
+    record(before);
+  };
+  $('measurement-close').onclick = close;
+  $('measurement-restart').onclick = () => {
+    if (saving) return;
+    const before = capture();
+    points = [];
+    editingId = null;
+    updatePoints();
+    record(before);
+  };
+  $('measurement-visible').onchange = () => {
+    persistent.visible = $('measurement-visible').checked;
+    requestRender();
+  };
+  $('measurement-save').onclick = async () => {
+    if (!ready() || saving) return;
+    saving = true;
+    report();
+    try {
+      await change('measurements.put', {
+        measurement: {
+          ...(editingId ? { id: editingId } : {}),
+          name: $('measurement-name').value,
+          kind: kind(),
+          points,
+        },
+      });
+      saving = false;
+      close();
+      notice('测量标注已保存，可一次撤销');
+    } catch (e) {
+      notice(e.message, true);
+    } finally {
+      saving = false;
+      report();
+    }
+  };
+  return {
+    open: start,
+    close,
+    previewHistory,
+    historyState,
+    isActive: () => active,
+    isBusy: () => saving,
+    update: (s) => {
+      if (workspaceId && workspaceId !== s.workspaceId) close();
+      workspaceId = s.workspaceId;
+      const guides = s.design?.guides || [],
+        key = JSON.stringify([s.workspaceId, guides]);
+      if (key !== guideSignature) {
+        guideSignature = key;
+        snapTargets = guideSnapTargets(guides);
+        snapSegments = guideSnapSegments(guides);
+        showSnap(null);
+      }
+      const list = s.design?.measurements || [],
+        next = JSON.stringify(list);
+      saved.hidden = !list.length;
+      if (next === signature) return;
+      signature = next;
+      dispose(persistent);
+      for (const item of list) {
+        const group = new THREE.Group();
+        draw(group, item.points, 0x8fbae8, item.kind || 'distance');
+        persistent.add(group);
+      }
+      $('measurement-list').replaceChildren(
+        ...list.map((item) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          const edit = document.createElement('button'),
+            remove = document.createElement('button');
+          edit.textContent = item.name + ' · ' + labelText(item.points, item.kind || 'distance');
+          edit.onclick = () => start(item);
+          remove.textContent = '删除';
+          remove.onclick = () =>
+            change('measurements.remove', { id: item.id }).catch((e) => notice(e.message, true));
+          row.append(edit, remove);
+          return row;
+        }),
+      );
+      requestRender();
+    },
+  };
+}

@@ -1,4 +1,75 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {pruneGraphics,loadTextureInfo} from '../src/graphics-resources.js';
-const disposable=extra=>({...extra,disposed:0,dispose(){this.disposed++;}}),root=nodes=>({traverse(fn){nodes.forEach(fn);}});
-test('graphics release follows scene owners and cached motion textures, then releases them after the final owner leaves',()=>{const a=disposable(),b=disposable(),motion=disposable(),ma=disposable({map:a}),mb=disposable({map:b}),mm=disposable({map:motion}),textures=new Map([['a',a],['b',b],['motion',motion]]),materials=new Map([['a',ma],['b',mb],['motion',mm]]);let r=pruneGraphics({textures,materials,roots:[root([{material:[ma]}])],pinnedTextureKeys:['motion']});assert.deepEqual(r.releasedTextures,['b']);assert.equal(a.disposed,0);assert.equal(motion.disposed,0);assert.equal(mb.disposed,1);assert.equal(mm.disposed,1);assert.deepEqual([...materials.keys()],['a']);r=pruneGraphics({textures,materials,roots:[root([])]});assert.deepEqual(r.releasedTextures,['a','motion']);assert.equal(a.disposed,1);assert.equal(motion.disposed,1);assert.equal(ma.disposed,1);assert.equal(textures.size,0);assert.equal(pruneGraphics({textures,materials}).releasedTextures.length,0);});
-test('temporary image URLs are revoked on successful and failed decode; supplied URIs remain owned by their caller',async()=>{const urls=[],options={createURL:()=> 'blob:test',revokeURL:u=>urls.push(u)};assert.equal(await loadTextureInfo({bytes:new Uint8Array([1])},async uri=>uri,options),'blob:test');await assert.rejects(()=>loadTextureInfo({bytes:new Uint8Array([1])},async()=>{throw Error('decode');},options));assert.deepEqual(urls,['blob:test','blob:test']);assert.equal(await loadTextureInfo({uri:'data:image/png;base64,x'},async uri=>uri,options),'data:image/png;base64,x');assert.equal(urls.length,2);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { pruneGraphics, loadTextureInfo } from '../src/rendering/graphics-resources.js';
+const disposable = (extra) => ({
+    ...extra,
+    disposed: 0,
+    dispose() {
+      this.disposed++;
+    },
+  }),
+  root = (nodes) => ({
+    traverse(fn) {
+      nodes.forEach(fn);
+    },
+  });
+test('graphics release follows scene owners and cached motion textures, then releases them after the final owner leaves', () => {
+  const a = disposable(),
+    b = disposable(),
+    motion = disposable(),
+    ma = disposable({ map: a }),
+    mb = disposable({ map: b }),
+    mm = disposable({ map: motion }),
+    textures = new Map([
+      ['a', a],
+      ['b', b],
+      ['motion', motion],
+    ]),
+    materials = new Map([
+      ['a', ma],
+      ['b', mb],
+      ['motion', mm],
+    ]);
+  let r = pruneGraphics({
+    textures,
+    materials,
+    roots: [root([{ material: [ma] }])],
+    pinnedTextureKeys: ['motion'],
+  });
+  assert.deepEqual(r.releasedTextures, ['b']);
+  assert.equal(a.disposed, 0);
+  assert.equal(motion.disposed, 0);
+  assert.equal(mb.disposed, 1);
+  assert.equal(mm.disposed, 1);
+  assert.deepEqual([...materials.keys()], ['a']);
+  r = pruneGraphics({ textures, materials, roots: [root([])] });
+  assert.deepEqual(r.releasedTextures, ['a', 'motion']);
+  assert.equal(a.disposed, 1);
+  assert.equal(motion.disposed, 1);
+  assert.equal(ma.disposed, 1);
+  assert.equal(textures.size, 0);
+  assert.equal(pruneGraphics({ textures, materials }).releasedTextures.length, 0);
+});
+test('temporary image URLs are revoked on successful and failed decode; supplied URIs remain owned by their caller', async () => {
+  const urls = [],
+    options = { createURL: () => 'blob:test', revokeURL: (u) => urls.push(u) };
+  assert.equal(
+    await loadTextureInfo({ bytes: new Uint8Array([1]) }, async (uri) => uri, options),
+    'blob:test',
+  );
+  await assert.rejects(() =>
+    loadTextureInfo(
+      { bytes: new Uint8Array([1]) },
+      async () => {
+        throw Error('decode');
+      },
+      options,
+    ),
+  );
+  assert.deepEqual(urls, ['blob:test', 'blob:test']);
+  assert.equal(
+    await loadTextureInfo({ uri: 'data:image/png;base64,x' }, async (uri) => uri, options),
+    'data:image/png;base64,x',
+  );
+  assert.equal(urls.length, 2);
+});

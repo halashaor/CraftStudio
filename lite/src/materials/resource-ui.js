@@ -1,0 +1,119 @@
+export function resourceUI({
+  $,
+  library,
+  resources,
+  task,
+  refresh,
+  render,
+  clearTextures,
+  markDirty,
+  notice,
+}) {
+  const dialog = document.createElement('dialog');
+  dialog.id = 'resource-library-dialog';
+  dialog.className = 'cad-dialog';
+  dialog.innerHTML =
+    '<div class="dialog-header"><h2>资源库 · 基础素材设置</h2><button id="resource-library-close">关闭</button></div><div class="cad-dialog-body"><p class="muted">原版和 Create 设置一次，之后工程自动复用。资源按列表从上到下加载，后面的材质包覆盖前面的外观。</p><div class="row"><button id="resource-library-local">从本地实例设置基础素材</button><button id="resource-library-files">添加 JAR / ZIP 文件</button></div><p id="resource-library-status" class="small"></p><div id="resource-library-rows"></div><p class="small">资源仅保存在本机。工程仍会保存使用到的模型与贴图；完整资源库随工程库备份转移。</p></div>';
+  document.body.append(dialog);
+  const add = document.createElement('button');
+  add.id = 'resource-library-open';
+  add.textContent = '资源库';
+  add.title = '原版、Create、其他 Mod 与材质包';
+  $('asset-add-resource').after(add);
+  function rows() {
+    const enabled = resources.entries.filter((e) => e.enabled !== false),
+      has = (e) => enabled.some((r) => r.kind === e);
+    $('resource-library-status').textContent =
+      '原版：' +
+      (has('vanilla') ? '已就绪' : '待设置') +
+      ' · Create：' +
+      (has('create') ? '已就绪' : '待设置') +
+      ' · ' +
+      enabled.length +
+      ' 个启用资源';
+    $('resource-library-local').hidden = !library.desktop;
+    $('resource-library-rows').replaceChildren(
+      ...resources.entries.map((e, i) => {
+        const row = document.createElement('div');
+        row.className = 'card';
+        const label = document.createElement('label');
+        label.className = 'check';
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.checked = e.enabled !== false;
+        check.onchange = () =>
+          change(
+            resources.entries.map((r) => (r.id === e.id ? { ...r, enabled: check.checked } : r)),
+          );
+        label.append(
+          check,
+          document.createTextNode(
+            { vanilla: '原版', create: 'Create', mod: 'Mod', pack: '材质包' }[e.kind] +
+              ' · ' +
+              e.name +
+              ' · ' +
+              e.count +
+              ' 资源',
+          ),
+        );
+        row.append(label);
+        const buttons = document.createElement('div');
+        buttons.className = 'row';
+        for (const [text, delta] of [
+          ['上移', -1],
+          ['下移', 1],
+        ]) {
+          const b = document.createElement('button');
+          b.textContent = text;
+          b.disabled = i + delta < 0 || i + delta >= resources.entries.length;
+          b.onclick = () => {
+            const list = [...resources.entries];
+            [list[i], list[i + delta]] = [list[i + delta], list[i]];
+            change(list);
+          };
+          buttons.append(b);
+        }
+        const remove = document.createElement('button');
+        remove.textContent = '移出资源库';
+        remove.onclick = () => change(resources.entries.filter((r) => r.id !== e.id));
+        buttons.append(remove);
+        row.append(buttons);
+        return row;
+      }),
+    );
+  }
+  async function updated(summary) {
+    refresh(summary);
+    clearTextures();
+    await render();
+    markDirty();
+    rows();
+  }
+  function change(entries) {
+    return task(async () => {
+      await updated(await resources.save(entries));
+      notice('资源顺序与启用状态已保存');
+    }, '应用资源外观…');
+  }
+  const open = () => {
+    rows();
+    dialog.showModal();
+  };
+  add.onclick = open;
+  $('asset-add-resource').onclick = open;
+  $('resource-library-files').onclick = () => $('resource-file').click();
+  $('resource-library-close').onclick = () => dialog.close();
+  $('resource-library-local').onclick = () => {
+    dialog.close();
+    $('desktop-files-open').click();
+    $('desktop-basic-resources').click();
+  };
+  return {
+    open,
+    rows,
+    add: async (files) => {
+      await updated(await resources.add(files));
+      notice('资源已保存，新工程会自动复用');
+    },
+  };
+}

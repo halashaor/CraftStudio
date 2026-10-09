@@ -1,6 +1,97 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {designerPlan} from '../src/designer.js';import {sampleFigure} from '../src/construction.js';import {Site} from '../src/site.js';import {emptyProject} from '../src/codec.js';import {fromPlane,toPlane} from '../src/workplane.js';
-const frame={origin:[20,20,20],u:[2/Math.sqrt(5),-1/Math.sqrt(5),0],v:[3/Math.sqrt(70),6/Math.sqrt(70),-5/Math.sqrt(70)],normal:[1/Math.sqrt(14),2/Math.sqrt(14),3/Math.sqrt(14)]},local=[[0,0,0],[8,0,0],[8,4,0],[0,4,0]],state={Name:'minecraft:stone_bricks'};
-function fixture(reverse=false){const s=new Site(emptyProject()),points=local.map(p=>fromPlane(p,frame));if(reverse)points.reverse();s.design.guides=[{id:'roof',points:sampleFigure({kind:'polyline',points,closed:true}),recipe:{kind:'polyline',points,closed:true,plane:'custom',workplane:frame,state}}];return s;}
-function spans(points){const p=points.map(q=>toPlane(q,frame));return[0,1].map(a=>[Math.min(...p.map(q=>q[a])),Math.max(...p.map(q=>q[a]))]);}
-test('inclined offsets preserve the plane, exact polygon corners and the requested outward/inward distances',()=>{for(const reverse of [false,true]){const s=fixture(reverse),before=s.pack();for(const [distance,expected]of [[1,[[-1,9],[-1,5]]],[-1,[[1,7],[1,3]]]]){const r=designerPlan(s,{operation:'offset',guideId:'roof',distance,guidesOnly:true});assert.equal(r.operations.length,0);assert.deepEqual(s.pack(),before);const output=r.design.guides.at(-1);assert.equal(output.recipe.points.length,4);for(const p of output.points)assert.ok(Math.abs(toPlane(p,frame)[2])<1e-9);const actual=spans(output.points);for(let a=0;a<2;a++)for(let b=0;b<2;b++)assert.ok(Math.abs(actual[a][b]-expected[a][b])<1e-8);assert.ok(output.recipe.workplane);assert.equal(output.recipe.snapApplied,true);}}});
-test('offset without stored plane infers the same geometry; collapse and noncoplanarity never flatten silently',()=>{const s=fixture();delete s.design.guides[0].recipe.workplane;assert.ok(designerPlan(s,{operation:'offset',guideId:'roof',distance:1,guidesOnly:true}).guide.every(p=>Math.abs(toPlane(p,frame)[2])<1e-8));assert.throws(()=>designerPlan(s,{operation:'offset',guideId:'roof',distance:-2,guidesOnly:true}),/消失|反向|宽度/);s.design.guides[0].points[2]=s.design.guides[0].points[2].map((n,a)=>n+frame.normal[a]);assert.throws(()=>designerPlan(s,{operation:'offset',guideId:'roof',distance:1,guidesOnly:true}),/共面/);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { designerPlan } from '../src/modeling/designer.js';
+import { sampleFigure } from '../src/modeling/construction.js';
+import { Site } from '../src/core/site.js';
+import { emptyProject } from '../src/minecraft/codec.js';
+import { fromPlane, toPlane } from '../src/sketch/workplane.js';
+const frame = {
+    origin: [20, 20, 20],
+    u: [2 / Math.sqrt(5), -1 / Math.sqrt(5), 0],
+    v: [3 / Math.sqrt(70), 6 / Math.sqrt(70), -5 / Math.sqrt(70)],
+    normal: [1 / Math.sqrt(14), 2 / Math.sqrt(14), 3 / Math.sqrt(14)],
+  },
+  local = [
+    [0, 0, 0],
+    [8, 0, 0],
+    [8, 4, 0],
+    [0, 4, 0],
+  ],
+  state = { Name: 'minecraft:stone_bricks' };
+function fixture(reverse = false) {
+  const s = new Site(emptyProject()),
+    points = local.map((p) => fromPlane(p, frame));
+  if (reverse) points.reverse();
+  s.design.guides = [
+    {
+      id: 'roof',
+      points: sampleFigure({ kind: 'polyline', points, closed: true }),
+      recipe: { kind: 'polyline', points, closed: true, plane: 'custom', workplane: frame, state },
+    },
+  ];
+  return s;
+}
+function spans(points) {
+  const p = points.map((q) => toPlane(q, frame));
+  return [0, 1].map((a) => [Math.min(...p.map((q) => q[a])), Math.max(...p.map((q) => q[a]))]);
+}
+test('inclined offsets preserve the plane, exact polygon corners and the requested outward/inward distances', () => {
+  for (const reverse of [false, true]) {
+    const s = fixture(reverse),
+      before = s.pack();
+    for (const [distance, expected] of [
+      [
+        1,
+        [
+          [-1, 9],
+          [-1, 5],
+        ],
+      ],
+      [
+        -1,
+        [
+          [1, 7],
+          [1, 3],
+        ],
+      ],
+    ]) {
+      const r = designerPlan(s, {
+        operation: 'offset',
+        guideId: 'roof',
+        distance,
+        guidesOnly: true,
+      });
+      assert.equal(r.operations.length, 0);
+      assert.deepEqual(s.pack(), before);
+      const output = r.design.guides.at(-1);
+      assert.equal(output.recipe.points.length, 4);
+      for (const p of output.points) assert.ok(Math.abs(toPlane(p, frame)[2]) < 1e-9);
+      const actual = spans(output.points);
+      for (let a = 0; a < 2; a++)
+        for (let b = 0; b < 2; b++) assert.ok(Math.abs(actual[a][b] - expected[a][b]) < 1e-8);
+      assert.ok(output.recipe.workplane);
+      assert.equal(output.recipe.snapApplied, true);
+    }
+  }
+});
+test('offset without stored plane infers the same geometry; collapse and noncoplanarity never flatten silently', () => {
+  const s = fixture();
+  delete s.design.guides[0].recipe.workplane;
+  assert.ok(
+    designerPlan(s, {
+      operation: 'offset',
+      guideId: 'roof',
+      distance: 1,
+      guidesOnly: true,
+    }).guide.every((p) => Math.abs(toPlane(p, frame)[2]) < 1e-8),
+  );
+  assert.throws(
+    () => designerPlan(s, { operation: 'offset', guideId: 'roof', distance: -2, guidesOnly: true }),
+    /消失|反向|宽度/,
+  );
+  s.design.guides[0].points[2] = s.design.guides[0].points[2].map((n, a) => n + frame.normal[a]);
+  assert.throws(
+    () => designerPlan(s, { operation: 'offset', guideId: 'roof', distance: 1, guidesOnly: true }),
+    /共面/,
+  );
+});

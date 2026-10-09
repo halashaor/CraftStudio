@@ -1,24 +1,168 @@
-import {resolve} from 'node:path';
-import {DatabaseSync} from 'node:sqlite';
-import {digest,encode,decode,references,decodeBaselineChunk} from './checkpoint.mjs';
-export class EngineStore{
- constructor(path){this.path=typeof path==='string'&&path!==':memory:'?resolve(path):null;this.db=new DatabaseSync(path);this.db.exec('PRAGMA busy_timeout=15000; CREATE TABLE IF NOT EXISTS designer_engine_blobs(id TEXT PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE IF NOT EXISTS designer_engine_heads(key TEXT PRIMARY KEY,sequence INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL)');}
- known(){return this.db.prepare('SELECT id FROM designer_engine_blobs').all().map(row=>row.id);}
- commit(key,packet,expectedSequence,{onTiming}={}){
-  const observe=event=>{try{onTiming?.(event);}catch{}};
-  if(typeof key!=='string'||!key)throw Error('Storage key required');const refs=references(packet.head),bytes=encode(packet.head),hash=digest(bytes);
-  let started=performance.now();this.db.exec('BEGIN IMMEDIATE');observe({stage:'lock',ms:performance.now()-started});started=performance.now();try{
-   const old=this.db.prepare('SELECT sequence,digest,payload FROM designer_engine_heads WHERE key=?').get(key);
-   if(old&&digest(old.payload)!==old.digest)throw Error('Corrupt checkpoint header');
-   if(old?.digest===hash){for(const id of refs)if(!this.db.prepare('SELECT id FROM designer_engine_blobs WHERE id=?').get(id))throw Error('Missing checkpoint blob');this.db.exec('ROLLBACK');return{sequence:old.sequence,replayed:true};}
-   if(old){const previous=decode(old.payload);if(previous.workspaceId===packet.head.workspaceId&&packet.head.revision<previous.revision)throw Error('Outdated engine revision');}
-   if((old?.sequence??null)!==expectedSequence)throw Error('Engine checkpoint version conflict');
-   for(const blob of packet.blobs){if(!(blob.bytes instanceof Uint8Array)||digest(blob.bytes)!==blob.id)throw Error('Invalid engine blob digest');this.db.prepare('INSERT OR IGNORE INTO designer_engine_blobs VALUES (?,?)').run(blob.id,blob.bytes);}
-   for(const id of refs){if(!this.db.prepare('SELECT id FROM designer_engine_blobs WHERE id=?').get(id))throw Error('Missing checkpoint blob');}
-   const sequence=(old?.sequence||0)+1;this.db.prepare('INSERT OR REPLACE INTO designer_engine_heads VALUES (?,?,?,?)').run(key,sequence,hash,bytes);observe({stage:'write',ms:performance.now()-started});started=performance.now();this.db.exec('COMMIT');observe({stage:'commit',ms:performance.now()-started});return{sequence,replayed:false};
-  }catch(error){this.db.exec('ROLLBACK');throw error;}
- }
- load(key,{lazySource=false}={}){const row=this.db.prepare('SELECT * FROM designer_engine_heads WHERE key=?').get(key);if(!row)return null;if(digest(row.payload)!==row.digest)throw Error('Corrupt checkpoint header');const head=decode(row.payload),refs=references(head),disk=lazySource&&this.path&&head.schema==='craftstudio-engine-checkpoint/2',sourceIds=new Set(disk?head.baseChunks.map(c=>c[1]):[]),required=new Set(disk?references({...head,baseChunks:[]}):refs),sourceSizes=[],blobs=[];for(const id of refs){if(sourceIds.has(id)&&!required.has(id)){const b=this.db.prepare('SELECT length(payload) AS bytes FROM designer_engine_blobs WHERE id=?').get(id);if(!b)throw Error('Missing checkpoint blob');sourceSizes.push([id,b.bytes]);continue;}const b=this.db.prepare('SELECT payload FROM designer_engine_blobs WHERE id=?').get(id);if(!b||digest(b.payload)!==id)throw Error('Missing or corrupt checkpoint blob');blobs.push({id,bytes:b.payload});}return{sequence:row.sequence,head,blobs,...(disk?{sourceDatabase:this.path,sourceSizes}:{})};}
- baseline(key,{chunks,expectedSequence}={}){const row=this.db.prepare('SELECT * FROM designer_engine_heads WHERE key=?').get(key);if(!row)throw Error('Stored workspace missing');if(digest(row.payload)!==row.digest)throw Error('Corrupt checkpoint header');if(expectedSequence!==undefined&&expectedSequence!==row.sequence)throw Error('Engine checkpoint version conflict');const head=decode(row.payload);references(head);if(head.schema!=='craftstudio-engine-checkpoint/2')throw Error('Save the legacy workspace before reading baseline chunks');const read=id=>{const b=this.db.prepare('SELECT payload FROM designer_engine_blobs WHERE id=?').get(id);if(!b||digest(b.payload)!==id)throw Error('Missing or corrupt checkpoint blob');return b.payload;},base=decode(read(head.base));if(!Array.isArray(base.blocks)||base.blocks.length||!Array.isArray(base.palette)||base.size?.length!==3)throw Error('Invalid baseline header');const manifest=head.baseChunks.map(([bucket,,count])=>({bucket,count})),total=manifest.reduce((n,c)=>n+c.count,0),result={schema:'craftstudio-stored-baseline/1',sequence:row.sequence,workspaceId:head.workspaceId,revision:head.revision,header:base,totalBlocks:total,chunks:manifest};if(chunks===undefined)return result;if(!Array.isArray(chunks)||chunks.length>128||chunks.some(n=>!Number.isInteger(n)||n<0||n>0xffffff)||new Set(chunks).size!==chunks.length)throw Error('Request at most 128 unique baseline chunk buckets');const rows=new Map(head.baseChunks.map(c=>[c[0],c]));if(chunks.some(bucket=>!rows.has(bucket)))throw Error('Unknown baseline chunk bucket');return{...result,chunks:chunks.map(bucket=>{const c=rows.get(bucket);return{bucket,blocks:decodeBaselineChunk(read(c[1]),c,base,total).map(([,b])=>b)};})};}
- close(){this.db.close();}
+import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { digest, encode, decode, references, decodeBaselineChunk } from './checkpoint.mjs';
+export class EngineStore {
+  constructor(path) {
+    this.path = typeof path === 'string' && path !== ':memory:' ? resolve(path) : null;
+    this.db = new DatabaseSync(path);
+    this.db.exec(
+      'PRAGMA busy_timeout=15000; CREATE TABLE IF NOT EXISTS designer_engine_blobs(id TEXT PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE IF NOT EXISTS designer_engine_heads(key TEXT PRIMARY KEY,sequence INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL)',
+    );
+  }
+  known() {
+    return this.db
+      .prepare('SELECT id FROM designer_engine_blobs')
+      .all()
+      .map((row) => row.id);
+  }
+  commit(key, packet, expectedSequence, { onTiming } = {}) {
+    const observe = (event) => {
+      try {
+        onTiming?.(event);
+      } catch {}
+    };
+    if (typeof key !== 'string' || !key) throw Error('Storage key required');
+    const refs = references(packet.head),
+      bytes = encode(packet.head),
+      hash = digest(bytes);
+    let started = performance.now();
+    this.db.exec('BEGIN IMMEDIATE');
+    observe({ stage: 'lock', ms: performance.now() - started });
+    started = performance.now();
+    try {
+      const old = this.db
+        .prepare('SELECT sequence,digest,payload FROM designer_engine_heads WHERE key=?')
+        .get(key);
+      if (old && digest(old.payload) !== old.digest) throw Error('Corrupt checkpoint header');
+      if (old?.digest === hash) {
+        for (const id of refs)
+          if (!this.db.prepare('SELECT id FROM designer_engine_blobs WHERE id=?').get(id))
+            throw Error('Missing checkpoint blob');
+        this.db.exec('ROLLBACK');
+        return { sequence: old.sequence, replayed: true };
+      }
+      if (old) {
+        const previous = decode(old.payload);
+        if (
+          previous.workspaceId === packet.head.workspaceId &&
+          packet.head.revision < previous.revision
+        )
+          throw Error('Outdated engine revision');
+      }
+      if ((old?.sequence ?? null) !== expectedSequence)
+        throw Error('Engine checkpoint version conflict');
+      for (const blob of packet.blobs) {
+        if (!(blob.bytes instanceof Uint8Array) || digest(blob.bytes) !== blob.id)
+          throw Error('Invalid engine blob digest');
+        this.db
+          .prepare('INSERT OR IGNORE INTO designer_engine_blobs VALUES (?,?)')
+          .run(blob.id, blob.bytes);
+      }
+      for (const id of refs) {
+        if (!this.db.prepare('SELECT id FROM designer_engine_blobs WHERE id=?').get(id))
+          throw Error('Missing checkpoint blob');
+      }
+      const sequence = (old?.sequence || 0) + 1;
+      this.db
+        .prepare('INSERT OR REPLACE INTO designer_engine_heads VALUES (?,?,?,?)')
+        .run(key, sequence, hash, bytes);
+      observe({ stage: 'write', ms: performance.now() - started });
+      started = performance.now();
+      this.db.exec('COMMIT');
+      observe({ stage: 'commit', ms: performance.now() - started });
+      return { sequence, replayed: false };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  load(key, { lazySource = false } = {}) {
+    const row = this.db.prepare('SELECT * FROM designer_engine_heads WHERE key=?').get(key);
+    if (!row) return null;
+    if (digest(row.payload) !== row.digest) throw Error('Corrupt checkpoint header');
+    const head = decode(row.payload),
+      refs = references(head),
+      disk = lazySource && this.path && head.schema === 'craftstudio-engine-checkpoint/2',
+      sourceIds = new Set(disk ? head.baseChunks.map((c) => c[1]) : []),
+      required = new Set(disk ? references({ ...head, baseChunks: [] }) : refs),
+      sourceSizes = [],
+      blobs = [];
+    for (const id of refs) {
+      if (sourceIds.has(id) && !required.has(id)) {
+        const b = this.db
+          .prepare('SELECT length(payload) AS bytes FROM designer_engine_blobs WHERE id=?')
+          .get(id);
+        if (!b) throw Error('Missing checkpoint blob');
+        sourceSizes.push([id, b.bytes]);
+        continue;
+      }
+      const b = this.db.prepare('SELECT payload FROM designer_engine_blobs WHERE id=?').get(id);
+      if (!b || digest(b.payload) !== id) throw Error('Missing or corrupt checkpoint blob');
+      blobs.push({ id, bytes: b.payload });
+    }
+    return {
+      sequence: row.sequence,
+      head,
+      blobs,
+      ...(disk ? { sourceDatabase: this.path, sourceSizes } : {}),
+    };
+  }
+  baseline(key, { chunks, expectedSequence } = {}) {
+    const row = this.db.prepare('SELECT * FROM designer_engine_heads WHERE key=?').get(key);
+    if (!row) throw Error('Stored workspace missing');
+    if (digest(row.payload) !== row.digest) throw Error('Corrupt checkpoint header');
+    if (expectedSequence !== undefined && expectedSequence !== row.sequence)
+      throw Error('Engine checkpoint version conflict');
+    const head = decode(row.payload);
+    references(head);
+    if (head.schema !== 'craftstudio-engine-checkpoint/2')
+      throw Error('Save the legacy workspace before reading baseline chunks');
+    const read = (id) => {
+        const b = this.db.prepare('SELECT payload FROM designer_engine_blobs WHERE id=?').get(id);
+        if (!b || digest(b.payload) !== id) throw Error('Missing or corrupt checkpoint blob');
+        return b.payload;
+      },
+      base = decode(read(head.base));
+    if (
+      !Array.isArray(base.blocks) ||
+      base.blocks.length ||
+      !Array.isArray(base.palette) ||
+      base.size?.length !== 3
+    )
+      throw Error('Invalid baseline header');
+    const manifest = head.baseChunks.map(([bucket, , count]) => ({ bucket, count })),
+      total = manifest.reduce((n, c) => n + c.count, 0),
+      result = {
+        schema: 'craftstudio-stored-baseline/1',
+        sequence: row.sequence,
+        workspaceId: head.workspaceId,
+        revision: head.revision,
+        header: base,
+        totalBlocks: total,
+        chunks: manifest,
+      };
+    if (chunks === undefined) return result;
+    if (
+      !Array.isArray(chunks) ||
+      chunks.length > 128 ||
+      chunks.some((n) => !Number.isInteger(n) || n < 0 || n > 0xffffff) ||
+      new Set(chunks).size !== chunks.length
+    )
+      throw Error('Request at most 128 unique baseline chunk buckets');
+    const rows = new Map(head.baseChunks.map((c) => [c[0], c]));
+    if (chunks.some((bucket) => !rows.has(bucket))) throw Error('Unknown baseline chunk bucket');
+    return {
+      ...result,
+      chunks: chunks.map((bucket) => {
+        const c = rows.get(bucket);
+        return {
+          bucket,
+          blocks: decodeBaselineChunk(read(c[1]), c, base, total).map(([, b]) => b),
+        };
+      }),
+    };
+  }
+  close() {
+    this.db.close();
+  }
 }

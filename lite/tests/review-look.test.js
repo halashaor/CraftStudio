@@ -1,3 +1,23 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {reviewLook} from '../src/review-look.js';
-test('review look changes normalized facing with a bounded pitch and readonly inputs',()=>{const dir=[0,0,-1],up=[0,1,0],before=[...dir],next=reviewLook(dir,up,100,0);assert.ok(next[0]>0);assert.ok(Math.abs(Math.hypot(...next)-1)<1e-12);assert.deepEqual(dir,before);assert.deepEqual(up,[0,1,0]);const pitched=reviewLook(dir,up,0,-10000);assert.ok(pitched[1]>.99&&pitched[1]<1);assert.ok(pitched[2]<0);assert.throws(()=>reviewLook(dir,up,NaN,0),/无效/);});
-test('review look supports a custom upward axis without flipping through its pole',()=>{const p=reviewLook([0,-1,0],[0,0,-1],40,10000);assert.ok(p.every(Number.isFinite));assert.ok(Math.abs(p[2])<1);assert.ok(Math.abs(Math.hypot(...p)-1)<1e-12);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { reviewLook } from '../src/view/review-look.js';
+test('review look changes normalized facing with a bounded pitch and readonly inputs', () => {
+  const dir = [0, 0, -1],
+    up = [0, 1, 0],
+    before = [...dir],
+    next = reviewLook(dir, up, 100, 0);
+  assert.ok(next[0] > 0);
+  assert.ok(Math.abs(Math.hypot(...next) - 1) < 1e-12);
+  assert.deepEqual(dir, before);
+  assert.deepEqual(up, [0, 1, 0]);
+  const pitched = reviewLook(dir, up, 0, -10000);
+  assert.ok(pitched[1] > 0.99 && pitched[1] < 1);
+  assert.ok(pitched[2] < 0);
+  assert.throws(() => reviewLook(dir, up, NaN, 0), /无效/);
+});
+test('review look supports a custom upward axis without flipping through its pole', () => {
+  const p = reviewLook([0, -1, 0], [0, 0, -1], 40, 10000);
+  assert.ok(p.every(Number.isFinite));
+  assert.ok(Math.abs(p[2]) < 1);
+  assert.ok(Math.abs(Math.hypot(...p) - 1) < 1e-12);
+});

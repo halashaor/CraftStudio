@@ -1,0 +1,183 @@
+export function searchCommands(commands, query = '', recent = []) {
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
+    rank = (c) => {
+      const label = c.label.toLocaleLowerCase(),
+        all = [c.label, c.category, c.aliases || ''].join(' ').toLocaleLowerCase();
+      if (!words.every((w) => all.includes(w))) return -1;
+      return words.length
+        ? words.reduce(
+            (n, w) =>
+              n + (label === w ? 100 : label.startsWith(w) ? 30 : label.includes(w) ? 15 : 2),
+            0,
+          )
+        : Math.max(0, 20 - recent.indexOf(c.id)) * (recent.includes(c.id) ? 1 : 0);
+    };
+  return commands
+    .map((command, index) => ({ command, index, score: rank(command) }))
+    .filter((r) => r.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((r) => r.command);
+}
+
+export function commandSearch({ $, commands, library, notice, requestRender }) {
+  const panel = document.createElement('section');
+  panel.id = 'command-search';
+  panel.hidden = true;
+  panel.dataset.shortcutScope = 'commands';
+  panel.innerHTML =
+    '<div class="command-heading"><strong>查找工具</strong><button id="command-search-close" title="关闭搜索 · Esc">关闭</button></div><input id="command-search-query" type="search" placeholder="例如：曲线、拉伸、阵列…" aria-label="查找设计工具" role="combobox" aria-controls="command-search-results" aria-expanded="true" autocomplete="off"><div id="command-search-results" role="listbox" aria-label="工具搜索结果"></div><p id="command-search-hint" aria-live="polite"></p>';
+  $('cad-inspector').prepend(panel);
+  const button = document.createElement('button');
+  button.id = 'command-search-open';
+  button.textContent = '查找工具';
+  button.title = 'F3 · 按名称查找设计工具';
+  document.querySelector('.workspace-quick').prepend(button);
+  const query = $('command-search-query'),
+    list = $('command-search-results');
+  let rows = [],
+    index = 0,
+    recent = [],
+    previousFocus = null,
+    treeHidden = false,
+    wasFocused = false;
+  const reason = (c) => c.unavailable?.() || '';
+  function select(next) {
+    index = Math.max(0, Math.min(rows.length - 1, next));
+    for (const [i, node] of [...list.children].entries()) {
+      node.classList.toggle('selected', i === index);
+      node.setAttribute('aria-selected', String(i === index));
+    }
+    const node = list.children[index];
+    query.setAttribute('aria-activedescendant', node?.id || '');
+    node?.scrollIntoView({ block: 'nearest' });
+    $('command-search-hint').textContent = rows[index]
+      ? reason(rows[index]) || 'Enter 打开工具 · ↑↓ 选择 · Esc 返回当前操作'
+      : '没有匹配的工具，可尝试“曲线”“复制”“整地”等名称';
+  }
+  function render() {
+    rows = searchCommands(commands, query.value, recent);
+    list.replaceChildren(
+      ...rows.map((c, i) => {
+        const row = document.createElement('button');
+        row.id = 'command-result-' + c.id;
+        row.type = 'button';
+        row.role = 'option';
+        row.tabIndex = -1;
+        row.dataset.commandId = c.id;
+        const unavailable = reason(c);
+        row.setAttribute('aria-disabled', String(!!unavailable));
+        const title = document.createElement('strong'),
+          meta = document.createElement('small');
+        title.textContent = c.label;
+        meta.textContent =
+          c.category +
+          (c.shortcut ? ' · ' + c.shortcut : '') +
+          (unavailable ? ' · ' + unavailable : '');
+        row.append(title, meta);
+        row.onclick = () => {
+          index = i;
+          execute();
+        };
+        return row;
+      }),
+    );
+    select(0);
+  }
+  function close(restore = true) {
+    if (panel.hidden) return;
+    panel.hidden = true;
+    $('workspace-tree').hidden = treeHidden;
+    if (restore && wasFocused) {
+      document.body.classList.add('viewport-focus');
+      $('workspace-focus').textContent = '恢复布局';
+    }
+    if (restore && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    requestRender();
+  }
+  async function execute() {
+    const c = rows[index];
+    if (!c) return;
+    const blocked = reason(c);
+    if (blocked) {
+      notice(blocked);
+      return;
+    }
+    close(false);
+    $('scene').querySelector('canvas')?.focus({ preventScroll: true });
+    try {
+      await c.run();
+      recent = [c.id, ...recent.filter((id) => id !== c.id)].slice(0, 10);
+      library.preference('command-recent', recent).catch(() => {});
+    } catch (e) {
+      notice(e.message, true);
+    }
+  }
+  function open() {
+    if (document.querySelector('dialog:modal')) {
+      notice('请先关闭当前对话框，再查找设计工具');
+      return;
+    }
+    if (!panel.hidden) {
+      query.focus();
+      query.select();
+      return;
+    }
+    previousFocus = document.activeElement;
+    treeHidden = $('workspace-tree').hidden;
+    wasFocused = document.body.classList.contains('viewport-focus');
+    document.body.classList.remove('viewport-focus');
+    $('workspace-focus').textContent = '专注视图';
+    $('workspace-tree').hidden = true;
+    panel.hidden = false;
+    query.value = '';
+    render();
+    query.focus();
+    requestRender();
+  }
+  button.onclick = open;
+  $('command-search-close').onclick = () => close();
+  query.oninput = () => {
+    if (!query.isComposing) render();
+  };
+  query.addEventListener('compositionend', render);
+  panel.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      select(index + (e.key === 'ArrowDown' ? 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      execute();
+    }
+  });
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'F3' || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      open();
+    },
+    true,
+  );
+  library
+    .preference('command-recent')
+    .then((value) => {
+      if (Array.isArray(value)) recent = value.filter((id) => typeof id === 'string');
+      if (!panel.hidden) render();
+    })
+    .catch(() => {});
+  return {
+    open,
+    close,
+    update: () => {
+      if (!panel.hidden) render();
+    },
+  };
+}

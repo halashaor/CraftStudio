@@ -1,7 +1,52 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import {Group,Line,Mesh,BufferGeometry,LineBasicMaterial,MeshBasicMaterial} from '../../web/vendor/three.module.js';
-import {snapSourceHighlight} from '../src/snap-source-highlight.js';
-test('snap sources highlight exact line roots and restore all original colors without changing data',()=>{
- const line=id=>{const node=new Line(new BufferGeometry(),new LineBasicMaterial({color:0x92b4df}));node.userData.guideId=id;return node;},a=line('a'),b=new Group(),nested=line('nested'),marker=new Mesh(new BufferGeometry(),new MeshBasicMaterial({color:0xffbc70})),other=line('other');b.userData.guideId='b';b.add(nested,marker);const feedback=snapSourceHighlight(),geometry=a.geometry,position=a.position.toArray();feedback.set([a,b,other],['a','b']);assert.equal(a.material.color.getHex(),0x55dfdc);assert.equal(nested.material.color.getHex(),0x55dfdc);assert.equal(marker.material.color.getHex(),0xffbc70);assert.equal(other.material.color.getHex(),0x92b4df);feedback.set([a,b,other],['b','a']);feedback.set([a,b,other],['b']);assert.equal(a.material.color.getHex(),0x92b4df);assert.equal(nested.material.color.getHex(),0x55dfdc);feedback.clear();assert.equal(nested.material.color.getHex(),0x92b4df);assert.equal(a.geometry,geometry);assert.deepEqual(a.position.toArray(),position);assert.equal(b.userData.snapHighlighted,undefined);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  Group,
+  Line,
+  Mesh,
+  BufferGeometry,
+  LineBasicMaterial,
+  MeshBasicMaterial,
+} from '../../web/vendor/three.module.js';
+import { snapSourceHighlight } from '../src/sketch/snap-source-highlight.js';
+test('snap sources highlight exact line roots and restore all original colors without changing data', () => {
+  const line = (id) => {
+      const node = new Line(new BufferGeometry(), new LineBasicMaterial({ color: 0x92b4df }));
+      node.userData.guideId = id;
+      return node;
+    },
+    a = line('a'),
+    b = new Group(),
+    nested = line('nested'),
+    marker = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: 0xffbc70 })),
+    other = line('other');
+  b.userData.guideId = 'b';
+  b.add(nested, marker);
+  const feedback = snapSourceHighlight(),
+    geometry = a.geometry,
+    position = a.position.toArray();
+  feedback.set([a, b, other], ['a', 'b']);
+  assert.equal(a.material.color.getHex(), 0x55dfdc);
+  assert.equal(nested.material.color.getHex(), 0x55dfdc);
+  assert.equal(marker.material.color.getHex(), 0xffbc70);
+  assert.equal(other.material.color.getHex(), 0x92b4df);
+  feedback.set([a, b, other], ['b', 'a']);
+  feedback.set([a, b, other], ['b']);
+  assert.equal(a.material.color.getHex(), 0x92b4df);
+  assert.equal(nested.material.color.getHex(), 0x55dfdc);
+  feedback.clear();
+  assert.equal(nested.material.color.getHex(), 0x92b4df);
+  assert.equal(a.geometry, geometry);
+  assert.deepEqual(a.position.toArray(), position);
+  assert.equal(b.userData.snapHighlighted, undefined);
 });
-test('hidden sources and clear feedback do not recolor hidden line roots',()=>{const hidden=new Line(new BufferGeometry(),new LineBasicMaterial({color:0x123456}));hidden.userData.guideId='hidden';hidden.visible=false;const feedback=snapSourceHighlight();feedback.set([hidden],['hidden']);assert.equal(hidden.material.color.getHex(),0x123456);feedback.clear();assert.equal(hidden.userData.snapHighlighted,undefined);});
+test('hidden sources and clear feedback do not recolor hidden line roots', () => {
+  const hidden = new Line(new BufferGeometry(), new LineBasicMaterial({ color: 0x123456 }));
+  hidden.userData.guideId = 'hidden';
+  hidden.visible = false;
+  const feedback = snapSourceHighlight();
+  feedback.set([hidden], ['hidden']);
+  assert.equal(hidden.material.color.getHex(), 0x123456);
+  feedback.clear();
+  assert.equal(hidden.userData.snapHighlighted, undefined);
+});

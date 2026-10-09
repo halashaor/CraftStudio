@@ -1,0 +1,43 @@
+<div class="dialog-header">
+  <h2>从 Minecraft 实例读取</h2>
+  <button id="desktop-close">关闭</button>
+</div>
+<div class="cad-dialog-body">
+  <p class="muted">按你选择的蓝图、区域和资源文件读取，不修改原存档。</p>
+  <label>实例<select id="desktop-instance"></select></label>
+  <div class="row">
+    <button data-desktop-tab="schematic">蓝图</button
+    ><button data-desktop-tab="world">真实地形区域</button
+    ><button data-desktop-tab="resources">模型与材质</button>
+  </div>
+  <section id="desktop-schematic">
+    <label>蓝图<select id="desktop-schematic-file"></select></label
+    ><button id="desktop-read-schematic" class="primary">读取到设计器</button>
+  </section>
+  <section id="desktop-world" hidden>
+    <label>存档<select id="desktop-world-file"></select></label
+    ><label>维度<select id="desktop-dimension"></select></label>
+    <div class="row">
+      <label>起点 X<input id="desktop-min-x" type="number" value="0" /></label
+      ><label>Y<input id="desktop-min-y" type="number" value="0" /></label
+      ><label>Z<input id="desktop-min-z" type="number" value="0" /></label>
+    </div>
+    <div class="row">
+      <label>终点 X<input id="desktop-max-x" type="number" value="31" /></label
+      ><label>Y<input id="desktop-max-y" type="number" value="127" /></label
+      ><label>Z<input id="desktop-max-z" type="number" value="31" /></label>
+    </div>
+    <button id="desktop-read-world" class="primary">读取这个真实区域</button>
+  </section>
+  <section id="desktop-resources" hidden>
+    <p class="small">只导入勾选的文件；可先选原版，再按需补充模组和材质包。</p>
+    <div id="desktop-resource-list"></div>
+    <button id="desktop-read-resources" class="primary">导入已勾选资源</button>
+  </section>
+  <p id="desktop-report" class="small"></p>
+  <details>
+    <summary>读取旧版本地工程库</summary>
+    <select id="desktop-legacy"></select
+    ><button id="desktop-read-legacy">读取旧工程</button>
+  </details>
+</div>

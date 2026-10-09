@@ -1,0 +1,1901 @@
+import { viewportContextMenu } from './viewport-context-menu.js';
+import { objectNameUI } from '../selection/object-name-ui.js';
+import { componentContextUI } from '../components/component-context-ui.js';
+import { selectionPredicate } from '../selection/selection-mask.js';
+import { coords } from '../core/site.js';
+import { combineObjectIds, objectsAtCell } from '../selection/object-selection.js';
+import { collectionsUI } from '../components/collections-ui.js';
+import { objectHidden } from '../components/collections.js';
+import { frameBounds } from '../view/frame-bounds.js';
+import { guideActions } from '../modeling/guide-actions.js';
+import { savedViewsUI } from '../view/saved-views-ui.js';
+import { generationLinks } from '../modeling/generation-links.js';
+import { measurementUI } from '../measurement/measurement-ui.js';
+import { closedProfiles } from '../sketch/sketch-profiles.js';
+import { commandSearch } from './command-search.js';
+import { sceneShortcutBlocked, textEditing, dialogOwnsKeyboard } from './keyboard-context.js';
+import { isolationUI } from '../view/isolation-ui.js';
+import { brushUI } from '../selection/brush-ui.js';
+import { workspaceUI } from './workspace-ui.js';
+import { designerUI } from '../modeling/designer-ui.js';
+import { constructionUI } from '../modeling/construction-ui.js';
+import { directEdit } from '../selection/direct-edit.js';
+import { AssetUI } from '../materials/asset-ui.js';
+export function cadShell({
+  THREE,
+  $,
+  call,
+  library,
+  prepareIntentPersistence,
+  notice,
+  download,
+  chooseTool,
+  task,
+  refresh,
+  render,
+  markDirty,
+  policy,
+  studio,
+  renderer,
+  cast,
+  hitCell,
+  getSummary,
+  projectPoint,
+  scene,
+  getCamera,
+  navigation,
+  requestRender,
+}) {
+  const sourceDetailsOpen = new Set();
+  let workspace = null;
+  document.body.classList.add('cad-workspace');
+  const main = document.querySelector('main'),
+    oldAside = document.querySelector('main>aside');
+  oldAside.id = 'legacy-aside';
+  const left = document.createElement('aside');
+  left.id = 'cad-browser';
+  left.innerHTML = `<div class="dock-title">设计浏览器</div><div class="dock-tabs"><button data-dock="objects" class="active">对象</button><button data-dock="assets">素材</button><button data-dock="components">构件</button></div><section id="dock-objects"><input id="cad-object-search" placeholder="查找对象"><div class="tree-root">▾ 当前设计</div><div id="cad-original-row">▧ 原始场地 <span>保留</span></div><div id="cad-object-list"></div><button id="cad-group-selection" class="full">将选择建立为对象</button></section><section id="dock-assets" hidden></section><section id="dock-components" hidden><h3>当前工程构件</h3><p class="muted">拖入场景，或点击插入。构件仍可自由编辑。</p><div id="cad-components-container"></div><button id="cad-component-library" class="full">打开本地构件库</button></section>`;
+  main.prepend(left);
+  const right = document.createElement('aside');
+  right.id = 'cad-inspector';
+  right.innerHTML = `<div class="dock-title">属性检查器</div><div id="cad-selection-info" class="inspector-section"><h3>当前选择</h3><p id="cad-selection-label">点击或拖框选择；Shift 增加，Ctrl 减去。</p><label>点击选择<select id="cad-selection-target"><option value="blocks">方块</option><option value="objects">对象优先</option></select></label><p class="small">对象优先按实际成员选中整对象；重叠处 Alt+点击切换，没有对象时仍选方块。</p><label>选区组合<select id="cad-selection-mode"><option value="replace">重新选择</option><option value="add">增加范围</option><option value="subtract">减去范围</option><option value="intersect">保留交集</option></select></label><p class="small" id="cad-selection-combine-hint">左→右完整框入，右→左相交选入；Shift 增加，Ctrl 减去。选区黄色外框表示范围。</p><div class="row"><button id="cad-selection-focus" title="保留当前朝向和透视 / 正交模式，聚焦所选范围">聚焦选择</button><button id="cad-selection-modify">变换</button><button id="cad-selection-clear">取消选择</button></div></div><div id="cad-brush-settings" class="inspector-section"><h3>放置与画笔</h3></div><div id="cad-selected-properties"></div><div class="inspector-section"><h3>本次设计改动</h3><div id="cad-change-summary"></div><button id="cad-history" class="full">查看编辑记录</button></div>`;
+  main.append(right);
+  function dialog(id, title) {
+    const d = document.createElement('dialog');
+    d.id = id;
+    d.className = 'cad-dialog';
+    const header = document.createElement('div');
+    header.className = 'dialog-header';
+    header.innerHTML = '<h2></h2><button>关闭</button>';
+    header.querySelector('h2').textContent = title;
+    header.querySelector('button').onclick = () => d.close();
+    d.append(header);
+    const body = document.createElement('div');
+    body.className = 'cad-dialog-body';
+    d.append(body);
+    document.body.append(d);
+    return { dialog: d, body };
+  }
+  const file = dialog('cad-file-dialog', '文件与资源'),
+    site = dialog('cad-site-dialog', '场地与显示'),
+    output = dialog('cad-output-dialog', '保存与导出'),
+    modify = dialog('cad-modify-dialog', '变换与选区编辑'),
+    build = dialog('cad-build-dialog', '辅助创建'),
+    motion = dialog('cad-motion-dialog', '运动外观'),
+    component = dialog('cad-component-dialog', '创建可复用构件'),
+    advanced = dialog('cad-advanced-dialog', '高级方块设置'),
+    history = dialog('cad-history-dialog', '编辑记录');
+  for (const [name, d] of [
+    ['import', file],
+    ['check', site],
+    ['save', output],
+  ]) {
+    const section = $('step-' + name);
+    section.hidden = false;
+    d.body.append(section);
+  }
+  const edit = $('step-edit'),
+    tools = edit.querySelector('.tool-row');
+  const ribbon = document.createElement('div');
+  ribbon.id = 'cad-ribbon';
+  ribbon.innerHTML = `<div class="ribbon-group" id="cad-tools"></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-move-direct" title="移动 M">移动</button><button id="cad-copy-direct" title="复制 C">复制</button><button id="cad-rotate-direct" title="旋转 R">旋转</button><button id="cad-modify-open">更多 ▾</button><button id="cad-create-open">创建 ▾</button><button id="cad-components-open">构件 ▾</button></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-assets-open">素材库</button><button id="cad-ai-open">AI 设计</button></div><span id="cad-active-tool">选择</span>`;
+  document.querySelector('header').after(ribbon);
+  $('cad-tools').append(...tools.children);
+  const labels = { inspect: '选择', place: '放置', erase: '擦除', paint: '画笔', sample: '取材' };
+  document.querySelectorAll('[data-tool]').forEach((b) => {
+    b.textContent = labels[b.dataset.tool];
+    b.title = {
+      inspect: '选择 V · 左键选择，拖动框选',
+      place: '放置 P · 每次一个方块',
+      erase: '擦除 X',
+      paint: '画笔 B · 拖动连续绘制',
+    }[b.dataset.tool];
+  });
+  const sample = document.createElement('button');
+  sample.dataset.tool = 'sample';
+  sample.textContent = '取材';
+  sample.title = '点击场景中的方块取材';
+  sample.onclick = () => chooseTool('sample');
+  $('cad-tools').append(sample);
+  const chip = document.createElement('button');
+  chip.id = 'cad-material-chip';
+  chip.title = '更换当前素材';
+  chip.textContent = '当前素材';
+  $('cad-ribbon').insertBefore(chip, $('cad-active-tool'));
+  const brush = edit.querySelector('.brush-settings');
+  $('cad-brush-settings').append(brush);
+  brush.querySelector('.small').textContent =
+    '右键旋转，中键平移；空格＋左键临时旋转。Shift 画直线，E 取材，[ ] 调大小。';
+  const brushOptions = brushUI({ $, library, notice });
+  const material = $('block-id').closest('.card');
+  advanced.body.append(material);
+  $('block-search').hidden = true;
+  $('block-list').hidden = true;
+  const rules = $('allow-terrain').closest('.card');
+  site.body.append(rules);
+  modify.body.append($('edit-min').closest('details'));
+  build.body.append($('platform-min').closest('details'));
+  const panel = $('studio-panel');
+  const take = (id, to) => {
+    const node = $(id);
+    if (!node) return;
+    const unit = node.closest('label') || node;
+    to.append(unit);
+  };
+  const fieldgroup = (title, to) => {
+    const f = document.createElement('section');
+    f.className = 'cad-form-group';
+    f.innerHTML = '<h3></h3>';
+    f.firstChild.textContent = title;
+    to.append(f);
+    return f;
+  };
+  const selection = fieldgroup('选择范围', modify.body);
+  for (const id of ['studio-min', 'studio-max', 'studio-select', 'studio-drag'])
+    take(id, selection);
+  const transform = fieldgroup('移动、复制与阵列', modify.body);
+  for (const id of [
+    'studio-at',
+    'studio-turn',
+    'studio-mirror',
+    'studio-count',
+    'studio-step',
+    'studio-copy',
+    'studio-move',
+  ])
+    take(id, transform);
+  const comp = fieldgroup('构件信息', component.body);
+  for (const id of [
+    'studio-name',
+    'studio-register',
+    'studio-prefab',
+    'studio-prefab-library',
+    'studio-prefab-file',
+  ])
+    take(id, comp);
+  $('cad-components-container').append($('studio-prefabs'));
+  const gen = fieldgroup('参数辅助（生成后可自由编辑）', build.body);
+  for (const id of ['studio-kind', 'studio-size', 'studio-build', 'studio-demo']) take(id, gen);
+  const roofLabel = $('studio-roof').closest('label');
+  advanced.body.append(roofLabel);
+  const roofButton = document.createElement('button');
+  roofButton.id = 'cad-roof-material';
+  roofButton.textContent = '选择屋顶素材';
+  roofButton.onclick = () =>
+    requestMaterial(
+      (state, name) => {
+        $('studio-roof').value = state.Name;
+        $('cad-roof-material').textContent = '屋顶：' + name;
+      },
+      { isActive: () => build.dialog.open },
+      build.dialog,
+      '参数辅助 · 屋顶',
+    );
+  gen.append(roofButton);
+  const objects = $('studio-objects');
+  objects.classList.add('cad-object-tree');
+  $('cad-object-list').append(objects);
+  const animate = fieldgroup('选择装置与运动方式', motion.body);
+  for (const id of [
+    'studio-motion-target',
+    'studio-motion-type',
+    'studio-axis',
+    'studio-rpm',
+    'studio-travel',
+    'studio-period',
+    'studio-animation',
+  ])
+    take(id, animate);
+  motion.body.append($('studio-route').closest('label'));
+  motion.body.append($('create-panel'));
+  motion.dialog.hidden = true;
+  $('create-play').checked = true;
+  $('create-demo').checked = true;
+  $('create-rpm').value = '16';
+  const merge = fieldgroup('区域裁切与蓝图合并', file.body);
+  for (const id of ['studio-crop', 'studio-merge-air', 'studio-merge']) take(id, merge);
+  panel.remove();
+  const views = $('studio-views');
+  views.open = true;
+  site.body.append(views);
+  edit.hidden = true;
+  oldAside.hidden = true;
+  const pick = $('pick-panel');
+  $('cad-selected-properties').append(pick);
+  pick.style.position = 'static';
+  const toolbar = document.querySelector('.scene-toolbar');
+  toolbar.querySelectorAll('button').forEach((b) => (b.title = b.textContent));
+  const cube = document.createElement('div');
+  cube.id = 'cad-view-cube';
+  cube.innerHTML =
+    '<button id="cad-view-top">俯</button><button id="cad-view-front">前</button><button id="cad-view-side">侧</button><button id="cad-view-iso">轴测</button>';
+  $('scene').append(cube);
+  document.querySelector('header .brand').after(document.querySelector('.scene-heading'));
+  const samples = document.createElement('details');
+  samples.className = 'card';
+  samples.innerHTML = '<summary>示例工程与设计参考</summary>';
+  for (const id of [
+    'provided-source',
+    'provided-demo',
+    'trial-rebuild',
+    'trial-redesign',
+    'provided-plan',
+  ])
+    if ($(id)) samples.append($(id));
+  file.body.append(samples);
+  const empty = document.createElement('div');
+  empty.id = 'cad-empty';
+  empty.innerHTML =
+    '<h2>你的建筑工作空间</h2><p>导入真实场地，或从素材开始自由建造。</p><button id="cad-empty-file">打开场地</button><button id="cad-empty-assets">选择素材</button>';
+  $('scene').append(empty);
+  const statusText = document.querySelector('.gesture');
+  statusText.textContent = '左键选择 / 拖框 · 右键旋转 · 中键平移 · F 总览';
+  document.querySelector('.scene-heading .eyebrow').hidden = true;
+  document.querySelector('.foot-right').textContent = '本地保存 · 每格一个方块';
+  let activeDock = 'objects',
+    materialReceiver = null;
+  let selectionActive = false;
+  let selectedObjects = new Set(),
+    objectCandidates = new Set(),
+    objectOnly = false,
+    selectionWorkspace = null;
+  const assets = AssetUI({
+    THREE,
+    $,
+    call,
+    library,
+    notice,
+    download,
+    task,
+    host: $('dock-assets'),
+    getSelection: () => (selectionActive ? structuredClone(studio.getSelection()) : null),
+    onChoose: (state, name, target) => {
+      if (materialReceiver) {
+        const receiver = materialReceiver;
+        if (receiver.active()) {
+          receiver.callback(state, name);
+          return 'parameter';
+        }
+        clearMaterialReceiver();
+      }
+      $('block-id').value = state.Name;
+      $('block-properties').value = state.Properties ? JSON.stringify(state.Properties) : '';
+      materialChanged(state, name);
+      notice('当前素材：' + name);
+      return 'brush';
+    },
+  });
+  $('cad-inspector').insertBefore(assets.detail, $('cad-selected-properties'));
+  function materialHeading() {
+    const heading = $('workspace-shelf')?.querySelector('.workspace-shelf-header > strong');
+    if (heading)
+      heading.textContent = materialReceiver
+        ? '选择素材 · ' + materialReceiver.label
+        : '素材与构件';
+  }
+  function clearMaterialReceiver() {
+    materialReceiver = null;
+    materialHeading();
+  }
+  function requestMaterial(callback, owner, node, label) {
+    materialReceiver = { callback, active: () => owner.isActive() && !node.hidden, label, node };
+    dock('assets');
+    materialHeading();
+  }
+  const materialObserver = new MutationObserver((records) => {
+    if (
+      materialReceiver &&
+      records.some(
+        (r) =>
+          r.target === materialReceiver.node &&
+          ((r.attributeName === 'hidden' && (r.oldValue === null || r.target.hidden)) ||
+            (r.attributeName === 'open' && !r.target.open)),
+      )
+    )
+      clearMaterialReceiver();
+  });
+  materialObserver.observe(build.dialog, {
+    attributes: true,
+    attributeFilter: ['open'],
+    attributeOldValue: true,
+  });
+  function dock(name) {
+    if (name !== 'assets') clearMaterialReceiver();
+    activeDock = name;
+    for (const n of ['objects', 'assets', 'components']) $('dock-' + n).hidden = n !== name;
+    document
+      .querySelectorAll('[data-dock]')
+      .forEach((b) => b.classList.toggle('active', b.dataset.dock === name));
+    name === 'assets' ? assets.activate() : assets.deactivate();
+    assets.detail.hidden =
+      name !== 'assets' && document.querySelector('[data-tool].active')?.dataset.tool === 'inspect';
+    workspace?.showDock(name);
+  }
+  document.querySelectorAll('[data-dock]').forEach((b) => (b.onclick = () => dock(b.dataset.dock)));
+  const open = (d) => {
+    clearMaterialReceiver();
+    if (typeof direct !== 'undefined') direct.cancel();
+    if (typeof construction !== 'undefined') construction.close();
+    if (typeof designer !== 'undefined') designer.close();
+    for (const other of [file, site, output, modify, build, motion, component, advanced, history])
+      if (other !== d && other.dialog.open) other.dialog.close();
+    if (!workspace?.openDialog(d.dialog)) d.dialog.showModal();
+    syncVectors();
+  };
+  for (const [id, d] of [
+    ['cad-modify-open', modify],
+    ['cad-create-open', build],
+    ['cad-components-open', component],
+    ['cad-selection-modify', modify],
+    ['cad-group-selection', component],
+  ])
+    $(id).onclick = () => open(d);
+  $('cad-empty-file').onclick = () => open(file);
+  $('cad-empty-assets').onclick = () => {
+    dock('assets');
+    chooseTool('place');
+  };
+  $('cad-material-chip').onclick = () => {
+    clearMaterialReceiver();
+    dock('assets');
+  };
+  $('cad-assets-open').onclick = () => {
+    clearMaterialReceiver();
+    dock('assets');
+  };
+  $('cad-ai-open').onclick = () => $('ai-dialog').showModal();
+  $('cad-component-library').onclick = () => $('open-library').click();
+  $('asset-edit-advanced').onclick = () => open(advanced);
+  const vectors = [];
+  for (const [id, names] of [
+    ['studio-min', ['X', 'Y', 'Z']],
+    ['studio-max', ['X', 'Y', 'Z']],
+    ['studio-at', ['X', 'Y', 'Z']],
+    ['studio-step', ['X', 'Y', 'Z']],
+    ['studio-travel', ['X', 'Y', 'Z']],
+    ['studio-size', ['宽', '深', '高']],
+    ['edit-min', ['X', 'Y', 'Z']],
+    ['edit-max', ['X', 'Y', 'Z']],
+    ['platform-min', ['X', 'Z']],
+    ['platform-max', ['X', 'Z']],
+    ['protect-min', ['X', 'Y', 'Z']],
+    ['protect-max', ['X', 'Y', 'Z']],
+    ['mca-min', ['X', 'Y', 'Z']],
+    ['mca-max', ['X', 'Y', 'Z']],
+  ]) {
+    const original = $(id);
+    if (!original) continue;
+    const group = document.createElement('div');
+    group.className = 'cad-vector';
+    const inputs = names.map((name, i) => {
+      const l = document.createElement('label');
+      l.textContent = name;
+      const field = document.createElement('input');
+      field.type = 'number';
+      field.step = '1';
+      field.dataset.vector = id;
+      field.dataset.axis = i;
+      field.setAttribute(
+        'aria-label',
+        original.closest('label')?.firstChild.textContent.trim() + ' ' + name,
+      );
+      field.oninput = () => (original.value = inputs.map((n) => n.value || '0').join(' '));
+      l.append(field);
+      group.append(l);
+      return field;
+    });
+    original.hidden = true;
+    original.after(group);
+    vectors.push({ original, inputs });
+  }
+  function syncVectors() {
+    for (const v of vectors) {
+      const parts = v.original.value.trim().split(/[\s,]+/);
+      v.inputs.forEach((n, i) => (n.value = parts[i] ?? '0'));
+    }
+    const min = $('studio-min').value.split(' ').map(Number),
+      max = $('studio-max').value.split(' ').map(Number);
+    $('cad-selection-label').textContent = selectionActive
+      ? '已选区域 · ' +
+        max.map((n, a) => n - min[a] + 1).join(' × ') +
+        ' 格' +
+        (studio.getSelection().regions?.length > 1
+          ? ' · ' + studio.getSelection().regions.length + ' 个组合区域'
+          : '')
+      : '点击或拖框选择；Shift 增加，Ctrl 减去。';
+  }
+  const direct = directEdit({
+    THREE,
+    $,
+    scene,
+    getCamera,
+    renderer,
+    navigation,
+    requestRender,
+    call,
+    refresh,
+    render,
+    markDirty,
+    policy,
+    studio,
+    hasSelection: () => selectionActive,
+    notice,
+    cast,
+    hitCell,
+    getSummary,
+  });
+  for (const [id, mode] of [
+    ['cad-move-direct', 'move'],
+    ['cad-copy-direct', 'copy'],
+    ['cad-rotate-direct', 'rotate'],
+  ])
+    $(id).onclick = async () => {
+      construction.close();
+      designer.close();
+      direct.begin(mode);
+      if (mode === 'copy') direct.copy();
+    };
+  window.addEventListener('craftstudio-prefab-drop', (e) => {
+    construction.close();
+    designer.close();
+    direct.begin('paste', e.detail);
+  });
+  const pasteButton = document.createElement('button');
+  pasteButton.id = 'cad-paste-direct';
+  pasteButton.textContent = '粘贴';
+  pasteButton.title = 'Ctrl+V · 先复制选择';
+  pasteButton.onclick = () => {
+    construction.close();
+    designer.close();
+    direct.paste();
+  };
+  $('cad-copy-direct').after(pasteButton);
+  const construction = constructionUI({
+    getSummary,
+    library,
+    prepareIntentPersistence,
+    hasSelection: () => selectionActive,
+    materialName: assets.labelName,
+    THREE,
+    $,
+    scene,
+    getCamera,
+    renderer,
+    call,
+    refresh,
+    render,
+    markDirty,
+    studio,
+    policy,
+    notice,
+    navigation,
+    requestRender,
+    cast,
+    hitCell,
+    onGuideHandoff: () => workspace.selectCategory('model'),
+    pickMaterial: (callback, label) =>
+      requestMaterial(callback, construction, $('construction-panel'), label || '建模材料'),
+  });
+  materialObserver.observe($('construction-panel'), {
+    attributes: true,
+    attributeFilter: ['hidden'],
+    attributeOldValue: true,
+  });
+  window.addEventListener('craftstudio-edit-sketch', (e) => {
+    direct.cancel();
+    designer.close();
+    chooseTool('inspect');
+    construction.editSaved(e.detail.id);
+  });
+  for (const [id, label, type] of [
+    ['cad-figure', '图形 / 曲线', 'geometry'],
+    ['cad-terrain', '地形', 'terrain'],
+    ['cad-feature', '拉伸 / 放样', 'feature'],
+  ]) {
+    const button = document.createElement('button');
+    button.id = id;
+    button.textContent = label;
+    button.onclick = () => {
+      direct.cancel();
+      designer.close();
+      chooseTool('inspect');
+      construction.open(type);
+    };
+    $('cad-create-open').after(button);
+  }
+
+  const designer = designerUI({
+    THREE,
+    $,
+    scene,
+    call,
+    refresh,
+    render,
+    markDirty,
+    policy,
+    getSelection: () => studio.getSelection(),
+    getObjects: () => {
+      if (selectedObjects.size && objectOnly) return [...selectedObjects];
+      const r = studio.getSelection();
+      if (r.regions) return [];
+      return (getSummary()?.design.objects || [])
+        .filter(
+          (o) => o.min.every((n, a) => n === r.min[a]) && o.max.every((n, a) => n === r.max[a]),
+        )
+        .map((o) => o.id);
+    },
+    getSummary,
+    materialName: assets.labelName,
+    pickMaterial: (callback, label) =>
+      requestMaterial(callback, designer, $('designer-panel'), label || '排列 / 编辑材料'),
+    notice,
+    requestRender,
+  });
+  materialObserver.observe($('designer-panel'), {
+    attributes: true,
+    attributeFilter: ['hidden'],
+    attributeOldValue: true,
+  });
+  window.addEventListener('craftstudio-transform-start', () => {
+    construction.close();
+    designer.close();
+  });
+  const designerButton = document.createElement('button');
+  designerButton.id = 'cad-designer';
+  designerButton.textContent = '排列 / 编辑';
+  designerButton.onclick = () => {
+    direct.cancel();
+    construction.close();
+    chooseTool('inspect');
+    designer.open();
+  };
+  $('cad-modify-open').after(designerButton);
+  const componentContext = componentContextUI({
+    $,
+    getSummary,
+    getObjectIds: () => (selectionActive && objectOnly ? [...selectedObjects] : []),
+    selectObjects,
+    notice,
+    openOperation: (operation, id) => {
+      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()) {
+        notice('正在提交当前操作，请稍候');
+        return;
+      }
+      direct.cancel();
+      construction.close();
+      measurement.close();
+      selectObjects([id]);
+      chooseTool('inspect');
+      designer.open(operation, { objectIds: [id] });
+    },
+  });
+  const viewPresets = savedViewsUI({
+    $,
+    getSummary,
+    getView: () => window.CraftStudio.viewState(),
+    setView: (state) => window.CraftStudio.setView(state),
+    getDisplay: () => window.CraftStudio.displayState(),
+    setDisplay: (state) => window.CraftStudio.setDisplay(state),
+    call,
+    refresh,
+    render,
+    markDirty,
+    notice,
+    task,
+  });
+  const measurement = measurementUI({
+    highlightSources: (ids) => construction.highlightSources(ids),
+    THREE,
+    $,
+    scene,
+    renderer,
+    cast,
+    getSummary,
+    getCamera,
+    call,
+    refresh,
+    render,
+    markDirty,
+    notice,
+    requestRender,
+    beforeOpen: () => {
+      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy())
+        throw Error('正在提交当前操作，请稍候');
+      direct.cancel();
+      construction.close();
+      designer.close();
+      chooseTool('inspect');
+    },
+  });
+  window.addEventListener('craftstudio-selection', () => {
+    objectCandidates.clear();
+    objectOnly = false;
+    selectedObjects.clear();
+    for (const row of objects.children) row.classList.remove('selected');
+    selectionActive = true;
+    syncVectors();
+    componentContext.update();
+    objectNames.update(getSummary());
+  });
+  $('cad-selection-clear').onclick = () => {
+    $('pick-close').click();
+    studio.clearSelection();
+    direct.cancel();
+    selectionActive = false;
+    objectCandidates.clear();
+    objectOnly = false;
+    selectedObjects.clear();
+    for (const row of objects.children) row.classList.remove('selected');
+    $('cad-selection-label').textContent = '尚未选择对象';
+    componentContext.update();
+    objectNames.update(getSummary());
+  };
+  const objectNames = objectNameUI({
+    $,
+    getSummary,
+    getObjectId: () =>
+      selectionActive && objectOnly && selectedObjects.size === 1 ? [...selectedObjects][0] : null,
+    isOperating: () =>
+      direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),
+    call,
+    refresh,
+    render,
+    markDirty,
+    notice,
+  });
+  const names = ['文件', '场地与视图', '设计', '保存 / 导出'];
+  document.querySelectorAll('#steps [data-step]').forEach((b, i) => (b.textContent = names[i]));
+  const advancedAi = document.createElement('details');
+  advancedAi.className = 'card';
+  advancedAi.innerHTML = '<summary>高级：导入外部 AI 的结构数据</summary>';
+  const aiJson = $('ai-json').closest('label');
+  aiJson.before(advancedAi);
+  advancedAi.append(aiJson);
+  $('ai-preview').textContent = '查看方案';
+  $('ai-open').hidden = true;
+  function toolChanged(tool) {
+    clearMaterialReceiver();
+    if (measurement.isActive()) measurement.close();
+    brushOptions.toolChanged(tool);
+    if (tool !== 'inspect' && typeof direct !== 'undefined') {
+      direct.cancel();
+      construction.close();
+      designer.close();
+    }
+    $('cad-active-tool').textContent = labels[tool] || tool;
+    const s = getSummary();
+    $('cad-empty').hidden = tool !== 'inspect' || !!(s?.sourceBlocks || s?.changes);
+    $('cad-brush-settings').hidden = !['paint', 'erase'].includes(tool);
+    assets.detail.hidden = tool === 'inspect' && activeDock !== 'assets';
+  }
+  window.addEventListener('craftstudio-asset-selected', () => {
+    if (
+      activeDock === 'assets' ||
+      document.querySelector('[data-tool].active')?.dataset.tool !== 'inspect'
+    )
+      assets.detail.hidden = false;
+  });
+  const collectionBrowser = collectionsUI({
+    $,
+    call,
+    refresh,
+    render,
+    markDirty,
+    task,
+    getSummary,
+    getObjectIds: () => [...selectedObjects],
+    selectObjects,
+    objects,
+  });
+  $('cad-object-search').oninput = collectionBrowser.filter;
+  $('cad-history').onclick = () => {
+    const s = getSummary();
+    history.body.replaceChildren();
+    const p = document.createElement('p');
+    p.textContent = s.undo
+      ? '可撤销 ' + s.undo + ' 次操作；保存正式版本后可从工程库打开历史版本。'
+      : '当前没有未撤销的编辑记录。';
+    history.body.append(p);
+    const b = document.createElement('button');
+    b.textContent = '查看工程版本';
+    b.onclick = () => {
+      history.dialog.close();
+      $('open-library').click();
+    };
+    history.body.append(b);
+    open(history);
+  };
+  for (const [id, position] of [
+    ['cad-view-front', [0, 0, 1]],
+    ['cad-view-side', [1, 0, 0]],
+    ['cad-view-top', [0, 1, 0.001]],
+    ['cad-view-iso', [1, 0.8, 1]],
+  ])
+    $(id).onclick = () => {
+      const s = getSummary();
+      if (!s) return;
+      const target = s.size.map((n) => n / 2),
+        distance = Math.max(...s.size) * 1.5;
+      window.CraftStudio.setView({
+        position: target.map((n, a) => n + position[a] * distance),
+        target,
+        projection: 'orthographic',
+      });
+    };
+  const menu = viewportContextMenu({
+    canvas: renderer.domElement,
+    items: [
+      { label: '聚焦选择 F', run: () => zoomSelection(), reason: () => selectionReason() },
+      {
+        label: '隔离编辑',
+        run: () => $('isolation-enter').click(),
+        reason: () => selectionReason(),
+      },
+      { label: '移动 M', run: () => direct.begin('move'), reason: () => selectionReason() },
+      { label: '复制 C', run: () => direct.begin('copy'), reason: () => selectionReason() },
+      { label: '旋转 R', run: () => direct.begin('rotate'), reason: () => selectionReason() },
+      { label: '更多变换参数', run: () => open(modify), reason: () => selectionReason() },
+      {
+        label: '重命名 F2',
+        run: () => objectNames.begin(),
+        reason: () =>
+          selectionReason() || (selectedObjects.size !== 1 ? '请先选择一个命名对象' : ''),
+      },
+      { label: '建立对象', run: () => open(component), reason: () => selectionReason() },
+      { label: '保存为构件', run: () => open(component), reason: () => selectionReason() },
+      { label: '选择素材', run: () => dock('assets') },
+      { label: '总览', run: () => $('fit').click() },
+    ],
+  });
+  const contextMenu = menu.element;
+  let pointer = null,
+    marquee = null;
+  renderer.domElement.addEventListener(
+    'wheel',
+    (e) => {
+      if (
+        !e.ctrlKey ||
+        !['paint', 'erase'].includes(document.querySelector('[data-tool].active')?.dataset.tool)
+      )
+        return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const sizes = [1, 3, 5, 7, 9],
+        i = sizes.indexOf(Number($('brush-size').value));
+      $('brush-size').value = sizes[Math.max(0, Math.min(4, i + (e.deltaY < 0 ? 1 : -1)))];
+      $('brush-size').onchange();
+      notice('画笔直径 ' + $('brush-size').value + ' 格');
+    },
+    { capture: true, passive: false },
+  );
+  function pickObject(e, hit) {
+    if (
+      $('cad-selection-target').value !== 'objects' ||
+      e.button !== 0 ||
+      !pointer ||
+      pointer.button !== 0 ||
+      Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) > 5 ||
+      hasOperation() ||
+      renderer.domElement.style.cursor === 'grab' ||
+      !document.querySelector('[data-tool="inspect"].active')
+    )
+      return;
+    if (!hit || hit.object.userData.plane || hit.object.userData.readOnly) return;
+    const position = hitCell(hit).pos,
+      candidates = objectsAtCell(getSummary().design, position);
+    if (!candidates.length) return;
+    const current = candidates.findIndex((o) => selectedObjects.has(o.id)),
+      index = e.altKey ? (current + 1) % candidates.length : Math.max(0, current),
+      object = candidates[index];
+    selectObjects([object.id], pointer.operation);
+    pointer = null;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (candidates.length > 1)
+      notice('已选 ' + object.name + ' · 重叠 ' + candidates.length + ' 个对象；Alt+点击切换');
+    return true;
+  }
+  renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    pointer = {
+      x: e.clientX,
+      y: e.clientY,
+      button: e.button,
+      start: e.button === 0 ? cast(e) : null,
+      shift: e.shiftKey,
+      ctrl: e.ctrlKey,
+      operation: e.ctrlKey ? 'subtract' : e.shiftKey ? 'add' : $('cad-selection-mode').value,
+    };
+  });
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (
+      !pointer ||
+      pointer.button !== 0 ||
+      document.querySelector('[data-tool="inspect"]').classList.contains('active') === false ||
+      e.altKey ||
+      direct.isActive() ||
+      construction.isActive() ||
+      designer.isActive() ||
+      renderer.domElement.style.cursor === 'grab'
+    )
+      return;
+    if (Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 8) return;
+    if (!marquee) {
+      marquee = document.createElement('div');
+      marquee.id = 'cad-marquee';
+      document.body.append(marquee);
+    }
+    const crossing = e.clientX < pointer.x;
+    marquee.dataset.crossing = String(crossing);
+    marquee.dataset.operation = pointer.operation;
+    marquee.dataset.label =
+      { replace: '重新选择', add: '增加', subtract: '减去', intersect: '保留交集' }[
+        pointer.operation
+      ] +
+      ' · ' +
+      (crossing ? '相交选入 ←' : '完整框入 →') +
+      ' · Esc 取消';
+    Object.assign(marquee.style, {
+      left: Math.min(pointer.x, e.clientX) + 'px',
+      top: Math.min(pointer.y, e.clientY) + 'px',
+      width: Math.abs(e.clientX - pointer.x) + 'px',
+      height: Math.abs(e.clientY - pointer.y) + 'px',
+    });
+  });
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!pointer) return;
+    if (pointer.button === 2 && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 5) {
+      menu.open(e.clientX, e.clientY);
+    }
+    if (marquee) {
+      const rect = renderer.domElement.getBoundingClientRect(),
+        lo = [Math.min(pointer.x, e.clientX), Math.min(pointer.y, e.clientY)],
+        hi = [Math.max(pointer.x, e.clientX), Math.max(pointer.y, e.clientY)],
+        crossing = e.clientX < pointer.x;
+      const selected = (getSummary()?.design.objects || []).filter((o) => {
+        if (objectHidden(getSummary().design, o)) return false;
+        const points = [];
+        for (const x of [o.min[0], o.max[0] + 1])
+          for (const y of [o.min[1], o.max[1] + 1])
+            for (const z of [o.min[2], o.max[2] + 1]) {
+              const p = projectPoint([x, y, z]);
+              points.push([
+                rect.left + ((p.x + 1) * rect.width) / 2,
+                rect.top + ((1 - p.y) * rect.height) / 2,
+                p.z,
+              ]);
+            }
+        if (points.every((p) => p[2] < -1 || p[2] > 1)) return false;
+        const a = [0, 1].map((i) => Math.min(...points.map((p) => p[i]))),
+          b = [0, 1].map((i) => Math.max(...points.map((p) => p[i])));
+        return crossing
+          ? a.every((n, i) => n <= hi[i]) && b.every((n, i) => n >= lo[i])
+          : a.every((n, i) => n >= lo[i]) && b.every((n, i) => n <= hi[i]);
+      });
+      if (selected.length) {
+        const min = [0, 1, 2].map((a) => Math.min(...selected.map((o) => o.min[a]))),
+          max = [0, 1, 2].map((a) => Math.max(...selected.map((o) => o.max[a])));
+        selectObjects(
+          selected.map((o) => o.id),
+          pointer.operation,
+        );
+        $('pick-panel').hidden = true;
+      } else {
+        const last = cast(e);
+        if (
+          pointer.start &&
+          last &&
+          !pointer.start.object.userData.readOnly &&
+          !last.object.userData.readOnly
+        ) {
+          const a = hitCell(pointer.start).pos,
+            b = hitCell(last).pos;
+          studio.selectRange(
+            { min: a.map((n, i) => Math.min(n, b[i])), max: a.map((n, i) => Math.max(n, b[i])) },
+            pointer.operation,
+          );
+        }
+      }
+      marquee.remove();
+      marquee = null;
+    }
+    pointer = null;
+  });
+  const cancelMarquee = () => {
+    pointer = null;
+    marquee?.remove();
+    marquee = null;
+  };
+  renderer.domElement.addEventListener('pointercancel', cancelMarquee);
+  window.addEventListener('blur', cancelMarquee);
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (
+        !marquee ||
+        e.key !== 'Escape' ||
+        dialogOwnsKeyboard() ||
+        textEditing(document.activeElement)
+      )
+        return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cancelMarquee();
+      notice('已取消本次框选，原选择保留');
+    },
+    true,
+  );
+  window.addEventListener('keydown', (e) => {
+    if (dialogOwnsKeyboard()) return;
+    if (e.target.closest?.('[data-shortcut-scope=commands]')) return;
+    if (e.defaultPrevented || e.isComposing) return;
+    if (sceneShortcutBlocked(document.activeElement) && ['c', 'v'].includes(e.key.toLowerCase()))
+      return;
+    if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      direct.copy();
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      construction.close();
+      designer.close();
+      direct.paste();
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      $('quick-save').click();
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'o') {
+      e.preventDefault();
+      open(file);
+    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      dock('assets');
+      $('asset-query').focus();
+    }
+    if (sceneShortcutBlocked(document.activeElement)) return;
+    if (!e.ctrlKey && !e.altKey) {
+      if (e.key.toLowerCase() === 'm') direct.begin('move');
+      if (e.key.toLowerCase() === 'c') direct.begin('copy');
+      if (e.key.toLowerCase() === 'r') direct.begin('rotate');
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      if (!selectionActive) {
+        notice('先选中要删除的方块或对象');
+        return;
+      }
+      task(async () => {
+        refresh(
+          await call('studio', {
+            command: 'deleteSelection',
+            ...studio.getSelection(),
+            policy: policy(),
+          }),
+        );
+        await render();
+        markDirty();
+        $('cad-selection-clear').click();
+        notice('已删除选择，可按 Ctrl+Z 撤销');
+      });
+    }
+    if (e.key === 'Escape') {
+      contextMenu.hidden = true;
+      for (const d of [modify, build, motion, component, advanced, history]) d.dialog.close();
+    }
+  });
+  renderer.domElement.addEventListener('dragover', (e) => e.preventDefault());
+  renderer.domElement.addEventListener('drop', (e) => {
+    const json = e.dataTransfer.getData('application/craftstudio-block');
+    if (!json) return;
+    e.preventDefault();
+    const hit = cast(e);
+    if (!hit || hit.object.userData.readOnly) return;
+    let state;
+    try {
+      state = JSON.parse(json);
+    } catch {
+      return;
+    }
+    const pos = hitCell(hit, true).pos;
+    task(async () => {
+      refresh(
+        await call('edit', {
+          operations: [{ type: 'set', pos, state, reason: '拖入素材' }],
+          policy: policy(),
+        }),
+      );
+      await render();
+      markDirty();
+    });
+  });
+
+  const hasOperation = () =>
+    direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive();
+  function handleHistory(direction) {
+    if (
+      construction.expressionHistory(direction) ||
+      construction.drawingHistory(direction) ||
+      construction.parameterHistory(direction) ||
+      direct.previewHistory(direction) ||
+      designer.parameterHistory(direction) ||
+      measurement.previewHistory(direction)
+    )
+      return true;
+    if (!hasOperation()) return false;
+    if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()) {
+      notice('正在提交当前操作，请稍候');
+      return true;
+    }
+    if (direction === 'redo') {
+      notice('请先确认或取消当前预览，再重做场景操作');
+      return true;
+    }
+    direct.cancel();
+    construction.close();
+    designer.close();
+    measurement.close();
+    notice('已取消当前预览，场景中的已确认改动保持原样');
+    return true;
+  }
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (dialogOwnsKeyboard()) return;
+      if (e.target.closest?.('[data-shortcut-scope=commands]')) return;
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        sceneShortcutBlocked(document.activeElement) ||
+        (!hasOperation() && !getSummary()?.preview)
+      )
+        return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        notice('当前正在预览；Enter 确认，Esc 取消后可删除选择');
+      }
+    },
+    true,
+  );
+  function syncSaveScope() {
+    const button = $('quick-save');
+    if (!button.dataset.baseLabel) {
+      button.dataset.baseLabel = button.textContent;
+      button.dataset.baseTitle = button.title;
+    }
+    const pending = hasOperation();
+    const label = pending ? '保存已确认部分' : button.dataset.baseLabel;
+    if (button.textContent !== label) button.textContent = label;
+    button.title = pending
+      ? '当前预览尚未确认；保存已有方案，预览仍可继续'
+      : button.dataset.baseTitle;
+  }
+  const syncHistory = () => {
+    syncSaveScope();
+    const picking = construction.drawingState(),
+      parameters = construction.parameterState(),
+      directHistory = direct.historyState(),
+      designerHistory = designer.parameterState(),
+      measurementHistory = measurement.historyState(),
+      drawing = directHistory.active
+        ? directHistory
+        : designerHistory.active
+          ? designerHistory
+          : measurementHistory.active
+            ? measurementHistory
+            : picking.active
+              ? picking
+              : parameters;
+    $('undo').disabled = drawing.active
+      ? !drawing.undo
+      : !hasOperation() && !getSummary()?.preview && !getSummary()?.undo;
+    $('redo').disabled = drawing.active
+      ? !drawing.redo
+      : hasOperation() || !!getSummary()?.preview || !getSummary()?.redo;
+  };
+  const operationObserver = new MutationObserver(syncHistory);
+  for (const id of ['direct-edit-bar', 'construction-panel', 'designer-panel', 'measurement-panel'])
+    operationObserver.observe($(id), {
+      attributes: true,
+      attributeFilter: ['hidden', 'data-drawing-points', 'data-local-history'],
+    });
+  const title = $('scene-title'),
+    titleInput = document.createElement('input');
+  titleInput.id = 'cad-project-name';
+  titleInput.hidden = true;
+  titleInput.setAttribute('aria-label', '工程名称');
+  title.after(titleInput);
+  title.title = '双击修改工程名称';
+  title.ondblclick = () => {
+    titleInput.value = $('save-title').value || title.textContent;
+    title.hidden = true;
+    titleInput.hidden = false;
+    titleInput.focus();
+    titleInput.select();
+  };
+  let naming = false;
+  async function finishName(cancel = false) {
+    if (titleInput.hidden || naming) return;
+    const name = titleInput.value.trim();
+    titleInput.hidden = true;
+    title.hidden = false;
+    if (cancel || !name) return;
+    naming = true;
+    try {
+      $('save-title').value = name;
+      refresh(await call('rename', { name }));
+      markDirty();
+    } catch (e) {
+      notice(e.message, true);
+    } finally {
+      naming = false;
+    }
+  }
+  titleInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishName();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      finishName(true);
+    }
+  };
+  titleInput.onblur = () => finishName();
+  const sketchTree = document.createElement('details');
+  sketchTree.open = true;
+  sketchTree.innerHTML = '<summary>草图与辅助轮廓</summary><div id="cad-sketch-list"></div>';
+  $('dock-objects').append(sketchTree);
+  $('cad-selection-focus').onclick = () => {
+    if (!zoomSelection()) notice('请先选择对象或区域');
+  };
+  const isolation = isolationUI({
+    $,
+    call,
+    refresh,
+    render,
+    task,
+    getView: () => window.CraftStudio.viewState(),
+    setView: (v) => window.CraftStudio.setView(v),
+    getSelection: () => studio.getSelection(),
+    getObjectIds: () => [...selectedObjects],
+    hasSelection: () => selectionActive,
+    notice,
+    frameSelection: zoomSelection,
+  });
+  workspace = workspaceUI({
+    $,
+    construction,
+    designer,
+    direct,
+    measurement,
+    dock,
+    chooseTool,
+    library,
+    notice,
+  });
+  const commands = [],
+    busyReason = () =>
+      direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()
+        ? '正在提交当前操作，请稍候'
+        : getSummary()?.preview
+          ? '请先采用或取消 AI 提案预览'
+          : '',
+    selectionReason = () => busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : ''),
+    invoke = (id, category) => () => {
+      if (category) workspace.selectCategory(category);
+      $(id).click();
+    };
+  const add = (id, label, category, run, aliases = '', unavailable = busyReason, shortcut = '') =>
+    commands.push({ id, label, category, run, aliases, unavailable, shortcut });
+  for (const [id, label, aliases] of [
+    ['inspect', '选择', 'select selection'],
+    ['place', '放置方块', 'place block'],
+    ['paint', '画笔', 'brush paint draw'],
+    ['erase', '擦除', 'erase delete'],
+    ['sample', '取材', 'eyedropper sample'],
+  ])
+    add(id, label, '编辑', () => chooseTool(id), aliases);
+  for (const [id, label, target, key, aliases] of [
+    ['move', '移动选择', 'cad-move-direct', 'M', 'move translate 挪动 移位置 抬高 降低 升高'],
+    ['rotate', '旋转选择', 'cad-rotate-direct', 'R', 'rotate'],
+    ['copy', '复制选择', 'cad-copy-direct', 'C', 'copy duplicate 拷贝 副本 重复'],
+  ])
+    add(id, label, '编辑', invoke(target, 'edit'), aliases, selectionReason, key);
+  add(
+    'paste',
+    '粘贴预览',
+    '编辑',
+    invoke('cad-paste-direct', 'edit'),
+    'paste clipboard',
+    () => busyReason() || (!direct.hasClipboard() ? '请先用 Ctrl+C 复制选择' : ''),
+    'Ctrl+V',
+  );
+  for (const [kind, label, aliases] of [
+    ['line', '线段', 'line'],
+    ['polyline', '连续折线', 'polyline path 折线 路径'],
+    ['rectangle', '矩形轮廓', 'rectangle'],
+    ['circle', '圆形轮廓', 'circle'],
+    ['polygon', '多边形轮廓', 'polygon'],
+    ['bezier', '贝塞尔曲线', 'bezier curve 控制曲线'],
+    ['spline', '贯穿点曲线', 'spline interpolated curve 插值曲线 平滑路径 长曲线 途经点'],
+    ['ellipse', '椭圆轮廓', 'ellipse 椭圆'],
+    ['arc', '圆弧', 'arc 拱线 弧线'],
+    ['box', '长方体', 'box cuboid 盒子 体积'],
+  ])
+    add(
+      'figure-' + kind,
+      label,
+      '草图',
+      () => {
+        workspace.selectCategory('draw');
+        $('cad-figure').click();
+        $('figure-kind').value = kind;
+        $('figure-kind').dispatchEvent(new Event('change'));
+      },
+      aliases,
+    );
+  add(
+    'object-rename',
+    '重命名对象',
+    '编辑',
+    () => objectNames.begin(),
+    'rename name F2 改名字 命名',
+    () =>
+      busyReason() ||
+      (hasOperation()
+        ? '请先确认或取消当前预览'
+        : !selectionActive || !objectOnly || selectedObjects.size !== 1
+          ? '请先选择一个对象'
+          : ''),
+    'F2',
+  );
+  add(
+    'material-palettes',
+    '工程配色方案',
+    '素材',
+    () => {
+      dock('assets');
+      const panel = $('asset-project-palettes');
+      panel.open = true;
+      panel.scrollIntoView({ block: 'nearest' });
+    },
+    'palette 配色 收藏素材 材料组合',
+  );
+  add(
+    'palette-collect',
+    '从选区收集配色素材',
+    '素材',
+    () => {
+      dock('assets');
+      $('asset-project-palettes').open = true;
+      $('asset-project-palette-collect').click();
+    },
+    'collect materials 收集素材 保存选区材质',
+    () =>
+      selectionReason() ||
+      (!$('asset-project-palette').value ? '请先打开工程配色方案并选择一个方案' : ''),
+  );
+  for (const [id, label, button, aliases] of [
+    ['view-back', '上一视角', 'view-previous', 'previous view 返回视角 看回去'],
+    ['view-forward', '下一视角', 'view-next', 'next view 前进视角'],
+  ])
+    add(
+      id,
+      label,
+      '视图',
+      () => $(button).click(),
+      aliases,
+      () => busyReason() || (!$(button) || $(button).disabled ? '没有可恢复的相机视角' : ''),
+    );
+  add(
+    'precise-rectangle',
+    '精确矩形沿路径生成',
+    '建模',
+    () => {
+      direct.cancel();
+      designer.close();
+      chooseTool('inspect');
+      workspace.selectCategory('model');
+      $('feature-operation').value = 'sweep';
+      $('feature-sweep-mode').value = 'rectangle-fit';
+      construction.open('feature', { operation: 'sweep' });
+    },
+    '半砖步道 薄梁 半格截面 rectangle precise rail',
+    () =>
+      busyReason() ||
+      (!(getSummary()?.design.guides || []).some((g) => g.points?.length >= 2)
+        ? '请先绘制并保存一条路径'
+        : ''),
+  );
+  add(
+    'space-review',
+    '空间浏览',
+    '视图',
+    () => $('studio-walk').click(),
+    '室内浏览 漫游 看内部 fly walk',
+    () => busyReason() || (hasOperation() ? '请先确认或取消当前预览' : ''),
+  );
+  add('feature', '建模工具', '建模', invoke('cad-feature', 'model'), 'feature modelling');
+  const profileReason = (count) =>
+    busyReason() ||
+    (closedProfiles(getSummary()?.design.guides || []).length < count
+      ? count === 1
+        ? '请先绘制并保存闭合轮廓'
+        : '放样需要至少两个已保存的闭合轮廓'
+      : '');
+  for (const [op, label, aliases] of [
+    ['extrude', '拉伸', 'extrude extrusion'],
+    ['loft', '截面放样', 'loft'],
+    ['sweep', '沿路径生成', 'sweep path'],
+  ])
+    add(
+      'feature-' + op,
+      label,
+      '建模',
+      () => {
+        workspace.selectCategory('model');
+        $('feature-operation').value = op;
+        $('cad-feature').click();
+      },
+      aliases,
+      () =>
+        op === 'sweep'
+          ? busyReason() ||
+            (!(getSummary()?.design.guides || []).length ? '请先绘制并保存路径' : '')
+          : profileReason(op === 'loft' ? 2 : 1),
+    );
+  const aliases = {
+    array: 'array duplicate repeat',
+    pathArray: 'path array',
+    radialArray: 'radial array',
+    align: 'align',
+    distribute: 'distribute',
+    mirror: 'mirror',
+    offset: 'offset profile',
+    updateOffset: 'rebuild offset source 更新偏移 来源',
+    pushpull: 'push pull',
+    boolean: 'boolean union subtract',
+    editFeature: 'edit feature',
+    paint: 'paint material recolor 换材质 配色',
+    instance: 'linked instance',
+    syncInstances: 'update component',
+    makeUniqueInstance: 'make unique',
+    detachInstance: 'detach',
+    inspect: 'inspect dimensions',
+  };
+  for (const option of $('designer-operation').options)
+    add(
+      'designer-' + option.value,
+      option.textContent,
+      '排列 / 编辑',
+      () => {
+        direct.cancel();
+        construction.close();
+        chooseTool('inspect');
+        workspace.selectCategory('model');
+        designer.open(option.value);
+      },
+      aliases[option.value] || '',
+      option.value === 'updateOffset'
+        ? () =>
+            busyReason() ||
+            (!(getSummary()?.design.guides || []).some((g) => g.provenance?.kind === 'offset')
+              ? '没有带来源记录的偏移轮廓'
+              : '')
+        : option.value === 'offset'
+          ? () =>
+              busyReason() ||
+              (!(getSummary()?.design.guides || []).some((g) => closedProfiles([g]).length)
+                ? '请先保存一个闭合且共面的轮廓'
+                : '')
+          : selectionReason,
+    );
+  window.addEventListener('craftstudio-edit-feature', (e) =>
+    task(async () => {
+      if (busyReason()) throw Error(busyReason());
+      direct.cancel();
+      construction.close();
+      chooseTool('inspect');
+      selectObjects([e.detail.objectId]);
+      workspace.selectCategory('model');
+      designer.open('editFeature', { objectIds: [e.detail.objectId] });
+    }),
+  );
+  window.addEventListener('craftstudio-rebuild-offset', (e) =>
+    task(async () => {
+      if (busyReason()) throw Error(busyReason());
+      direct.cancel();
+      construction.close();
+      chooseTool('inspect');
+      workspace.selectCategory('model');
+      designer.open('updateOffset', { guideId: e.detail.guideId, repair: !!e.detail.repair });
+    }),
+  );
+  for (const [mode, label, aliases] of [
+    ['flatten', '局部整平', 'flatten terrain'],
+    ['smooth', '平滑地形', 'smooth terrain'],
+    ['slope', '连续坡道', 'slope ramp'],
+  ])
+    add(
+      'terrain-' + mode,
+      label,
+      '场地',
+      () => {
+        workspace.selectCategory('site');
+        $('terrain-operation').value = mode;
+        $('cad-terrain').click();
+      },
+      aliases,
+      selectionReason,
+    );
+  add(
+    'measure',
+    '测量间距 / 高差',
+    '视图',
+    () => measurement.open(),
+    'ruler measure distance height slope angle polyline length 夹角 折线 总长',
+    () =>
+      direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()
+        ? '正在提交当前操作，请稍候'
+        : '',
+  );
+  add(
+    'materials',
+    '素材库',
+    '素材',
+    () => dock('assets'),
+    'materials blocks palette',
+    () => '',
+    'Ctrl+F',
+  );
+  add('library', '本地工程库', '文件', invoke('open-library'), 'projects library', busyReason);
+  add(
+    'saved-views',
+    '收藏视角',
+    '视图',
+    () => viewPresets.open(),
+    'views bookmark camera',
+    () => '',
+  );
+  add('fit', '总览场景', '视图', invoke('fit'), 'frame fit all', () => '', 'F');
+  add('top', '俯视', '视图', invoke('top'), 'top view', () => '');
+  add(
+    'frame-selection',
+    '聚焦选择',
+    '视图',
+    zoomSelection,
+    'frame selected focus zoom',
+    selectionReason,
+  );
+  add(
+    'isolate-selection',
+    '隔离编辑当前选择',
+    '视图',
+    invoke('isolation-enter'),
+    'local view isolate',
+    selectionReason,
+  );
+  add('exit-isolation', '退出一层隔离', '视图', invoke('isolation-exit'), 'exit local view', () =>
+    getSummary()?.view?.isolated ? '' : '当前未隔离',
+  );
+  add(
+    'clear-isolation',
+    '恢复全部场景',
+    '视图',
+    invoke('isolation-all'),
+    'global view clear isolation',
+    () => (getSummary()?.view?.isolated ? '' : '当前未隔离'),
+  );
+  let sketchTreeSignature = '';
+  const commandFinder = commandSearch({ $, commands, library, notice, requestRender });
+  viewPresets.mount();
+  syncVectors();
+  toolChanged('inspect');
+  return {
+    assets,
+    pickObject,
+    handleHistory,
+    cancelOperations: () => {
+      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy())
+        throw Error('正在提交当前操作，请稍候');
+      direct.cancel();
+      construction.close();
+      designer.close();
+      measurement.close();
+    },
+    hasWorkplaneGrid: () => construction.hasWorkplaneGrid(),
+    toggleWorkplaneGrid: () => construction.toggleWorkplaneGrid(),
+    brushConfig: brushOptions.config,
+    hasSelection: () => selectionActive,
+    openLegacy: (name) =>
+      name === 'edit'
+        ? enterWorkspace()
+        : open({ import: file, check: site, save: output }[name] || file),
+    enterWorkspace,
+    toolChanged,
+    update: (s) => {
+      if (selectionWorkspace && selectionWorkspace !== s.workspaceId) {
+        $('cad-selection-clear').click();
+        for (const id of ['studio-min', 'studio-max', 'studio-at']) $(id).value = '0 0 0';
+        sourceDetailsOpen.clear();
+      }
+      selectionWorkspace = s.workspaceId;
+      const availableIds = new Set(s.design.objects.map((o) => o.id));
+      if ([...objectCandidates].some((id) => !availableIds.has(id))) {
+        objectCandidates = new Set([...objectCandidates].filter((id) => availableIds.has(id)));
+        selectedObjects = new Set([...selectedObjects].filter((id) => availableIds.has(id)));
+        objectOnly = false;
+      }
+      collectionBrowser.update(s);
+      const links = generationLinks(s.design);
+      commandFinder.update();
+      direct.ensureFresh(s);
+      isolation.update(s);
+      construction.update(s);
+      designer.update(s);
+      measurement.update(s);
+      viewPresets.update(s);
+      const sketchKey = JSON.stringify([s.workspaceId, s.design?.guides, links.guides]);
+      if (sketchKey !== sketchTreeSignature) {
+        sketchTreeSignature = sketchKey;
+        const guideProfiles = closedProfiles(s.design?.guides || []);
+        $('cad-sketch-list').replaceChildren(
+          ...(s.design?.guides || [])
+            .filter((g) => g.recipe?.kind && g.recipe.points)
+            .map((g) => {
+              const row = document.createElement('div');
+              row.className = 'row';
+              const button = document.createElement('button');
+              const linked = links.guides.find((r) => r.id === g.id)?.dependents || [];
+              button.textContent =
+                g.name +
+                ' · 编辑' +
+                (linked.length ? ' · 直接关联 ' + linked.length + ' 个结果' : '');
+              button.dataset.guideId = g.id;
+              button.onclick = () => {
+                direct.cancel();
+                designer.close();
+                chooseTool('inspect');
+                construction.editSaved(g.id);
+              };
+              row.append(button);
+              const actions = guideActions(s.design.guides, g.id, guideProfiles);
+              for (const [operation, label] of [
+                ['extrude', '拉伸'],
+                ['sweep', '沿路径生成'],
+              ]) {
+                const action = actions[operation],
+                  b = document.createElement('button');
+                b.textContent = label;
+                b.dataset.guideAction = operation;
+                b.dataset.guideId = g.id;
+                b.disabled = !!action.reason;
+                b.title =
+                  action.reason ||
+                  (operation === 'extrude' && action.sourceIds.length > 1
+                    ? '使用相接的 ' + action.sourceIds.length + ' 段闭合线框'
+                    : '使用此草图作为来源');
+                b.onclick = () =>
+                  task(async () => {
+                    if (busyReason()) throw Error(busyReason());
+                    direct.cancel();
+                    designer.close();
+                    chooseTool('inspect');
+                    workspace.selectCategory('model');
+                    await construction.openFromGuide(g.id, operation);
+                  });
+                row.append(b);
+              }
+              const offsetSource = links.guides.find((r) => r.id === g.id)?.source;
+              if (offsetSource) {
+                const detail = document.createElement('div');
+                detail.className = 'generation-sources';
+                const label = document.createElement('small');
+                label.textContent =
+                  (offsetSource.outdated ? '来源已变 · ' : '') +
+                  '偏移副本 · ' +
+                  offsetSource.name +
+                  ' · 距离 ' +
+                  offsetSource.distance;
+                detail.append(label);
+                const edit = document.createElement('button');
+                edit.textContent = '编辑来源';
+                edit.disabled = offsetSource.missing;
+                edit.dataset.offsetSourceId = offsetSource.guideId;
+                edit.onclick = () =>
+                  window.dispatchEvent(
+                    new CustomEvent('craftstudio-edit-sketch', {
+                      detail: { id: offsetSource.guideId },
+                    }),
+                  );
+                const rebuild = document.createElement('button');
+                rebuild.textContent = '按来源重建';
+                rebuild.dataset.offsetRebuildId = g.id;
+                rebuild.disabled = !offsetSource.canRebuild;
+                rebuild.title = offsetSource.reason || '保留距离，预览新的偏移轮廓与下游建筑';
+                rebuild.onclick = () =>
+                  window.dispatchEvent(
+                    new CustomEvent('craftstudio-rebuild-offset', { detail: { guideId: g.id } }),
+                  );
+                const repair = document.createElement('button');
+                repair.textContent = '更换来源';
+                repair.dataset.offsetRepairId = g.id;
+                repair.onclick = () =>
+                  window.dispatchEvent(
+                    new CustomEvent('craftstudio-rebuild-offset', {
+                      detail: { guideId: g.id, repair: true },
+                    }),
+                  );
+                detail.append(edit, rebuild, repair);
+                row.append(detail);
+              }
+              return row;
+            }),
+        );
+      }
+      $('cad-empty').hidden = !!(
+        s.sourceBlocks ||
+        s.changes ||
+        s.design?.guides?.length ||
+        s.design?.measurements?.length ||
+        hasOperation()
+      );
+      $('cad-original-row').textContent = s.sourceBlocks ? '▧ 原始场地 · 保留' : '▧ 尚未导入场地';
+      assets
+        .update(s)
+        .then(() => materialChanged({ Name: $('block-id').value }))
+        .catch((e) => notice(e.message, true));
+      $('cad-change-summary').textContent =
+        '新增 ' +
+        s.add.toLocaleString() +
+        ' · 替换 ' +
+        s.replace.toLocaleString() +
+        ' · 删除 ' +
+        s.remove.toLocaleString();
+      for (const row of objects.children) {
+        row.classList.add('tree-object');
+        row.classList.toggle('selected', selectedObjects.has(row.dataset.objectId));
+        const buttons = row.querySelectorAll('button');
+        if (buttons[0] && !buttons[0].dataset.cadBound) {
+          buttons[0].dataset.cadBound = '1';
+          buttons[0].dataset.sceneShortcuts = 'true';
+          const prior = buttons[0].onclick;
+          buttons[0].onclick = (e) => {
+            if (direct.isActive()) direct.cancel();
+            const operation = e?.ctrlKey
+              ? 'subtract'
+              : e?.shiftKey
+                ? 'add'
+                : $('cad-selection-mode').value;
+            selectObjects([row.dataset.objectId], operation);
+            if (designer.isActive()) {
+              if (selectionActive) designer.open();
+              else designer.close();
+            }
+          };
+          buttons[0].ondblclick = () => zoomSelection();
+        }
+        if (buttons[1]) {
+          if (['显示', '隐藏'].includes(buttons[1].textContent))
+            buttons[1].dataset.label = buttons[1].textContent;
+          buttons[1].title = buttons[1].dataset.label;
+          buttons[1].setAttribute('aria-label', buttons[1].dataset.label + '对象');
+          buttons[1].textContent = buttons[1].dataset.label === '显示' ? '◉' : '◎';
+        }
+        const object = s.design.objects.find((o) => o.id === row.dataset.objectId);
+        const relation = links.objects.find((o) => o.id === object?.id);
+        const relationKey = JSON.stringify(relation || null),
+          existingRelation = row.querySelector('.generation-sources');
+        if (existingRelation?.dataset.relationKey !== relationKey) {
+          existingRelation?.remove();
+          if (relation) {
+            const details = document.createElement('details');
+            details.className = 'generation-sources';
+            details.dataset.relationKey = relationKey;
+            details.open = sourceDetailsOpen.has(object.id);
+            details.ontoggle = () => {
+              if (!details.isConnected) return;
+              if (details.open) sourceDetailsOpen.add(object.id);
+              else sourceDetailsOpen.delete(object.id);
+            };
+            const summary = document.createElement('summary');
+            summary.textContent = relation.detached
+              ? '已独立化'
+              : relation.sources.some((g) => g.missing)
+                ? '来源参照已失效'
+                : (relation.outdated ? '待更新 · ' : '') + '源草图 · ' + relation.sources.length;
+            details.append(summary);
+            for (const issue of relation.issues || []) {
+              const message = document.createElement('p');
+              message.className = 'small';
+              message.dataset.generationIssue = issue.code;
+              message.textContent = issue.message;
+              details.append(message);
+            }
+            for (const source of relation.sources) {
+              const b = document.createElement('button');
+              b.textContent =
+                source.name +
+                ' · ' +
+                (source.editable ? '编辑源草图' : source.missing ? '已失效' : '参照');
+              b.dataset.sourceGuideId = source.id;
+              b.disabled = !source.editable;
+              b.onclick = () =>
+                window.dispatchEvent(
+                  new CustomEvent('craftstudio-edit-sketch', { detail: { id: source.id } }),
+                );
+              details.append(b);
+            }
+            if (object.generation?.type === 'feature') {
+              const repair = document.createElement('button');
+              repair.textContent = '修复 / 更换建模来源';
+              repair.dataset.featureSourceObject = object.id;
+              repair.onclick = () =>
+                window.dispatchEvent(
+                  new CustomEvent('craftstudio-edit-feature', { detail: { objectId: object.id } }),
+                );
+              details.append(repair);
+            }
+            row.append(details);
+          }
+        }
+        if (object?.instanceOf) {
+          const family = s.design.componentDefinitions?.find((d) => d.id === object.instanceOf),
+            badge = row.querySelector('.component-badge') || document.createElement('small');
+          badge.className = 'component-badge';
+          badge.textContent =
+            '关联 · ' +
+            (family?.name || '组件') +
+            ' · ' +
+            s.design.objects.filter((o) => o.instanceOf === object.instanceOf).length +
+            ' 份';
+          if (!badge.parentElement) row.append(badge);
+          for (const el of row.querySelectorAll('.component-publish,.component-unique'))
+            el.remove();
+        } else {
+          for (const el of row.querySelectorAll(
+            '.component-badge,.component-publish,.component-unique',
+          ))
+            el.remove();
+        }
+        if (object?.generation?.detached) row.querySelector('.generation-detach')?.remove();
+        if (
+          object?.generation &&
+          !object.generation.detached &&
+          !row.querySelector('.generation-detach')
+        ) {
+          const detach = document.createElement('button');
+          detach.className = 'generation-detach';
+          detach.textContent = '独立化';
+          detach.title = '保留方块并断开后续草图更新';
+          detach.onclick = () =>
+            task(async () => {
+              refresh(await call('detachGeneration', { id: object.id }));
+              markDirty();
+              notice('已断开生成关联，方块保持原样，可撤销');
+            });
+          row.append(detach);
+        }
+        if (object?.generation?.outdated) buttons[0].textContent = object.name + ' · 待更新';
+        if (buttons[2]) {
+          if (['锁定', '解锁'].includes(buttons[2].textContent))
+            buttons[2].dataset.label = buttons[2].textContent;
+          buttons[2].title = buttons[2].dataset.label;
+          buttons[2].textContent = buttons[2].dataset.label === '锁定' ? '◇' : '◆';
+        }
+      }
+      syncVectors();
+      componentContext.update(s);
+      objectNames.update(s);
+    },
+    materialName: assets.labelName,
+    selection: () => syncVectors(),
+    zoomSelection,
+    isTransformActive: () =>
+      direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),
+    viewChanged: () => {
+      direct.updateCamera();
+      construction.viewChanged();
+    },
+    clearSelection: () => {
+      $('cad-selection-clear').click();
+    },
+    materialChanged,
+  };
+  function selectObjects(ids, operation = 'replace') {
+    if (!selectionActive && ['subtract', 'intersect'].includes(operation)) {
+      notice('请先选择基础对象，再减去或取交集');
+      return;
+    }
+    const previousCandidates = [...objectCandidates],
+      previousObjectOnly = objectOnly;
+    const list = getSummary()?.design.objects.filter((o) => ids.includes(o.id)) || [];
+    if (!list.length) {
+      $('cad-selection-clear').click();
+      return;
+    }
+    const min = [0, 1, 2].map((a) => Math.min(...list.map((o) => o.min[a]))),
+      max = [0, 1, 2].map((a) => Math.max(...list.map((o) => o.max[a])));
+    studio.selectRange(
+      { min, max, members: [...new Set(list.flatMap((o) => o.cells || []))] },
+      operation,
+    );
+    objectCandidates = combineObjectIds(
+      previousCandidates,
+      ids,
+      operation === 'replace' ? 'replace' : 'add',
+    );
+    objectOnly = operation === 'replace' || previousObjectOnly;
+    const currentSelection = studio.getSelection(),
+      contains = selectionPredicate(currentSelection),
+      candidates = getSummary().design.objects.filter((o) => objectCandidates.has(o.id)),
+      candidateMap = new Map(candidates.map((o) => [o.id, o])),
+      point = (p) => (Array.isArray(p) ? p : coords(p));
+    selectedObjects = new Set(
+      [...objectCandidates].filter((id) => {
+        const object = candidateMap.get(id);
+        return object?.cells?.length && object.cells.every((p) => contains(point(p)));
+      }),
+    );
+    if (objectOnly && !candidates.some((o) => o.cells?.some((p) => contains(point(p))))) {
+      $('cad-selection-clear').click();
+      return;
+    }
+    for (const row of objects.children)
+      row.classList.toggle('selected', selectedObjects.has(row.dataset.objectId));
+    $('pick-panel').hidden = true;
+    if (selectedObjects.size && objectOnly) {
+      const named = getSummary().design.objects.filter((o) => selectedObjects.has(o.id));
+      $('cad-selection-label').textContent =
+        named.length === 1
+          ? named[0].name + ' · ' + (named[0].cells?.length || 0) + ' 格'
+          : '已选择 ' + named.length + ' 个对象';
+    } else syncVectors();
+    componentContext.update();
+    objectNames.update(getSummary());
+  }
+  function materialChanged(state, name) {
+    $('cad-material-chip').textContent = (name || assets.labelName(state)) + ' ▾';
+  }
+  function zoomSelection() {
+    if (!selectionActive) return false;
+    const min = $('studio-min').value.split(' ').map(Number),
+      max = $('studio-max').value.split(' ').map(Number),
+      rect = renderer.domElement.getBoundingClientRect();
+    window.CraftStudio.setView(
+      frameBounds(
+        window.CraftStudio.viewState(),
+        { min, max },
+        Math.max(1, rect.width) / Math.max(1, rect.height),
+      ),
+    );
+    return true;
+  }
+  function enterWorkspace() {
+    for (const d of [file, site, output]) if (d.dialog.open) d.dialog.close();
+    toolChanged(document.querySelector('[data-tool].active')?.dataset.tool || 'inspect');
+  }
+}

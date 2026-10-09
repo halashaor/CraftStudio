@@ -286,6 +286,12 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 
 ## Development
 
+The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`.
+
+Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
+
+
+
 Install Node.js 22.13 or later, then:
 
 ```sh

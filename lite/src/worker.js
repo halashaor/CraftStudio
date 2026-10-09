@@ -1,127 +1,1498 @@
-import {readSaveForm} from './save-form.js';
-import {selectionPreviewSite,packMemberCoordinates} from './selection-preview.js';
-import {captureDraftHistory} from './draft-history.js';
-import {objectHidden,hiddenObjectContains} from './collections.js';
-import {CheckpointPackets} from './checkpoint-packet.js';
-import {proposalOperations as proposalDiff,acceptedProposal} from './proposal.js';
-import {selectionPredicate} from './selection-mask.js';
-import {isolationKeys} from './isolation.js';
-import {captureGeneration,generatedObject,editSketchPlan} from './generation.js';
-import {brushPlan} from './tool-mask.js';
-import {resourceArchive} from './resource-library.js';
-import {designerPlan,designInspection,selectedObjects} from './designer.js';
-import {featurePlan} from './features.js';
-import {geometryPlan,terrainPlan,surfaceColumns} from './construction.js';
-import {catalogue} from './asset-catalog.js';
-import {DesignAPI} from './foundation.js';
-import {decorations} from './decorations.js';
-import {exportSponge} from './sponge.js';
-import {design,selection,insertPrefab,insertOperations,buildOnSite,findSite,transformSelection,cropProject,semantic,pastePrefab} from './studio.js';
+import { WorkerRuntime } from './runtime/worker-runtime.js';
+import { readSaveForm } from './storage/save-form.js';
+import { selectionPreviewSite, packMemberCoordinates } from './selection/selection-preview.js';
+import { captureDraftHistory } from './storage/draft-history.js';
+import { objectHidden, hiddenObjectContains } from './components/collections.js';
+import { CheckpointPackets } from './storage/checkpoint-packet.js';
+import { proposalOperations as proposalDiff, acceptedProposal } from './api/proposal.js';
+import { selectionPredicate } from './selection/selection-mask.js';
+import { isolationKeys } from './view/isolation.js';
+import { captureGeneration, generatedObject, editSketchPlan } from './modeling/generation.js';
+import { brushPlan } from './selection/tool-mask.js';
+import { resourceArchive } from './materials/resource-library.js';
+import { designerPlan, designInspection, selectedObjects } from './modeling/designer.js';
+import { featurePlan } from './modeling/features.js';
+import { geometryPlan, terrainPlan, surfaceColumns } from './modeling/construction.js';
+import { catalogue } from './materials/asset-catalog.js';
+import { DesignAPI } from './api/design-api.js';
+import { decorations } from './rendering/decorations.js';
+import { exportSponge } from './minecraft/sponge.js';
+import {
+  design,
+  selection,
+  insertPrefab,
+  insertOperations,
+  buildOnSite,
+  findSite,
+  transformSelection,
+  cropProject,
+  semantic,
+  pastePrefab,
+} from './modeling/studio.js';
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
-import { importNBT,importMCA,exportNBT,emptyProject,tag,maskBlocks } from './codec.js';
-import { Site,coordKey,terrainType } from './site.js';
-import { Resources } from './resources.js';
-import { buildMesh } from './mesh.js';
-import { ChunkMesher } from './chunk-mesh.js';
-import { CreateScene,capturedContraptions } from './create.js';
-import { readReferenceHTML,referenceAssets,referenceOperations,inferOrigin } from './reference.js';
-let libraryResources=[];function defaultResources(){const r=new Resources();for(const f of libraryResources)r.addZip(new Uint8Array(f.bytes),f.name);return r;}
-let brushDescriptors=null;
-let site=new Site(emptyProject()),resources=new Resources(),preview=null,previewOperations=null,previewAnchor=null;
-let isolatedKeys=null,isolatedIds=null,isolationVersion=0,isolationContext=null,isolationStack=[];let constructionDraft=null;let baseBytes=null,baseKey=crypto.randomUUID();
-let cachedAssets=null,assetsSite=null,assetsResources=null,assetsVersion=-1,assetsPaletteLength=-1,assetsPartialVersion=-1,assetBytes=null,assetKey=null;
-function assets(){if(assetsSite!==site||assetsResources!==resources||assetsVersion!==resources.version||assetsPaletteLength!==site.palette.length||assetsPartialVersion!==resources.partialVersion){const extra=[...capturedContraptions(site).items.flatMap(c=>c.palette),...decorations(site,resources).map(d=>d.state)];cachedAssets=resources.bundle([...site.palette,...extra]);assetsSite=site;assetsResources=resources;assetsVersion=resources.version;assetsPaletteLength=site.palette.length;assetsPartialVersion=resources.partialVersion;assetBytes=null;assetKey=null;}return cachedAssets;}
-const mesher=new ChunkMesher(),checkpointPackets=new CheckpointPackets();
-const createScene=new CreateScene();let decorativeSite=null,decorativeVersion=-1;const decorativeSent=new Set(),visualSignatures=new Map();
-const summary=()=>({revision:api.revision,workspaceId:api.workspaceId,...(preview||site).summary(),design:{...(preview||site).design,componentDefinitions:(preview||site).design.componentDefinitions?.map(d=>({...d,blocks:undefined,blockCount:d.blocks.length})),objects:(preview||site).design.objects.map(o=>({...o,componentRecords:undefined,componentTrackedCells:o.componentRecords?.length,...(o.generation?{generation:{...o.generation,records:undefined,trackedCells:o.generation.records?.length||0}}:{})}))},preview:!!preview,proposal:previewAnchor?{...previewAnchor}:null,view:{isolated:!!isolatedKeys,contextVisible:!!isolatedKeys&&!!isolationContext?.contextVisible,isolatedCells:isolatedKeys?.size||0,depth:isolatedKeys?isolationStack.length+1:0,objectNames:isolatedIds?(preview||site).design.objects.filter(o=>isolatedIds.includes(o.id)).map(o=>o.name):[],editBounds:isolationContext?.includeNew?isolationKeys(preview||site,isolationContext).bounds:null},resources:resources.summary()});
-async function fingerprint(bytes){if(!self.crypto?.subtle)throw Error('浏览器不支持文件 SHA-256 校验，请使用新版 Edge/Chrome');return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(n=>n.toString(16).padStart(2,'0')).join('');}
-async function ensureBaseline(){if(!baseBytes){baseBytes=gzipSync(strToU8(JSON.stringify(site.base)),{level:1,mtime:0});baseKey='baseline:'+await fingerprint(baseBytes);}}
-function hydrate(project){self.postMessage({progress:'正在校验方块与建立区块索引'});isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];isolationVersion++;site=new Site(project);resources=defaultResources();const inferred=inferOrigin(project);if(inferred){site.origin=inferred.origin;site.originConfirmed=inferred.consistent;site.base.metadata.originEvidence=inferred;}baseBytes=null;baseKey=site.sourceHash||crypto.randomUUID();preview=null;previewOperations=null;previewAnchor=null;return summary();}
-function unpackPackage(pkg){self.postMessage({progress:'正在恢复设计与区块索引'});isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];isolationVersion++;if(pkg.liteSchema!==1)throw Error('未知轻量工程版本');site=Site.unpack(pkg.site);resources=defaultResources();resources.addSaved(pkg.assets||{});baseBytes=null;baseKey=site.sourceHash||crypto.randomUUID();preview=null;previewOperations=null;previewAnchor=null;return{...summary(),saveForm:readSaveForm(pkg.saveForm||pkg.site.saveForm)};}
-const api=new DesignAPI({getSite:()=>site,resources:()=>resources,onChange:()=>{mesher.changed(site);createScene.changedCells(site);}});
-async function proposalRequest(request){try{const p=request.params||{},method=request.method;let value;if(method==='proposal.prepare'){api.guard(p);if(p.space&&p.space!=='local')throw Error('提案使用局部坐标；世界坐标可通过自由编辑事务转换');await execute('preview',{operations:api.operations(site,p)});value={...previewAnchor,summary:summary()};}else if(method==='proposal.inspect'){if(!previewAnchor)throw Error('没有待检查的提案');const start=p.cursor===undefined?0:Number(p.cursor),limit=Math.min(20000,p.limit??1000);if(!Number.isSafeInteger(start)||start<0||!Number.isInteger(limit)||limit<1)throw Error('提案分页参数无效');value={...previewAnchor,summary:summary(),operations:previewOperations.slice(start,start+limit),nextCursor:start+limit<previewOperations.length?String(start+limit):null,total:previewOperations.length};}else{if(!p.proposalId||p.proposalId!==previewAnchor?.id)throw Error('提案已被替换或结束，请重新读取');if(method==='proposal.commit')api.guard(p);value=await execute(method==='proposal.commit'?'accept':'cancel',p);}return{schema:'craftstudio-design/1',id:request.id??null,ok:true,workspaceId:api.workspaceId,revision:api.revision,value};}catch(e){return{schema:'craftstudio-design/1',id:request.id??null,ok:false,workspaceId:api.workspaceId,revision:api.revision,error:{code:e.code||'PROPOSAL_REJECTED',message:e.message,details:e.details||{}}};}}
-async function run(action,data){if(action==='toolContext'){if(!baseKey?.startsWith('baseline:'))await ensureBaseline();const value={baseline:baseKey,header:site.packHeader(),size:site.size,overlay:[...site.overlay].sort(([a],[b])=>a-b)};const context={workspaceId:api.workspaceId,revision:api.revision};return{...context,key:await fingerprint(strToU8(JSON.stringify(value)))};}if(action==='engineMountSource'&&self.enginePersistence)return self.enginePersistence.mountSource({site},data);if(action==='sourceResidency')return site.baseline?.stats()||{mode:'memory',totalBlocks:site.cells.size,residentChunks:site.baseChunks.size};if(action==='engineCapture'&&self.enginePersistence)return self.enginePersistence.capture({site,api,resources,libraryResources,baseKey},data);if(action==='engineRestore'&&self.enginePersistence){const restored=self.enginePersistence.restore(data);site=restored.site;libraryResources=restored.files;resources=defaultResources();resources.addSaved(restored.assets);baseKey=restored.baseKey;baseBytes=null;api.workspaceId=restored.workspaceId;api.revision=restored.revision;api.receipts=new Map(restored.receipts);api.transactions.clear();preview=null;previewOperations=null;previewAnchor=null;constructionDraft=null;isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];isolationVersion++;checkpointPackets.previous=null;return summary();}if(action==='undo'&&preview)return execute('cancel',{});if(action==='api'){if(['proposal.prepare','proposal.inspect','proposal.commit','proposal.cancel'].includes(data.method))return proposalRequest(data);if(['construction.prepare','construction.commit','construction.cancel','design.inspect','view.isolate'].includes(data.method)){try{if(data.params?.expectedRevision!==undefined)api.guard(data.params);const value=await execute(data.method==='construction.cancel'?'cancelConstruction':data.method==='construction.prepare'?'prepareConstruction':data.method==='design.inspect'?'designInspect':data.method==='view.isolate'?'viewIsolation':'commitConstruction',data.params||{});if(data.method==='construction.prepare'&&!data.params?.includeMesh){delete value.buckets;delete value.removedBuckets;delete value.textures;}return{schema:'craftstudio-design/1',id:data.id??null,ok:true,workspaceId:api.workspaceId,revision:api.revision,value};}catch(e){return{schema:'craftstudio-design/1',id:data.id??null,ok:false,workspaceId:api.workspaceId,revision:api.revision,error:{code:'CONSTRUCTION_REJECTED',message:e.message,details:{}}};}}if(preview&&['views.put','views.remove','measurements.put','measurements.remove','edit.brush','edit.apply','transaction.commit','selection.transform','history.undo','history.redo','objects.put','collections.put','collections.remove','palettes.put','palettes.remove','workplanes.put','workplanes.remove'].includes(data.method))return{schema:'craftstudio-design/1',id:data.id??null,revision:api.revision,workspaceId:api.workspaceId,ok:false,error:{code:'PREVIEW_ACTIVE',message:'请先采用或取消预览'}};const reply=api.execute(data);if(reply.ok&&data.method==='workspace.describe'){reply.value.previewActive=!!preview;reply.value.view={isolated:!!isolatedKeys,isolatedCells:isolatedKeys?.size||0,depth:isolatedKeys?isolationStack.length+1:0,editBounds:isolationContext?.includeNew?isolationKeys(site,isolationContext).bounds:null};reply.value.proposal=previewAnchor?{...previewAnchor}:null;reply.value.methods.push('proposal.prepare','proposal.inspect','proposal.commit','proposal.cancel','construction.prepare','construction.commit','construction.cancel','design.inspect','view.isolate');}return reply;}const previousAnchor=previewAnchor,previousSite=site,result=await execute(action,data);if(['import','load','resume'].includes(action)&&!(action==='import'&&/\.html?$/i.test(data.name||'')))await ensureBaseline();if(previousSite!==site){isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];isolationVersion++;}if(['import','load','resume','edit','undo','redo','origin','protect','unprotect','studio','resources','reference'].includes(action))api.changed(previousSite!==site||['import','load','resume'].includes(action));if(previewAnchor&&previewAnchor!==previousAnchor){previewAnchor.revision=api.revision;previewAnchor.workspaceId=api.workspaceId;}if(result?.sourceBlocks!==undefined){result.proposal=previewAnchor?{...previewAnchor}:null;result.revision=api.revision;result.workspaceId=api.workspaceId;}return result;}
-async function execute(action,data){
- if(action==='import'){self.postMessage({progress:'正在解析文件结构'});const bytes=new Uint8Array(data.bytes);if(/\.json$/i.test(data.name)){const obj=JSON.parse(new TextDecoder().decode(bytes));return obj.liteSchema?unpackPackage(obj):hydrate(obj);}if(/\.craftlite$/i.test(data.name))return unpackPackage(JSON.parse(strFromU8(gunzipSync(bytes))));if(/\.html?$/i.test(data.name))return run('reference',{html:new TextDecoder().decode(bytes)});const p=/\.mca$/i.test(data.name)?importMCA(bytes,data.name,data.min,data.max):importNBT(bytes,data.name.replace(/\.[^.]+$/,''));p.metadata.sourceHash=await fingerprint(bytes);return hydrate(p);}
- if(action==='resourceArchive')return resourceArchive(data.bytes,data.name);
- if(action==='resourceLibrary'){const saved=resources.saved;libraryResources=data.files;resources=defaultResources();resources.addSaved(saved);api.changed();return summary();}
- if(action==='resources'){for(const file of data.files)resources.addZip(new Uint8Array(file.bytes),file.name);return summary();}
- if(action==='assets'){resources.addSaved(data.pack);return summary();}
- if(action==='prepareConstruction'){if(preview)throw Error('请先采用或取消提案预览');if(preview)throw Error('先采用或取消当前方案');const materialCatalogue=catalogue(site,resources),available=new Set(materialCatalogue.map(i=>i.id)),plan=data.type==='terrain'?terrainPlan(site,data.config):data.type==='feature'?featurePlan(site,{...data.config,available:[...available]}):data.type==='designer'?designerPlan(site,data.config,available,new Map(materialCatalogue.map(i=>[i.id,i]))):(data.config.editGuideId?editSketchPlan(site,data.config,available):geometryPlan(site,data.config,available)),cells=new Map(),removed=new Map(),palette=[],ids=new Map(),counts={place:0,replace:0,remove:0,cut:0,fill:0},conflicts=[];if(data.type==='geometry'&&data.config.guidesOnly&&!data.config.editGuideId)plan.operations=[];for(const op of new Map(plan.operations.map(op=>[coordKey(...op.pos),op])).values()){const key=coordKey(...op.pos),before=site.at(op.pos);if(JSON.stringify(before?site.palette[before.state]:null)===JSON.stringify(op.state||null)&&(op.nbt===undefined||JSON.stringify(before?.nbt||null)===JSON.stringify(op.nbt||null)))continue;try{if(site.design.objects.some(o=>o.locked&&op.pos.every((n,a)=>n>=o.min[a]&&n<=o.max[a])))throw Error('这个对象已锁定');site.allowed(op.pos,data.policy||{});}catch(e){if(conflicts.length<20)conflicts.push({pos:op.pos,message:e.message});}if(op.state){const text=JSON.stringify(op.state);if(!ids.has(text)){ids.set(text,palette.length);palette.push(op.state);}cells.set(key,{pos:op.pos,state:ids.get(text)});removed.delete(key);before?counts.replace++:counts.place++;if(terrainType(op.state.Name)==='ground'&&!before)counts.fill++;}else{cells.delete(key);if(before){const text=JSON.stringify(site.palette[before.state]);if(!ids.has(text)){ids.set(text,palette.length);palette.push(site.palette[before.state]);}removed.set(key,{pos:op.pos,state:ids.get(text)});counts.remove++;if(terrainType(site.palette[before.state].Name)==='ground')counts.cut++;}}}
- const fake={cells,overlay:new Map(),palette},mesh=buildMesh(fake,resources),red=buildMesh({cells:removed,overlay:new Map(),palette},resources),textures={};for(const b of mesh.buckets)if(b.texture)textures[b.texture]=resources.texture(b.texture);const id=crypto.randomUUID();constructionDraft={id,revision:api.revision,workspaceId:api.workspaceId,plan,config:data.config,type:data.type};return{id,revision:api.revision,workspaceId:api.workspaceId,guide:plan.guide,guideGroups:plan.guideGroups||null,counts,regeneration:plan.regeneration||null,componentUpdate:plan.componentUpdate||null,materialChange:plan.materialChange||null,arraySpacing:plan.arraySpacing||null,pathArray:plan.pathArray?{...plan.pathArray,placements:undefined,count:plan.pathArray.placements.length}:null,supports:plan.supports||null,surfaceFit:plan.surfaceFit||null,warnings:plan.warnings,usedRoles:plan.usedRoles,scope:plan.scope||null,closure:plan.closure||null,overlap:plan.overlap?{...plan.overlap,allPositions:undefined}:null,blocked:plan.blocked||null,conflicts,buckets:mesh.buckets,removedBuckets:red.buckets,textures,triangles:mesh.triangles};}
- if(action==='cancelConstruction'){const cancelled=constructionDraft?.id===data.id;if(cancelled)constructionDraft=null;return{cancelled};}
- if(action==='commitConstruction'){if(preview)throw Error('请先采用或取消提案预览');const draft=constructionDraft;if(draft?.plan.blocked)throw Error(draft.plan.blocked.message);if(!draft||draft.id!==data.id)throw Error('预览已更新，请重新确认');if(draft.revision!==api.revision||draft.workspaceId!==api.workspaceId)throw Error('场景已变化，请重新生成预览');const history=site.undo.length,previousDesign=structuredClone(site.design),captured=captureGeneration(site,draft.plan.operations);site.operations(draft.plan.operations,data.policy||{});if(site.undo.length===history){site.undo.push({overlay:site.overlay,size:[...site.size],design:previousDesign});site.redo=[];}if(draft.plan.design)site.design=structuredClone(draft.plan.design);site.design.guides||=[];if(draft.plan.guide.length&&!draft.plan.design)site.design.guides.push({id:draft.id,name:data.name||'辅助图形',points:draft.plan.guide,...(draft.plan.guideGroups?{paths:draft.plan.guideGroups}:{}),recipe:structuredClone(draft.config),revision:0});if(!draft.plan.design&&['feature','geometry'].includes(draft.type)&&!draft.config.guidesOnly){const object=generatedObject(site,captured,{type:draft.type,config:draft.config,guideId:draft.id,name:data.name||'生成特征'});if(object)site.design.objects.push(object);}mesher.changed(site);createScene.changedCells(site);constructionDraft=null;api.changed();return summary();}
- if(action==='detachGeneration'){const object=site.design.objects.find(o=>o.id===data.id);if(!object)throw Error('对象不存在');if(object.locked)throw Error('对象已锁定');site.undo.push({overlay:site.overlay,size:[...site.size],design:structuredClone(site.design)});site.redo=[];object.generation={...object.generation,detached:true};object.kind='voxel';api.changed();return summary();}
- if(action==='summary')return summary();
- if(action==='viewIsolation'){if(typeof data.contextVisible==='boolean'){if(!isolationContext)throw Error('请先进入局部视图');isolationContext.contextVisible=data.contextVisible;}else if(data.clear){isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];}else if(data.pop){const previous=isolationStack.pop();isolationContext=previous||null;isolatedIds=previous?.objectIds?.length?previous.objectIds:null;isolatedKeys=previous?isolationKeys(site,previous).keys:null;}else{const objects=selectedObjects(site,data,{allowLocked:true});if(data.push&&isolationContext)isolationStack.push(structuredClone(isolationContext));isolationContext={objectIds:data.objectIds||[],keys:objects.flatMap(o=>o.cells),selection:data.selection?{min:data.selection.min,max:data.selection.max}:null,includeNew:!!data.includeNew,contextVisible:false};isolatedIds=isolationContext.objectIds.length?isolationContext.objectIds:null;isolatedKeys=isolationKeys(site,isolationContext).keys;}isolationVersion++;return{isolated:!!isolatedKeys,contextVisible:!!isolationContext?.contextVisible,cells:isolatedKeys?.size||0,depth:isolatedKeys?isolationStack.length+1:0};}
- if(action==='designInspect')return{...designInspection(site,data),revision:api.revision,workspaceId:api.workspaceId};
- if(action==='constructionSurface'){const matches=selectionPredicate(data.selection,{axes:[0,2]}),map=surfaceColumns(site),values=[];for(let x=data.min[0];x<=data.max[0];x++)for(let z=data.min[1];z<=data.max[1];z++){const c=map.get(x+4096*z);if(c?.ground!==null&&c?.ground!==undefined&&matches([x,c.ground,z]))values.push(c.ground);}values.sort((a,b)=>a-b);return{median:values.length?values[Math.floor(values.length/2)]:null};}
- if(action==='rename'){if(typeof data.name!=='string'||!data.name.trim())throw Error('请输入工程名称');site.title=data.name.trim();return summary();}
-
- if(action==='pasteCheck'){const result={place:0,replace:0,skip:0,locked:0};for(const op of insertOperations(data.prefab,data.at,{turn:data.turn})){const exists=!!site.at(op.pos);if(data.overlap==='empty'&&exists||data.overlap==='replace'&&!exists){result.skip++;continue;}exists?result.replace++:result.place++;try{if(site.design.objects.some(o=>o.locked&&op.pos.every((n,a)=>n>=o.min[a]&&n<=o.max[a])))throw Error('锁定');site.allowed(op.pos,{...data.policy,allowExisting:data.overlap==='empty'?data.policy?.allowExisting:true});}catch{result.locked++;}}return result;}
- if(action==='copySelection'){if(data.expectedRevision!==undefined)api.guard(data);return selection(site,data.min,data.max,{keys:data.members,regions:data.regions});}
- if(action==='selectionPreview'){if(data.expectedRevision!==undefined)api.guard(data);let view;if(data.prefab){const p=data.prefab,fake=new Site({...emptyProject(),size:p.size,palette:[],blocks:[]});for(const b of p.blocks){const state=fake.state(b.state);fake.cells.set(coordKey(...b.pos),{pos:b.pos,state});}view={site:fake,size:p.size,count:p.blocks.length,members:p.blocks.map(b=>b.pos)};}else view=selectionPreviewSite(site,data.min,data.max,{keys:data.members,regions:data.regions});const mesh=buildMesh(view.site,resources,{geometryOnly:!!data.geometryOnly}),textures={};for(const b of mesh.buckets)if(!data.geometryOnly&&b.texture)textures[b.texture]=resources.texture(b.texture);return{...mesh,textures,revision:api.revision,workspaceId:api.workspaceId,size:view.size,count:view.count,members:data.compactMembers?packMemberCoordinates(view.members):view.members};}
- if(action==='assetCatalogue')return catalogue(site,resources);
- if(action==='assetPreview'){const state=data.state,fake=new Site({...emptyProject(),palette:[state],blocks:[{pos:[0,0,0],state:0}]});const mesh=buildMesh(fake,resources,{excludeWholeKinetics:true}),motions=new CreateScene().render(fake,resources,{enabled:true,mode:'after',cut:4095,showExisting:true}),textures={...motions.textures};for(const b of mesh.buckets)if(b.texture)textures[b.texture]=resources.texture(b.texture);return{...mesh,motions,textures,approximate:resources.model(state).missing};}
-
- if(action==='studio'){if(data.expectedRevision!==undefined)api.guard(data);
-  if(preview)throw Error('请先采用或取消预览');
-  const beforeDesign=structuredClone(design(site)),beforeOverlay=site.overlay,beforeHistory=site.undo.length;const d=design(site), policy=data.policy||{allowTerrain:false,allowExisting:false};
-  if(data.command==='build')buildOnSite(site,data.kind,data.params,policy);
-  if(data.command==='paste')pastePrefab(site,data.prefab,data.at,data,policy);
-  if(data.command==='transform')transformSelection(site,data,policy);
-  if(data.command==='prefabImport'){const p=data.prefab;if(p.schema!=='craftstudio-prefab/1'||!Array.isArray(p.blocks))throw Error('不是构件文件');p.id=crypto.randomUUID();insertOperations(p,[0,0,0]);d.prefabs.push(p);}
-  if(data.command==='component'){const pkg=JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes)))),other=Site.unpack(pkg.site),p=selection(other,[0,0,0],other.size.map(n=>n-1),{all:true});p.name=other.title;insertPrefab(site,p,data.at,data,policy);resources.addSaved(pkg.assets||{});}
-  if(data.command==='prefab'){const p=selection(site,data.min,data.max,{keys:data.members,regions:data.regions});p.name=data.name||'新构件';p.id=crypto.randomUUID();d.prefabs.push(p);}
-  if(data.command==='insert'){const p=d.prefabs.find(p=>p.id===data.id);if(!p)throw Error('找不到构件');insertPrefab(site,p,data.at,data,policy);}
-  if(data.command==='object'){const o=d.objects.find(o=>o.id===data.id);if(!o)throw Error('找不到对象');for(const k of ['name','hidden','locked'])if(k in data)o[k]=data[k];}
-  if(data.command==='deleteSelection'){const chosen=selection(site,data.min,data.max,{keys:data.members,regions:data.regions}),keys=new Set(chosen.blocks.map(b=>coordKey(...b.pos.map((n,a)=>n+data.min[a]))));site.operations(chosen.blocks.map(b=>{const pos=b.pos.map((n,a)=>n+data.min[a]);return{type:'erase',min:pos,max:pos,reason:'删除选择'};}),policy);d.objects=d.objects.filter(o=>!o.cells?.length||!o.cells.every(k=>keys.has(k)));}
-  if(data.command==='register'){const selected=selection(site,data.min,data.max,{keys:data.members,regions:data.regions});d.objects.push({id:crypto.randomUUID(),name:data.name||'对象',min:data.min,max:data.max,cells:selected.blocks.map(b=>coordKey(...b.pos.map((n,a)=>n+data.min[a]))),kind:'selection'});}
-  if(data.command==='animation')d.animations[data.id]=data.animation;
-  if(data.command==='camera')d.cameras.push(data.camera);
-  if(data.command==='lighting')d.lighting=data.value;
-  if(data.command==='crop'){const p=cropProject(site,data.min,data.max);return hydrate(p);}
-  if(data.command==='merge'){const p=importNBT(new Uint8Array(data.bytes),data.name);if(p.entities?.length)throw Error('带实体蓝图请单独打开，合并不会隐式丢弃实体');const ops=p.blocks.map(b=>({type:'set',pos:b.pos.map((n,a)=>n+data.at[a]),state:p.palette[b.state],nbt:b.nbt,reason:'合并 '+data.name}));if(data.applyAir&&p.metadata?.placementMask)for(const pos of maskBlocks(p.metadata.placementMask))ops.push({type:'erase',min:pos.map((n,a)=>n+data.at[a]),max:pos.map((n,a)=>n+data.at[a]),reason:'蓝图显式空气'});site.operations(ops,policy);}
-  if(data.command==='demo'){for(const [i,kind]of ['house','windmill'].entries()){const place=findSite(site,13,11,d.objects);buildOnSite(site,kind,{at:place.at,width:13,depth:11,height:5,name:i?'风车庭院住宅':'沿坡石木住宅',state:{Name:i?'minecraft:white_concrete':'minecraft:stone_bricks'},roof:{Name:i?'minecraft:cherry_planks':'minecraft:dark_oak_planks'}},policy);}site.title='真实场地 · 双住宅设计';}
-  if(site.overlay===beforeOverlay&&site.undo.length===beforeHistory&&JSON.stringify(beforeDesign)!==JSON.stringify(site.design)){site.undo.push({overlay:site.overlay,size:[...site.size],design:beforeDesign});site.redo=[];}mesher.changed(site);createScene.changedCells(site);return summary();
- }
-
- if(action==='mesh'){const current=preview||site;const result=buildMesh(current,resources,data);const keys=[...new Set(result.buckets.map(b=>b.texture).filter(Boolean))],textures=Object.fromEntries(keys.map(k=>[k,resources.texture(k)]));return{...result,textures};}
- if(action==='meshChunks'){if(isolationContext)isolatedKeys=isolationKeys(preview||site,isolationContext).keys;if(isolatedIds){const list=(preview||site).design.objects.filter(o=>isolatedIds.includes(o.id));if(list.length)isolatedKeys=isolationKeys(preview||site,isolationContext||{objectIds:isolatedIds}).keys;else{isolatedKeys=null;isolatedIds=null;isolationContext=null;isolationStack=[];isolationVersion++;}}return mesher.render(preview||site,resources,{...data,isolateKeys:isolationContext?.contextVisible?null:isolatedKeys,isolationVersion,hidden:(preview||site).design.objects.filter(o=>objectHidden((preview||site).design,o)).map(o=>({min:o.min,max:o.max,cells:o.cells})),animated:Object.entries(data.excludeWholeKinetics?(preview||site).design.animations:{}).filter(([id,a])=>a.min&&a.max&&selection(preview||site,a.min,a.max).blocks.some(b=>/^create:(windmill_bearing|mechanical_bearing|white_sail|black_sail)$/.test(b.state.Name))).filter(([id,a])=>a.min&&a.max).map(([id,a])=>({min:a.min,max:a.max,cells:(preview||site).design.objects.find(o=>o.id===id)?.cells}))});}
- if(action==='createScene'){const current=preview||site,result=createScene.render(current,resources,data);if(result.reset||decorativeSite!==current||decorativeVersion!==resources.version){decorativeSite=current;decorativeVersion=resources.version;decorativeSent.clear();visualSignatures.clear();}if(data.enabled&&data.showExisting!==false&&data.mode!=='removed')for(const d of decorations(current,resources)){if(d.position[1]>data.cut)continue;const model='decoration:'+d.id;if(!decorativeSent.has(model)){const fake={cells:new Map([[0,{pos:[0,0,0],state:0}]]),overlay:new Map(),palette:[d.state]},mesh=buildMesh(fake,resources);for(const b of mesh.buckets)for(let i=0;i<b.positions.length;i++)b.positions[i]-=.5;result.definitions[model]=mesh;decorativeSent.add(model);for(const b of mesh.buckets)if(b.texture)result.textures[b.texture]=resources.texture(b.texture);}result.instances.push({...d,model,kind:'decoration'});}if(data.mode!=='before')result.instances=result.instances.filter(d=>!current.design.objects.some(o=>hiddenObjectContains(current.design,o,d.owner||d.position.map(Math.floor))));result.overrides={};result.visuals=[];if(data.enabled&&data.mode!=='before')for(const [id,a]of Object.entries(current.design.animations)){if(!a.min||!a.max||current.design.objects.some(o=>o.id===id&&objectHidden(current.design,o)))continue;const region=selection(current,a.min,a.max);if(!region.blocks.some(b=>/^create:(windmill_bearing|mechanical_bearing|white_sail|black_sail)$/.test(b.state.Name)))continue;const model='visual:'+id,signature=JSON.stringify(a);if(visualSignatures.get(model)?.overlay!==current.overlay||visualSignatures.get(model)?.signature!==signature){const p=selection(current,a.min,a.max),fake=new Site({...emptyProject(),size:p.size,palette:[],blocks:[]});for(const b of p.blocks){const state=fake.state(b.state);fake.cells.set(coordKey(...b.pos),{pos:b.pos,state});}const mesh=buildMesh(fake,resources);for(const b of mesh.buckets)for(let i=0;i<b.positions.length;i++)b.positions[i]+=a.min[i%3]-a.center[i%3];result.definitions[model]=mesh;visualSignatures.set(model,{overlay:current.overlay,signature});for(const b of mesh.buckets)if(b.texture)result.textures[b.texture]=resources.texture(b.texture);}result.instances.push({id,model,position:a.center,axis:a.axis||'y',rpm:16,savedAngle:0,kind:'visual',state:{Name:'craftstudio:visual'},owner:a.min});}if(isolatedKeys&&!isolationContext?.contextVisible)result.instances=result.instances.filter(d=>isolatedKeys.has(coordKey(...(d.owner||d.position.map(Math.floor)))));return result;}
- if(action==='inspect')return(preview||site).inspect(data.pos);
- if(action==='search'){const candidates=resources.catalogue(data.query||''),existing=(preview||site).palette.filter(s=>(s.Name+' '+Object.values(s.Properties||{}).join(' ')).toLowerCase().includes((data.query||'').toLowerCase())).map(s=>({id:s.Name,label:s.Name.split(':')[1],state:s}));const map=new Map();for(const item of [...existing,...candidates])if(!map.has(item.id))map.set(item.id,item);return[...map.values()].slice(data.offset||0,(data.offset||0)+80);}
- if(action==='edit'){if(preview)throw Error('请先采用或取消预览');site.operations(data.operations,data.policy);mesher.changed(site);createScene.changedCells(site);return summary();}
- if(action==='brush'){if(preview)throw Error('请先采用或取消预览');if(data.mode==='paint'&&!brushDescriptors)brushDescriptors=new Map(catalogue(site,resources).map(i=>[i.id,i]));let isolationFiltered=0,brushData=data;if(isolationContext?.includeNew){const scope=isolationKeys(site,isolationContext);const points=data.points.filter(pos=>{const key=coordKey(...pos),ok=(!scope.bounds||pos.every((n,a)=>n>=scope.bounds.min[a]&&n<=scope.bounds.max[a]))&&!scope.excluded.has(key)&&(!site.at(pos)||scope.keys.has(key));if(!ok)isolationFiltered++;return ok;});brushData={...data,points};}const plan=brushPlan(site,brushData,brushDescriptors||new Map());plan.filtered+=isolationFiltered;site.operations(plan.operations,data.policy);mesher.changed(site);createScene.changedCells(site);api.changed();return{...summary(),filtered:plan.filtered,toolWarnings:plan.warnings};}
- if(action==='beginStroke'){if(preview)throw Error('请先采用或取消预览');site.beginStroke();brushDescriptors=null;const cell=data.anchor?site.at(data.anchor):null;return{from:cell?site.palette[cell.state].Name:null};}
- if(action==='endStroke'){site.endStroke();return true;}
- if(action==='undo'||action==='redo'){if(preview){if(action==='undo')return execute('cancel',{});throw Error('请先采用或取消预览');}previewOperations=null;previewAnchor=null;site.restore(action);mesher.changed(site);createScene.changedCells(site);return summary();}
- if(action==='origin'){if(data.origin?.length!==3||data.origin.some(n=>!Number.isInteger(n)))throw Error('需要三个整数世界原点坐标');site.origin=data.origin;site.originConfirmed=!!data.confirmed;return summary();}
- if(action==='protect'){site.protected.push({min:data.min,max:data.max,name:data.name||'保留区'});return summary();}
- if(action==='unprotect'){site.protected.splice(data.index,1);return summary();}
- if(action==='preview'){const candidate=site.fork();const batch=[];const flush=()=>{if(batch.length){candidate.operations(batch.splice(0),{allowTerrain:true,allowExisting:true});}};for(const op of data.operations){if(op.type==='build'){flush();buildOnSite(candidate,op.kind,op.params,{allowTerrain:true,allowExisting:true});}else if(['insertPrefab','restyle'].includes(op.type)){flush();candidate.operations(semantic(candidate,[op]),{allowTerrain:true,allowExisting:true});}else batch.push(op);}flush();previewOperations=proposalDiff(site,candidate);preview=candidate;previewAnchor={id:crypto.randomUUID(),revision:api.revision,workspaceId:api.workspaceId};return summary();}
- if(action==='reference'){const ref=readReferenceHTML(data.html),ops=referenceOperations(ref,site);resources.addSaved(referenceAssets(ref));site.origin=ref.scene.origin;site.originConfirmed=true;site.base.metadata.originEvidence=ref.scene.origin_evidence;const info=await run('preview',{operations:ops});preview.title=ref.scene.title;return{...info,name:ref.scene.title,reference:{title:ref.scene.title,counts:ref.scene.change_counts,notes:ref.scene.notes,originEvidence:ref.scene.origin_evidence,spec:ref.scene.spec}};}
- if(action==='accept'){if(!preview||!previewOperations||!previewAnchor)throw Error('没有待采用的方案');if(data.proposalId&&data.proposalId!==previewAnchor.id)throw Error('提案已被替换，请重新读取');api.guard({expectedRevision:previewAnchor.revision,workspaceId:previewAnchor.workspaceId});const accepted=acceptedProposal(site,preview,previewOperations,data.policy);api.commit(accepted);preview=null;previewOperations=null;previewAnchor=null;return summary();}
- if(action==='cancel'){if(data.proposalId&&data.proposalId!==previewAnchor?.id)throw Error('提案已被替换，请重新读取');preview=null;previewOperations=null;previewAnchor=null;return summary();}
- if(action==='platform'){const plan=site.platform(data.min,data.max,data.y,data.state,data.spacing);const info=await run('preview',{operations:plan.operations});return{...info,platformDepth:plan.deepest};}
- if(action==='diff')return(preview||site).diff();
- if(action==='heightmap')return site.heightmap(null,Infinity);
- if(action==='buildProject'){if(preview)throw Error('请先采用方案');if(!site.originConfirmed)throw Error('请先确认世界原点');const p=site.project(),changes=[...site.overlay.values()];p.palette=[...p.palette];let air=p.palette.findIndex(s=>s.Name==='minecraft:air');if(air<0){air=p.palette.length;p.palette.push({Name:'minecraft:air'});}if(!changes.length)throw Error('没有待施工的改动');const lo=[0,1,2].map(a=>Math.min(...changes.map(b=>b.pos[a]))),hi=[0,1,2].map(a=>Math.max(...changes.map(b=>b.pos[a]))),used=new Map(),palette=[];p.blocks=changes.map(b=>{const old=b.state<0?air:b.state;if(!used.has(old)){used.set(old,palette.length);palette.push(p.palette[old]);}return{...b,pos:b.pos.map((n,a)=>n-lo[a]),state:used.get(old)};});p.palette=palette;p.size=hi.map((n,a)=>n-lo[a]+1);p.origin=site.origin.map((n,a)=>n+lo[a]);p.entities=[];p.metadata={};return p;}
- if(action==='prefabPackage'){const p=selection(site,data.min,data.max,{keys:data.members,regions:data.regions}),other=new Site({...emptyProject(),name:data.name||p.name,size:p.size});insertPrefab(other,p,[0,0,0],{},{});return gzipSync(strToU8(JSON.stringify({liteSchema:1,site:other.pack(),assets:resources.bundle(other.palette),savedAt:new Date().toISOString()})),{mtime:0});}
- if(action==='sponge'){const p=site.project(),added=[...site.overlay.values()].filter(b=>b.state>=0);if(!added.length)throw Error('没有新增建筑');const min=[0,1,2].map(a=>Math.min(...added.map(b=>b.pos[a]))),max=[0,1,2].map(a=>Math.max(...added.map(b=>b.pos[a])));p.blocks=added.map(b=>({...b,pos:b.pos.map((n,a)=>n-min[a])}));p.size=max.map((n,a)=>n-min[a]+1);p.origin=site.origin.map((n,a)=>n+min[a]);p.entities=[];return exportSponge(p);}
- if(action==='package'){if(preview)throw Error('请先采用预览再保存或导出');site.title=data.title||site.title;return{liteSchema:1,site:site.pack(),assets:assets(),savedAt:new Date().toISOString()};}
- if(action==='workspaceAssets')return assets();
- if(action==='workspaceCheckpoint'){await ensureBaseline();return checkpointPackets.capture(site,{...data,workspaceId:api.workspaceId,revision:api.revision,baseKey});}
- if(action==='baselineReference'){await ensureBaseline();return{baseKey,...(data.cachedKey!==baseKey?{baseline:baseBytes}:{}),revision:api.revision,workspaceId:api.workspaceId};}
- if(action==='draftAttachments'){if(preview)throw Error('请先采用或取消提案');api.guard(data);const pack=assets();if(!assetBytes){assetBytes=gzipSync(strToU8(JSON.stringify(pack)),{level:1,mtime:0});assetKey='assets:'+await fingerprint(assetBytes);}return{workspaceId:api.workspaceId,revision:api.revision,history:captureDraftHistory(site),saveForm:readSaveForm(data.saveForm),assetKey,...(data.cachedAssetKey===assetKey?{}:{assetBytes})};}
- if(action==='draft'){if(preview)throw Error('请先采用预览');site.title=data.title||site.title;await ensureBaseline();const pack=assets();if(!assetBytes){assetBytes=gzipSync(strToU8(JSON.stringify(pack)),{level:1,mtime:0});assetKey='assets:'+await fingerprint(assetBytes);}const{base,...delta}=site.pack();delta.history=captureDraftHistory(site);return{baseKey,baseline:baseBytes,assetKey,assetBytes,payload:gzipSync(strToU8(JSON.stringify({liteSchema:1,site:delta,saveForm:readSaveForm(data.saveForm)})),{level:1,mtime:0})};}
- if(action==='resume'){const base=JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.baseline)))),pkg=JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes))));pkg.site.base=base;if(data.assetBytes)pkg.assets=JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.assetBytes))));return unpackPackage(pkg);}
- if(action==='compressed'){if(data.expectedRevision!==undefined)api.guard(data);const pkg=await run('package',data);return gzipSync(strToU8(JSON.stringify(pkg)),{mtime:0});}
- if(action==='load')return unpackPackage(data.package);
- if(action==='context'){const s=summary(),diff=site.diff();return{schema:'craftstudio-request/1',interface:api.execute({method:'workspace.describe'}).value,request:data.prompt,site:{name:s.name,size:s.size,worldOrigin:s.origin,originConfirmed:s.originConfirmed,sourceBlocks:s.sourceBlocks,protected:s.protected,sourceHash:site.sourceHash},terrain:site.heightmap(data.focus||null),rules:['基于真实场地，不生成参考山坡','默认不得改动原地形、河水、已有建筑和保留区','所有操作使用局部整数坐标；terrain 是原始文件的真实高度数据，null 不得当作平地','stride>1 的地形仅为概览，不能推断中间格的准确高度','输出 JSON {operations:[{type:set/fill/erase/replace,...}]}','调色板是已有材料参考，不限制新方块 ID；未知模型可以后补','生成器都是可选工具，可直接提交任意 set/fill/erase 操作'],objects:design(site).objects,prefabs:design(site).prefabs.map(({blocks,...p})=>p),semanticOperations:['build(kind: house/windmill/wall/roof/stairs/arch/path,params:{at,width,depth,height,state,roof})','insertPrefab(id,at,turn,mirror,count,step)','restyle(id,from,state)'],palette:s.palette,changes:diff,focus:data.focus?site.inspect(data.focus):null};}
- if(action==='bridgeProject'){const exported=await execute('export',{kind:data.kind||'additions'});return{project:importNBT(exported.bytes||exported,'CraftStudio build'),offsetWorld:exported.offsetWorld||null,offsetLocal:exported.offsetLocal||[0,0,0]};}
- if(action==='export'){if(preview)throw Error('请先采用预览');if(data.kind==='full')return exportNBT(site.project());const p=site.project(),changes=[...site.overlay.values()].filter(b=>data.kind==='patch'||b.state>=0);if(!changes.length)throw Error('没有可导出的变更');const lo=[0,1,2].map(a=>Math.min(...changes.map(b=>b.pos[a]))),hi=[0,1,2].map(a=>Math.max(...changes.map(b=>b.pos[a])));let air=p.palette.findIndex(s=>s.Name==='minecraft:air');if(air<0){air=p.palette.length;p.palette.push({Name:'minecraft:air'});}p.blocks=changes.map(b=>({pos:b.pos.map((v,a)=>v-lo[a]),state:b.state<0?air:b.state,...(b.nbt?{nbt:b.nbt}:{})}));p.entities=[];p.metadata={};p.size=hi.map((v,a)=>v-lo[a]+1);return{bytes:exportNBT(p),offsetLocal:lo,offsetWorld:site.originConfirmed?lo.map((v,a)=>v+site.origin[a]):null,containsAir:data.kind==='patch'};}
- throw Error('未知前端任务 '+action);
+import {
+  importNBT,
+  importMCA,
+  exportNBT,
+  emptyProject,
+  tag,
+  maskBlocks,
+} from './minecraft/codec.js';
+import { Site, coordKey, terrainType } from './core/site.js';
+import { Resources } from './materials/resources.js';
+import { buildMesh } from './rendering/mesh.js';
+import { ChunkMesher } from './rendering/chunk-mesh.js';
+import { CreateScene, capturedContraptions } from './rendering/create.js';
+import {
+  readReferenceHTML,
+  referenceAssets,
+  referenceOperations,
+  inferOrigin,
+} from './minecraft/reference.js';
+let libraryResources = [];
+function defaultResources() {
+  const r = new Resources();
+  for (const f of libraryResources) r.addZip(new Uint8Array(f.bytes), f.name);
+  return r;
 }
-let queue=Promise.resolve();
-self.onmessage=event=>{const received=event.data.trace?performance.now():null;queue=queue.then(async()=>{const{id,action,data}=event.data,started=received===null?null:performance.now();try{const value=await run(action,data||{}),timing=started===null?null:{queueWaitMs:started-received,executeMs:performance.now()-started},transfers=[];if(value instanceof Uint8Array)transfers.push(value.buffer);else if(action==='mesh'||action==='meshChunks'||action==='createScene'||action==='assetPreview'||action==='selectionPreview'||action==='prepareConstruction'){const buckets=action==='mesh'||action==='assetPreview'||action==='selectionPreview'||action==='prepareConstruction'?value.buckets:action==='meshChunks'?value.chunks.flatMap(c=>c.buckets):Object.values(value.definitions).flatMap(g=>g.buckets);if(action==='assetPreview')buckets.push(...Object.values(value.motions?.definitions||{}).flatMap(m=>m.buckets));for(const b of buckets)for(const a of[b.positions,b.normals,b.colors,b.uv])if(a)transfers.push(a.buffer);}else if(value?.bytes instanceof Uint8Array)transfers.push(value.bytes.buffer);if(action==='selectionPreview'&&ArrayBuffer.isView(value.members))transfers.push(value.members.buffer);self.postMessage({id,value,...(timing?{performance:timing}:{})},transfers);}catch(error){self.postMessage({id,error:error.message});}});};
+let brushDescriptors = null;
+let site = new Site(emptyProject()),
+  resources = new Resources(),
+  preview = null,
+  previewOperations = null,
+  previewAnchor = null;
+let isolatedKeys = null,
+  isolatedIds = null,
+  isolationVersion = 0,
+  isolationContext = null,
+  isolationStack = [];
+let constructionDraft = null;
+let baseBytes = null,
+  baseKey = crypto.randomUUID();
+let cachedAssets = null,
+  assetsSite = null,
+  assetsResources = null,
+  assetsVersion = -1,
+  assetsPaletteLength = -1,
+  assetsPartialVersion = -1,
+  assetBytes = null,
+  assetKey = null;
+function assets() {
+  if (
+    assetsSite !== site ||
+    assetsResources !== resources ||
+    assetsVersion !== resources.version ||
+    assetsPaletteLength !== site.palette.length ||
+    assetsPartialVersion !== resources.partialVersion
+  ) {
+    const extra = [
+      ...capturedContraptions(site).items.flatMap((c) => c.palette),
+      ...decorations(site, resources).map((d) => d.state),
+    ];
+    cachedAssets = resources.bundle([...site.palette, ...extra]);
+    assetsSite = site;
+    assetsResources = resources;
+    assetsVersion = resources.version;
+    assetsPaletteLength = site.palette.length;
+    assetsPartialVersion = resources.partialVersion;
+    assetBytes = null;
+    assetKey = null;
+  }
+  return cachedAssets;
+}
+const mesher = new ChunkMesher(),
+  checkpointPackets = new CheckpointPackets();
+const createScene = new CreateScene();
+let decorativeSite = null,
+  decorativeVersion = -1;
+const decorativeSent = new Set(),
+  visualSignatures = new Map();
+const summary = () => ({
+  revision: api.revision,
+  workspaceId: api.workspaceId,
+  ...(preview || site).summary(),
+  design: {
+    ...(preview || site).design,
+    componentDefinitions: (preview || site).design.componentDefinitions?.map((d) => ({
+      ...d,
+      blocks: undefined,
+      blockCount: d.blocks.length,
+    })),
+    objects: (preview || site).design.objects.map((o) => ({
+      ...o,
+      componentRecords: undefined,
+      componentTrackedCells: o.componentRecords?.length,
+      ...(o.generation
+        ? {
+            generation: {
+              ...o.generation,
+              records: undefined,
+              trackedCells: o.generation.records?.length || 0,
+            },
+          }
+        : {}),
+    })),
+  },
+  preview: !!preview,
+  proposal: previewAnchor ? { ...previewAnchor } : null,
+  view: {
+    isolated: !!isolatedKeys,
+    contextVisible: !!isolatedKeys && !!isolationContext?.contextVisible,
+    isolatedCells: isolatedKeys?.size || 0,
+    depth: isolatedKeys ? isolationStack.length + 1 : 0,
+    objectNames: isolatedIds
+      ? (preview || site).design.objects
+          .filter((o) => isolatedIds.includes(o.id))
+          .map((o) => o.name)
+      : [],
+    editBounds: isolationContext?.includeNew
+      ? isolationKeys(preview || site, isolationContext).bounds
+      : null,
+  },
+  resources: resources.summary(),
+});
+async function fingerprint(bytes) {
+  if (!self.crypto?.subtle) throw Error('浏览器不支持文件 SHA-256 校验，请使用新版 Edge/Chrome');
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+    .map((n) => n.toString(16).padStart(2, '0'))
+    .join('');
+}
+async function ensureBaseline() {
+  if (!baseBytes) {
+    baseBytes = gzipSync(strToU8(JSON.stringify(site.base)), { level: 1, mtime: 0 });
+    baseKey = 'baseline:' + (await fingerprint(baseBytes));
+  }
+}
+function hydrate(project) {
+  self.postMessage({ progress: '正在校验方块与建立区块索引' });
+  isolatedKeys = null;
+  isolatedIds = null;
+  isolationContext = null;
+  isolationStack = [];
+  isolationVersion++;
+  site = new Site(project);
+  resources = defaultResources();
+  const inferred = inferOrigin(project);
+  if (inferred) {
+    site.origin = inferred.origin;
+    site.originConfirmed = inferred.consistent;
+    site.base.metadata.originEvidence = inferred;
+  }
+  baseBytes = null;
+  baseKey = site.sourceHash || crypto.randomUUID();
+  preview = null;
+  previewOperations = null;
+  previewAnchor = null;
+  return summary();
+}
+function unpackPackage(pkg) {
+  self.postMessage({ progress: '正在恢复设计与区块索引' });
+  isolatedKeys = null;
+  isolatedIds = null;
+  isolationContext = null;
+  isolationStack = [];
+  isolationVersion++;
+  if (pkg.liteSchema !== 1) throw Error('未知轻量工程版本');
+  site = Site.unpack(pkg.site);
+  resources = defaultResources();
+  resources.addSaved(pkg.assets || {});
+  baseBytes = null;
+  baseKey = site.sourceHash || crypto.randomUUID();
+  preview = null;
+  previewOperations = null;
+  previewAnchor = null;
+  return { ...summary(), saveForm: readSaveForm(pkg.saveForm || pkg.site.saveForm) };
+}
+const api = new DesignAPI({
+  getSite: () => site,
+  resources: () => resources,
+  onChange: () => {
+    mesher.changed(site);
+    createScene.changedCells(site);
+  },
+});
+async function proposalRequest(request) {
+  try {
+    const p = request.params || {},
+      method = request.method;
+    let value;
+    if (method === 'proposal.prepare') {
+      api.guard(p);
+      if (p.space && p.space !== 'local')
+        throw Error('提案使用局部坐标；世界坐标可通过自由编辑事务转换');
+      await execute('preview', { operations: api.operations(site, p) });
+      value = { ...previewAnchor, summary: summary() };
+    } else if (method === 'proposal.inspect') {
+      if (!previewAnchor) throw Error('没有待检查的提案');
+      const start = p.cursor === undefined ? 0 : Number(p.cursor),
+        limit = Math.min(20000, p.limit ?? 1000);
+      if (!Number.isSafeInteger(start) || start < 0 || !Number.isInteger(limit) || limit < 1)
+        throw Error('提案分页参数无效');
+      value = {
+        ...previewAnchor,
+        summary: summary(),
+        operations: previewOperations.slice(start, start + limit),
+        nextCursor: start + limit < previewOperations.length ? String(start + limit) : null,
+        total: previewOperations.length,
+      };
+    } else {
+      if (!p.proposalId || p.proposalId !== previewAnchor?.id)
+        throw Error('提案已被替换或结束，请重新读取');
+      if (method === 'proposal.commit') api.guard(p);
+      value = await execute(method === 'proposal.commit' ? 'accept' : 'cancel', p);
+    }
+    return {
+      schema: 'craftstudio-design/1',
+      id: request.id ?? null,
+      ok: true,
+      workspaceId: api.workspaceId,
+      revision: api.revision,
+      value,
+    };
+  } catch (e) {
+    return {
+      schema: 'craftstudio-design/1',
+      id: request.id ?? null,
+      ok: false,
+      workspaceId: api.workspaceId,
+      revision: api.revision,
+      error: { code: e.code || 'PROPOSAL_REJECTED', message: e.message, details: e.details || {} },
+    };
+  }
+}
+async function run(action, data) {
+  if (action === 'toolContext') {
+    if (!baseKey?.startsWith('baseline:')) await ensureBaseline();
+    const value = {
+      baseline: baseKey,
+      header: site.packHeader(),
+      size: site.size,
+      overlay: [...site.overlay].sort(([a], [b]) => a - b),
+    };
+    const context = { workspaceId: api.workspaceId, revision: api.revision };
+    return { ...context, key: await fingerprint(strToU8(JSON.stringify(value))) };
+  }
+  if (action === 'engineMountSource' && self.enginePersistence)
+    return self.enginePersistence.mountSource({ site }, data);
+  if (action === 'sourceResidency')
+    return (
+      site.baseline?.stats() || {
+        mode: 'memory',
+        totalBlocks: site.cells.size,
+        residentChunks: site.baseChunks.size,
+      }
+    );
+  if (action === 'engineCapture' && self.enginePersistence)
+    return self.enginePersistence.capture(
+      { site, api, resources, libraryResources, baseKey },
+      data,
+    );
+  if (action === 'engineRestore' && self.enginePersistence) {
+    const restored = self.enginePersistence.restore(data);
+    site = restored.site;
+    libraryResources = restored.files;
+    resources = defaultResources();
+    resources.addSaved(restored.assets);
+    baseKey = restored.baseKey;
+    baseBytes = null;
+    api.workspaceId = restored.workspaceId;
+    api.revision = restored.revision;
+    api.receipts = new Map(restored.receipts);
+    api.transactions.clear();
+    preview = null;
+    previewOperations = null;
+    previewAnchor = null;
+    constructionDraft = null;
+    isolatedKeys = null;
+    isolatedIds = null;
+    isolationContext = null;
+    isolationStack = [];
+    isolationVersion++;
+    checkpointPackets.previous = null;
+    return summary();
+  }
+  if (action === 'undo' && preview) return execute('cancel', {});
+  if (action === 'api') {
+    if (
+      ['proposal.prepare', 'proposal.inspect', 'proposal.commit', 'proposal.cancel'].includes(
+        data.method,
+      )
+    )
+      return proposalRequest(data);
+    if (
+      [
+        'construction.prepare',
+        'construction.commit',
+        'construction.cancel',
+        'design.inspect',
+        'view.isolate',
+      ].includes(data.method)
+    ) {
+      try {
+        if (data.params?.expectedRevision !== undefined) api.guard(data.params);
+        const value = await execute(
+          data.method === 'construction.cancel'
+            ? 'cancelConstruction'
+            : data.method === 'construction.prepare'
+              ? 'prepareConstruction'
+              : data.method === 'design.inspect'
+                ? 'designInspect'
+                : data.method === 'view.isolate'
+                  ? 'viewIsolation'
+                  : 'commitConstruction',
+          data.params || {},
+        );
+        if (data.method === 'construction.prepare' && !data.params?.includeMesh) {
+          delete value.buckets;
+          delete value.removedBuckets;
+          delete value.textures;
+        }
+        return {
+          schema: 'craftstudio-design/1',
+          id: data.id ?? null,
+          ok: true,
+          workspaceId: api.workspaceId,
+          revision: api.revision,
+          value,
+        };
+      } catch (e) {
+        return {
+          schema: 'craftstudio-design/1',
+          id: data.id ?? null,
+          ok: false,
+          workspaceId: api.workspaceId,
+          revision: api.revision,
+          error: { code: 'CONSTRUCTION_REJECTED', message: e.message, details: {} },
+        };
+      }
+    }
+    if (
+      preview &&
+      [
+        'views.put',
+        'views.remove',
+        'measurements.put',
+        'measurements.remove',
+        'edit.brush',
+        'edit.apply',
+        'transaction.commit',
+        'selection.transform',
+        'history.undo',
+        'history.redo',
+        'objects.put',
+        'collections.put',
+        'collections.remove',
+        'palettes.put',
+        'palettes.remove',
+        'workplanes.put',
+        'workplanes.remove',
+      ].includes(data.method)
+    )
+      return {
+        schema: 'craftstudio-design/1',
+        id: data.id ?? null,
+        revision: api.revision,
+        workspaceId: api.workspaceId,
+        ok: false,
+        error: { code: 'PREVIEW_ACTIVE', message: '请先采用或取消预览' },
+      };
+    const reply = api.execute(data);
+    if (reply.ok && data.method === 'workspace.describe') {
+      reply.value.previewActive = !!preview;
+      reply.value.view = {
+        isolated: !!isolatedKeys,
+        isolatedCells: isolatedKeys?.size || 0,
+        depth: isolatedKeys ? isolationStack.length + 1 : 0,
+        editBounds: isolationContext?.includeNew
+          ? isolationKeys(site, isolationContext).bounds
+          : null,
+      };
+      reply.value.proposal = previewAnchor ? { ...previewAnchor } : null;
+      reply.value.methods.push(
+        'proposal.prepare',
+        'proposal.inspect',
+        'proposal.commit',
+        'proposal.cancel',
+        'construction.prepare',
+        'construction.commit',
+        'construction.cancel',
+        'design.inspect',
+        'view.isolate',
+      );
+    }
+    return reply;
+  }
+  const previousAnchor = previewAnchor,
+    previousSite = site,
+    result = await execute(action, data);
+  if (
+    ['import', 'load', 'resume'].includes(action) &&
+    !(action === 'import' && /\.html?$/i.test(data.name || ''))
+  )
+    await ensureBaseline();
+  if (previousSite !== site) {
+    isolatedKeys = null;
+    isolatedIds = null;
+    isolationContext = null;
+    isolationStack = [];
+    isolationVersion++;
+  }
+  if (
+    [
+      'import',
+      'load',
+      'resume',
+      'edit',
+      'undo',
+      'redo',
+      'origin',
+      'protect',
+      'unprotect',
+      'studio',
+      'resources',
+      'reference',
+    ].includes(action)
+  )
+    api.changed(previousSite !== site || ['import', 'load', 'resume'].includes(action));
+  if (previewAnchor && previewAnchor !== previousAnchor) {
+    previewAnchor.revision = api.revision;
+    previewAnchor.workspaceId = api.workspaceId;
+  }
+  if (result?.sourceBlocks !== undefined) {
+    result.proposal = previewAnchor ? { ...previewAnchor } : null;
+    result.revision = api.revision;
+    result.workspaceId = api.workspaceId;
+  }
+  return result;
+}
+async function execute(action, data) {
+  if (action === 'import') {
+    self.postMessage({ progress: '正在解析文件结构' });
+    const bytes = new Uint8Array(data.bytes);
+    if (/\.json$/i.test(data.name)) {
+      const obj = JSON.parse(new TextDecoder().decode(bytes));
+      return obj.liteSchema ? unpackPackage(obj) : hydrate(obj);
+    }
+    if (/\.craftlite$/i.test(data.name))
+      return unpackPackage(JSON.parse(strFromU8(gunzipSync(bytes))));
+    if (/\.html?$/i.test(data.name))
+      return run('reference', { html: new TextDecoder().decode(bytes) });
+    const p = /\.mca$/i.test(data.name)
+      ? importMCA(bytes, data.name, data.min, data.max)
+      : importNBT(bytes, data.name.replace(/\.[^.]+$/, ''));
+    p.metadata.sourceHash = await fingerprint(bytes);
+    return hydrate(p);
+  }
+  if (action === 'resourceArchive') return resourceArchive(data.bytes, data.name);
+  if (action === 'resourceLibrary') {
+    const saved = resources.saved;
+    libraryResources = data.files;
+    resources = defaultResources();
+    resources.addSaved(saved);
+    api.changed();
+    return summary();
+  }
+  if (action === 'resources') {
+    for (const file of data.files) resources.addZip(new Uint8Array(file.bytes), file.name);
+    return summary();
+  }
+  if (action === 'assets') {
+    resources.addSaved(data.pack);
+    return summary();
+  }
+  if (action === 'prepareConstruction') {
+    if (preview) throw Error('请先采用或取消提案预览');
+    const materialCatalogue = catalogue(site, resources),
+      available = new Set(materialCatalogue.map((i) => i.id)),
+      plan =
+        data.type === 'terrain'
+          ? terrainPlan(site, data.config)
+          : data.type === 'feature'
+            ? featurePlan(site, { ...data.config, available: [...available] })
+            : data.type === 'designer'
+              ? designerPlan(
+                  site,
+                  data.config,
+                  available,
+                  new Map(materialCatalogue.map((i) => [i.id, i])),
+                )
+              : data.config.editGuideId
+                ? editSketchPlan(site, data.config, available)
+                : geometryPlan(site, data.config, available),
+      cells = new Map(),
+      removed = new Map(),
+      palette = [],
+      ids = new Map(),
+      counts = { place: 0, replace: 0, remove: 0, cut: 0, fill: 0 },
+      conflicts = [];
+    if (data.type === 'geometry' && data.config.guidesOnly && !data.config.editGuideId)
+      plan.operations = [];
+    for (const op of new Map(plan.operations.map((op) => [coordKey(...op.pos), op])).values()) {
+      const key = coordKey(...op.pos),
+        before = site.at(op.pos);
+      if (
+        JSON.stringify(before ? site.palette[before.state] : null) ===
+          JSON.stringify(op.state || null) &&
+        (op.nbt === undefined ||
+          JSON.stringify(before?.nbt || null) === JSON.stringify(op.nbt || null))
+      )
+        continue;
+      try {
+        if (
+          site.design.objects.some(
+            (o) => o.locked && op.pos.every((n, a) => n >= o.min[a] && n <= o.max[a]),
+          )
+        )
+          throw Error('这个对象已锁定');
+        site.allowed(op.pos, data.policy || {});
+      } catch (e) {
+        if (conflicts.length < 20) conflicts.push({ pos: op.pos, message: e.message });
+      }
+      if (op.state) {
+        const text = JSON.stringify(op.state);
+        if (!ids.has(text)) {
+          ids.set(text, palette.length);
+          palette.push(op.state);
+        }
+        cells.set(key, { pos: op.pos, state: ids.get(text) });
+        removed.delete(key);
+        before ? counts.replace++ : counts.place++;
+        if (terrainType(op.state.Name) === 'ground' && !before) counts.fill++;
+      } else {
+        cells.delete(key);
+        if (before) {
+          const text = JSON.stringify(site.palette[before.state]);
+          if (!ids.has(text)) {
+            ids.set(text, palette.length);
+            palette.push(site.palette[before.state]);
+          }
+          removed.set(key, { pos: op.pos, state: ids.get(text) });
+          counts.remove++;
+          if (terrainType(site.palette[before.state].Name) === 'ground') counts.cut++;
+        }
+      }
+    }
+    const fake = { cells, overlay: new Map(), palette },
+      mesh = buildMesh(fake, resources),
+      red = buildMesh({ cells: removed, overlay: new Map(), palette }, resources),
+      textures = {};
+    for (const b of mesh.buckets) if (b.texture) textures[b.texture] = resources.texture(b.texture);
+    const id = crypto.randomUUID();
+    constructionDraft = {
+      id,
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+      plan,
+      config: data.config,
+      type: data.type,
+    };
+    return {
+      id,
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+      guide: plan.guide,
+      guideGroups: plan.guideGroups || null,
+      counts,
+      regeneration: plan.regeneration || null,
+      componentUpdate: plan.componentUpdate || null,
+      materialChange: plan.materialChange || null,
+      arraySpacing: plan.arraySpacing || null,
+      pathArray: plan.pathArray
+        ? { ...plan.pathArray, placements: undefined, count: plan.pathArray.placements.length }
+        : null,
+      supports: plan.supports || null,
+      surfaceFit: plan.surfaceFit || null,
+      warnings: plan.warnings,
+      usedRoles: plan.usedRoles,
+      scope: plan.scope || null,
+      closure: plan.closure || null,
+      overlap: plan.overlap ? { ...plan.overlap, allPositions: undefined } : null,
+      blocked: plan.blocked || null,
+      conflicts,
+      buckets: mesh.buckets,
+      removedBuckets: red.buckets,
+      textures,
+      triangles: mesh.triangles,
+    };
+  }
+  if (action === 'cancelConstruction') {
+    const cancelled = constructionDraft?.id === data.id;
+    if (cancelled) constructionDraft = null;
+    return { cancelled };
+  }
+  if (action === 'commitConstruction') {
+    if (preview) throw Error('请先采用或取消提案预览');
+    const draft = constructionDraft;
+    if (draft?.plan.blocked) throw Error(draft.plan.blocked.message);
+    if (!draft || draft.id !== data.id) throw Error('预览已更新，请重新确认');
+    if (draft.revision !== api.revision || draft.workspaceId !== api.workspaceId)
+      throw Error('场景已变化，请重新生成预览');
+    const history = site.undo.length,
+      previousDesign = structuredClone(site.design),
+      captured = captureGeneration(site, draft.plan.operations);
+    site.operations(draft.plan.operations, data.policy || {});
+    if (site.undo.length === history) {
+      site.undo.push({ overlay: site.overlay, size: [...site.size], design: previousDesign });
+      site.redo = [];
+    }
+    if (draft.plan.design) site.design = structuredClone(draft.plan.design);
+    site.design.guides ||= [];
+    if (draft.plan.guide.length && !draft.plan.design)
+      site.design.guides.push({
+        id: draft.id,
+        name: data.name || '辅助图形',
+        points: draft.plan.guide,
+        ...(draft.plan.guideGroups ? { paths: draft.plan.guideGroups } : {}),
+        recipe: structuredClone(draft.config),
+        revision: 0,
+      });
+    if (
+      !draft.plan.design &&
+      ['feature', 'geometry'].includes(draft.type) &&
+      !draft.config.guidesOnly
+    ) {
+      const object = generatedObject(site, captured, {
+        type: draft.type,
+        config: draft.config,
+        guideId: draft.id,
+        name: data.name || '生成特征',
+      });
+      if (object) site.design.objects.push(object);
+    }
+    mesher.changed(site);
+    createScene.changedCells(site);
+    constructionDraft = null;
+    api.changed();
+    return summary();
+  }
+  if (action === 'detachGeneration') {
+    const object = site.design.objects.find((o) => o.id === data.id);
+    if (!object) throw Error('对象不存在');
+    if (object.locked) throw Error('对象已锁定');
+    site.undo.push({
+      overlay: site.overlay,
+      size: [...site.size],
+      design: structuredClone(site.design),
+    });
+    site.redo = [];
+    object.generation = { ...object.generation, detached: true };
+    object.kind = 'voxel';
+    api.changed();
+    return summary();
+  }
+  if (action === 'summary') return summary();
+  if (action === 'viewIsolation') {
+    if (typeof data.contextVisible === 'boolean') {
+      if (!isolationContext) throw Error('请先进入局部视图');
+      isolationContext.contextVisible = data.contextVisible;
+    } else if (data.clear) {
+      isolatedKeys = null;
+      isolatedIds = null;
+      isolationContext = null;
+      isolationStack = [];
+    } else if (data.pop) {
+      const previous = isolationStack.pop();
+      isolationContext = previous || null;
+      isolatedIds = previous?.objectIds?.length ? previous.objectIds : null;
+      isolatedKeys = previous ? isolationKeys(site, previous).keys : null;
+    } else {
+      const objects = selectedObjects(site, data, { allowLocked: true });
+      if (data.push && isolationContext) isolationStack.push(structuredClone(isolationContext));
+      isolationContext = {
+        objectIds: data.objectIds || [],
+        keys: objects.flatMap((o) => o.cells),
+        selection: data.selection ? { min: data.selection.min, max: data.selection.max } : null,
+        includeNew: !!data.includeNew,
+        contextVisible: false,
+      };
+      isolatedIds = isolationContext.objectIds.length ? isolationContext.objectIds : null;
+      isolatedKeys = isolationKeys(site, isolationContext).keys;
+    }
+    isolationVersion++;
+    return {
+      isolated: !!isolatedKeys,
+      contextVisible: !!isolationContext?.contextVisible,
+      cells: isolatedKeys?.size || 0,
+      depth: isolatedKeys ? isolationStack.length + 1 : 0,
+    };
+  }
+  if (action === 'designInspect')
+    return {
+      ...designInspection(site, data),
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+    };
+  if (action === 'constructionSurface') {
+    const matches = selectionPredicate(data.selection, { axes: [0, 2] }),
+      map = surfaceColumns(site),
+      values = [];
+    for (let x = data.min[0]; x <= data.max[0]; x++)
+      for (let z = data.min[1]; z <= data.max[1]; z++) {
+        const c = map.get(x + 4096 * z);
+        if (c?.ground !== null && c?.ground !== undefined && matches([x, c.ground, z]))
+          values.push(c.ground);
+      }
+    values.sort((a, b) => a - b);
+    return { median: values.length ? values[Math.floor(values.length / 2)] : null };
+  }
+  if (action === 'rename') {
+    if (typeof data.name !== 'string' || !data.name.trim()) throw Error('请输入工程名称');
+    site.title = data.name.trim();
+    return summary();
+  }
+
+  if (action === 'pasteCheck') {
+    const result = { place: 0, replace: 0, skip: 0, locked: 0 };
+    for (const op of insertOperations(data.prefab, data.at, { turn: data.turn })) {
+      const exists = !!site.at(op.pos);
+      if ((data.overlap === 'empty' && exists) || (data.overlap === 'replace' && !exists)) {
+        result.skip++;
+        continue;
+      }
+      exists ? result.replace++ : result.place++;
+      try {
+        if (
+          site.design.objects.some(
+            (o) => o.locked && op.pos.every((n, a) => n >= o.min[a] && n <= o.max[a]),
+          )
+        )
+          throw Error('锁定');
+        site.allowed(op.pos, {
+          ...data.policy,
+          allowExisting: data.overlap === 'empty' ? data.policy?.allowExisting : true,
+        });
+      } catch {
+        result.locked++;
+      }
+    }
+    return result;
+  }
+  if (action === 'copySelection') {
+    if (data.expectedRevision !== undefined) api.guard(data);
+    return selection(site, data.min, data.max, { keys: data.members, regions: data.regions });
+  }
+  if (action === 'selectionPreview') {
+    if (data.expectedRevision !== undefined) api.guard(data);
+    let view;
+    if (data.prefab) {
+      const p = data.prefab,
+        fake = new Site({ ...emptyProject(), size: p.size, palette: [], blocks: [] });
+      for (const b of p.blocks) {
+        const state = fake.state(b.state);
+        fake.cells.set(coordKey(...b.pos), { pos: b.pos, state });
+      }
+      view = {
+        site: fake,
+        size: p.size,
+        count: p.blocks.length,
+        members: p.blocks.map((b) => b.pos),
+      };
+    } else
+      view = selectionPreviewSite(site, data.min, data.max, {
+        keys: data.members,
+        regions: data.regions,
+      });
+    const mesh = buildMesh(view.site, resources, { geometryOnly: !!data.geometryOnly }),
+      textures = {};
+    for (const b of mesh.buckets)
+      if (!data.geometryOnly && b.texture) textures[b.texture] = resources.texture(b.texture);
+    return {
+      ...mesh,
+      textures,
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+      size: view.size,
+      count: view.count,
+      members: data.compactMembers ? packMemberCoordinates(view.members) : view.members,
+    };
+  }
+  if (action === 'assetCatalogue') return catalogue(site, resources);
+  if (action === 'assetPreview') {
+    const state = data.state,
+      fake = new Site({
+        ...emptyProject(),
+        palette: [state],
+        blocks: [{ pos: [0, 0, 0], state: 0 }],
+      });
+    const mesh = buildMesh(fake, resources, { excludeWholeKinetics: true }),
+      motions = new CreateScene().render(fake, resources, {
+        enabled: true,
+        mode: 'after',
+        cut: 4095,
+        showExisting: true,
+      }),
+      textures = { ...motions.textures };
+    for (const b of mesh.buckets) if (b.texture) textures[b.texture] = resources.texture(b.texture);
+    return { ...mesh, motions, textures, approximate: resources.model(state).missing };
+  }
+
+  if (action === 'studio') {
+    if (data.expectedRevision !== undefined) api.guard(data);
+    if (preview) throw Error('请先采用或取消预览');
+    const beforeDesign = structuredClone(design(site)),
+      beforeOverlay = site.overlay,
+      beforeHistory = site.undo.length;
+    const d = design(site),
+      policy = data.policy || { allowTerrain: false, allowExisting: false };
+    if (data.command === 'build') buildOnSite(site, data.kind, data.params, policy);
+    if (data.command === 'paste') pastePrefab(site, data.prefab, data.at, data, policy);
+    if (data.command === 'transform') transformSelection(site, data, policy);
+    if (data.command === 'prefabImport') {
+      const p = data.prefab;
+      if (p.schema !== 'craftstudio-prefab/1' || !Array.isArray(p.blocks))
+        throw Error('不是构件文件');
+      p.id = crypto.randomUUID();
+      insertOperations(p, [0, 0, 0]);
+      d.prefabs.push(p);
+    }
+    if (data.command === 'component') {
+      const pkg = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes)))),
+        other = Site.unpack(pkg.site),
+        p = selection(
+          other,
+          [0, 0, 0],
+          other.size.map((n) => n - 1),
+          { all: true },
+        );
+      p.name = other.title;
+      insertPrefab(site, p, data.at, data, policy);
+      resources.addSaved(pkg.assets || {});
+    }
+    if (data.command === 'prefab') {
+      const p = selection(site, data.min, data.max, { keys: data.members, regions: data.regions });
+      p.name = data.name || '新构件';
+      p.id = crypto.randomUUID();
+      d.prefabs.push(p);
+    }
+    if (data.command === 'insert') {
+      const p = d.prefabs.find((p) => p.id === data.id);
+      if (!p) throw Error('找不到构件');
+      insertPrefab(site, p, data.at, data, policy);
+    }
+    if (data.command === 'object') {
+      const o = d.objects.find((o) => o.id === data.id);
+      if (!o) throw Error('找不到对象');
+      for (const k of ['name', 'hidden', 'locked']) if (k in data) o[k] = data[k];
+    }
+    if (data.command === 'deleteSelection') {
+      const chosen = selection(site, data.min, data.max, {
+          keys: data.members,
+          regions: data.regions,
+        }),
+        keys = new Set(chosen.blocks.map((b) => coordKey(...b.pos.map((n, a) => n + data.min[a]))));
+      site.operations(
+        chosen.blocks.map((b) => {
+          const pos = b.pos.map((n, a) => n + data.min[a]);
+          return { type: 'erase', min: pos, max: pos, reason: '删除选择' };
+        }),
+        policy,
+      );
+      d.objects = d.objects.filter((o) => !o.cells?.length || !o.cells.every((k) => keys.has(k)));
+    }
+    if (data.command === 'register') {
+      const selected = selection(site, data.min, data.max, {
+        keys: data.members,
+        regions: data.regions,
+      });
+      d.objects.push({
+        id: crypto.randomUUID(),
+        name: data.name || '对象',
+        min: data.min,
+        max: data.max,
+        cells: selected.blocks.map((b) => coordKey(...b.pos.map((n, a) => n + data.min[a]))),
+        kind: 'selection',
+      });
+    }
+    if (data.command === 'animation') d.animations[data.id] = data.animation;
+    if (data.command === 'camera') d.cameras.push(data.camera);
+    if (data.command === 'lighting') d.lighting = data.value;
+    if (data.command === 'crop') {
+      const p = cropProject(site, data.min, data.max);
+      return hydrate(p);
+    }
+    if (data.command === 'merge') {
+      const p = importNBT(new Uint8Array(data.bytes), data.name);
+      if (p.entities?.length) throw Error('带实体蓝图请单独打开，合并不会隐式丢弃实体');
+      const ops = p.blocks.map((b) => ({
+        type: 'set',
+        pos: b.pos.map((n, a) => n + data.at[a]),
+        state: p.palette[b.state],
+        nbt: b.nbt,
+        reason: '合并 ' + data.name,
+      }));
+      if (data.applyAir && p.metadata?.placementMask)
+        for (const pos of maskBlocks(p.metadata.placementMask))
+          ops.push({
+            type: 'erase',
+            min: pos.map((n, a) => n + data.at[a]),
+            max: pos.map((n, a) => n + data.at[a]),
+            reason: '蓝图显式空气',
+          });
+      site.operations(ops, policy);
+    }
+    if (data.command === 'demo') {
+      for (const [i, kind] of ['house', 'windmill'].entries()) {
+        const place = findSite(site, 13, 11, d.objects);
+        buildOnSite(
+          site,
+          kind,
+          {
+            at: place.at,
+            width: 13,
+            depth: 11,
+            height: 5,
+            name: i ? '风车庭院住宅' : '沿坡石木住宅',
+            state: { Name: i ? 'minecraft:white_concrete' : 'minecraft:stone_bricks' },
+            roof: { Name: i ? 'minecraft:cherry_planks' : 'minecraft:dark_oak_planks' },
+          },
+          policy,
+        );
+      }
+      site.title = '真实场地 · 双住宅设计';
+    }
+    if (
+      site.overlay === beforeOverlay &&
+      site.undo.length === beforeHistory &&
+      JSON.stringify(beforeDesign) !== JSON.stringify(site.design)
+    ) {
+      site.undo.push({ overlay: site.overlay, size: [...site.size], design: beforeDesign });
+      site.redo = [];
+    }
+    mesher.changed(site);
+    createScene.changedCells(site);
+    return summary();
+  }
+
+  if (action === 'mesh') {
+    const current = preview || site;
+    const result = buildMesh(current, resources, data);
+    const keys = [...new Set(result.buckets.map((b) => b.texture).filter(Boolean))],
+      textures = Object.fromEntries(keys.map((k) => [k, resources.texture(k)]));
+    return { ...result, textures };
+  }
+  if (action === 'meshChunks') {
+    if (isolationContext) isolatedKeys = isolationKeys(preview || site, isolationContext).keys;
+    if (isolatedIds) {
+      const list = (preview || site).design.objects.filter((o) => isolatedIds.includes(o.id));
+      if (list.length)
+        isolatedKeys = isolationKeys(
+          preview || site,
+          isolationContext || { objectIds: isolatedIds },
+        ).keys;
+      else {
+        isolatedKeys = null;
+        isolatedIds = null;
+        isolationContext = null;
+        isolationStack = [];
+        isolationVersion++;
+      }
+    }
+    return mesher.render(preview || site, resources, {
+      ...data,
+      isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
+      isolationVersion,
+      hidden: (preview || site).design.objects
+        .filter((o) => objectHidden((preview || site).design, o))
+        .map((o) => ({ min: o.min, max: o.max, cells: o.cells })),
+      animated: Object.entries(data.excludeWholeKinetics ? (preview || site).design.animations : {})
+        .filter(
+          ([id, a]) =>
+            a.min &&
+            a.max &&
+            selection(preview || site, a.min, a.max).blocks.some((b) =>
+              /^create:(windmill_bearing|mechanical_bearing|white_sail|black_sail)$/.test(
+                b.state.Name,
+              ),
+            ),
+        )
+        .filter(([id, a]) => a.min && a.max)
+        .map(([id, a]) => ({
+          min: a.min,
+          max: a.max,
+          cells: (preview || site).design.objects.find((o) => o.id === id)?.cells,
+        })),
+    });
+  }
+  if (action === 'createScene') {
+    const current = preview || site,
+      result = createScene.render(current, resources, data);
+    if (result.reset || decorativeSite !== current || decorativeVersion !== resources.version) {
+      decorativeSite = current;
+      decorativeVersion = resources.version;
+      decorativeSent.clear();
+      visualSignatures.clear();
+    }
+    if (data.enabled && data.showExisting !== false && data.mode !== 'removed')
+      for (const d of decorations(current, resources)) {
+        if (d.position[1] > data.cut) continue;
+        const model = 'decoration:' + d.id;
+        if (!decorativeSent.has(model)) {
+          const fake = {
+              cells: new Map([[0, { pos: [0, 0, 0], state: 0 }]]),
+              overlay: new Map(),
+              palette: [d.state],
+            },
+            mesh = buildMesh(fake, resources);
+          for (const b of mesh.buckets)
+            for (let i = 0; i < b.positions.length; i++) b.positions[i] -= 0.5;
+          result.definitions[model] = mesh;
+          decorativeSent.add(model);
+          for (const b of mesh.buckets)
+            if (b.texture) result.textures[b.texture] = resources.texture(b.texture);
+        }
+        result.instances.push({ ...d, model, kind: 'decoration' });
+      }
+    if (data.mode !== 'before')
+      result.instances = result.instances.filter(
+        (d) =>
+          !current.design.objects.some((o) =>
+            hiddenObjectContains(current.design, o, d.owner || d.position.map(Math.floor)),
+          ),
+      );
+    result.overrides = {};
+    result.visuals = [];
+    if (data.enabled && data.mode !== 'before')
+      for (const [id, a] of Object.entries(current.design.animations)) {
+        if (
+          !a.min ||
+          !a.max ||
+          current.design.objects.some((o) => o.id === id && objectHidden(current.design, o))
+        )
+          continue;
+        const region = selection(current, a.min, a.max);
+        if (
+          !region.blocks.some((b) =>
+            /^create:(windmill_bearing|mechanical_bearing|white_sail|black_sail)$/.test(
+              b.state.Name,
+            ),
+          )
+        )
+          continue;
+        const model = 'visual:' + id,
+          signature = JSON.stringify(a);
+        if (
+          visualSignatures.get(model)?.overlay !== current.overlay ||
+          visualSignatures.get(model)?.signature !== signature
+        ) {
+          const p = selection(current, a.min, a.max),
+            fake = new Site({ ...emptyProject(), size: p.size, palette: [], blocks: [] });
+          for (const b of p.blocks) {
+            const state = fake.state(b.state);
+            fake.cells.set(coordKey(...b.pos), { pos: b.pos, state });
+          }
+          const mesh = buildMesh(fake, resources);
+          for (const b of mesh.buckets)
+            for (let i = 0; i < b.positions.length; i++)
+              b.positions[i] += a.min[i % 3] - a.center[i % 3];
+          result.definitions[model] = mesh;
+          visualSignatures.set(model, { overlay: current.overlay, signature });
+          for (const b of mesh.buckets)
+            if (b.texture) result.textures[b.texture] = resources.texture(b.texture);
+        }
+        result.instances.push({
+          id,
+          model,
+          position: a.center,
+          axis: a.axis || 'y',
+          rpm: 16,
+          savedAngle: 0,
+          kind: 'visual',
+          state: { Name: 'craftstudio:visual' },
+          owner: a.min,
+        });
+      }
+    if (isolatedKeys && !isolationContext?.contextVisible)
+      result.instances = result.instances.filter((d) =>
+        isolatedKeys.has(coordKey(...(d.owner || d.position.map(Math.floor)))),
+      );
+    return result;
+  }
+  if (action === 'inspect') return (preview || site).inspect(data.pos);
+  if (action === 'search') {
+    const candidates = resources.catalogue(data.query || ''),
+      existing = (preview || site).palette
+        .filter((s) =>
+          (s.Name + ' ' + Object.values(s.Properties || {}).join(' '))
+            .toLowerCase()
+            .includes((data.query || '').toLowerCase()),
+        )
+        .map((s) => ({ id: s.Name, label: s.Name.split(':')[1], state: s }));
+    const map = new Map();
+    for (const item of [...existing, ...candidates]) if (!map.has(item.id)) map.set(item.id, item);
+    return [...map.values()].slice(data.offset || 0, (data.offset || 0) + 80);
+  }
+  if (action === 'edit') {
+    if (preview) throw Error('请先采用或取消预览');
+    site.operations(data.operations, data.policy);
+    mesher.changed(site);
+    createScene.changedCells(site);
+    return summary();
+  }
+  if (action === 'brush') {
+    if (preview) throw Error('请先采用或取消预览');
+    if (data.mode === 'paint' && !brushDescriptors)
+      brushDescriptors = new Map(catalogue(site, resources).map((i) => [i.id, i]));
+    let isolationFiltered = 0,
+      brushData = data;
+    if (isolationContext?.includeNew) {
+      const scope = isolationKeys(site, isolationContext);
+      const points = data.points.filter((pos) => {
+        const key = coordKey(...pos),
+          ok =
+            (!scope.bounds ||
+              pos.every((n, a) => n >= scope.bounds.min[a] && n <= scope.bounds.max[a])) &&
+            !scope.excluded.has(key) &&
+            (!site.at(pos) || scope.keys.has(key));
+        if (!ok) isolationFiltered++;
+        return ok;
+      });
+      brushData = { ...data, points };
+    }
+    const plan = brushPlan(site, brushData, brushDescriptors || new Map());
+    plan.filtered += isolationFiltered;
+    site.operations(plan.operations, data.policy);
+    mesher.changed(site);
+    createScene.changedCells(site);
+    api.changed();
+    return { ...summary(), filtered: plan.filtered, toolWarnings: plan.warnings };
+  }
+  if (action === 'beginStroke') {
+    if (preview) throw Error('请先采用或取消预览');
+    site.beginStroke();
+    brushDescriptors = null;
+    const cell = data.anchor ? site.at(data.anchor) : null;
+    return { from: cell ? site.palette[cell.state].Name : null };
+  }
+  if (action === 'endStroke') {
+    site.endStroke();
+    return true;
+  }
+  if (action === 'undo' || action === 'redo') {
+    if (preview) {
+      if (action === 'undo') return execute('cancel', {});
+      throw Error('请先采用或取消预览');
+    }
+    previewOperations = null;
+    previewAnchor = null;
+    site.restore(action);
+    mesher.changed(site);
+    createScene.changedCells(site);
+    return summary();
+  }
+  if (action === 'origin') {
+    if (data.origin?.length !== 3 || data.origin.some((n) => !Number.isInteger(n)))
+      throw Error('需要三个整数世界原点坐标');
+    site.origin = data.origin;
+    site.originConfirmed = !!data.confirmed;
+    return summary();
+  }
+  if (action === 'protect') {
+    site.protected.push({ min: data.min, max: data.max, name: data.name || '保留区' });
+    return summary();
+  }
+  if (action === 'unprotect') {
+    site.protected.splice(data.index, 1);
+    return summary();
+  }
+  if (action === 'preview') {
+    const candidate = site.fork();
+    const batch = [];
+    const flush = () => {
+      if (batch.length) {
+        candidate.operations(batch.splice(0), { allowTerrain: true, allowExisting: true });
+      }
+    };
+    for (const op of data.operations) {
+      if (op.type === 'build') {
+        flush();
+        buildOnSite(candidate, op.kind, op.params, { allowTerrain: true, allowExisting: true });
+      } else if (['insertPrefab', 'restyle'].includes(op.type)) {
+        flush();
+        candidate.operations(semantic(candidate, [op]), {
+          allowTerrain: true,
+          allowExisting: true,
+        });
+      } else batch.push(op);
+    }
+    flush();
+    previewOperations = proposalDiff(site, candidate);
+    preview = candidate;
+    previewAnchor = {
+      id: crypto.randomUUID(),
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+    };
+    return summary();
+  }
+  if (action === 'reference') {
+    const ref = readReferenceHTML(data.html),
+      ops = referenceOperations(ref, site);
+    resources.addSaved(referenceAssets(ref));
+    site.origin = ref.scene.origin;
+    site.originConfirmed = true;
+    site.base.metadata.originEvidence = ref.scene.origin_evidence;
+    const info = await run('preview', { operations: ops });
+    preview.title = ref.scene.title;
+    return {
+      ...info,
+      name: ref.scene.title,
+      reference: {
+        title: ref.scene.title,
+        counts: ref.scene.change_counts,
+        notes: ref.scene.notes,
+        originEvidence: ref.scene.origin_evidence,
+        spec: ref.scene.spec,
+      },
+    };
+  }
+  if (action === 'accept') {
+    if (!preview || !previewOperations || !previewAnchor) throw Error('没有待采用的方案');
+    if (data.proposalId && data.proposalId !== previewAnchor.id)
+      throw Error('提案已被替换，请重新读取');
+    api.guard({ expectedRevision: previewAnchor.revision, workspaceId: previewAnchor.workspaceId });
+    const accepted = acceptedProposal(site, preview, previewOperations, data.policy);
+    api.commit(accepted);
+    preview = null;
+    previewOperations = null;
+    previewAnchor = null;
+    return summary();
+  }
+  if (action === 'cancel') {
+    if (data.proposalId && data.proposalId !== previewAnchor?.id)
+      throw Error('提案已被替换，请重新读取');
+    preview = null;
+    previewOperations = null;
+    previewAnchor = null;
+    return summary();
+  }
+  if (action === 'platform') {
+    const plan = site.platform(data.min, data.max, data.y, data.state, data.spacing);
+    const info = await run('preview', { operations: plan.operations });
+    return { ...info, platformDepth: plan.deepest };
+  }
+  if (action === 'diff') return (preview || site).diff();
+  if (action === 'heightmap') return site.heightmap(null, Infinity);
+  if (action === 'buildProject') {
+    if (preview) throw Error('请先采用方案');
+    if (!site.originConfirmed) throw Error('请先确认世界原点');
+    const p = site.project(),
+      changes = [...site.overlay.values()];
+    p.palette = [...p.palette];
+    let air = p.palette.findIndex((s) => s.Name === 'minecraft:air');
+    if (air < 0) {
+      air = p.palette.length;
+      p.palette.push({ Name: 'minecraft:air' });
+    }
+    if (!changes.length) throw Error('没有待施工的改动');
+    const lo = [0, 1, 2].map((a) => Math.min(...changes.map((b) => b.pos[a]))),
+      hi = [0, 1, 2].map((a) => Math.max(...changes.map((b) => b.pos[a]))),
+      used = new Map(),
+      palette = [];
+    p.blocks = changes.map((b) => {
+      const old = b.state < 0 ? air : b.state;
+      if (!used.has(old)) {
+        used.set(old, palette.length);
+        palette.push(p.palette[old]);
+      }
+      return { ...b, pos: b.pos.map((n, a) => n - lo[a]), state: used.get(old) };
+    });
+    p.palette = palette;
+    p.size = hi.map((n, a) => n - lo[a] + 1);
+    p.origin = site.origin.map((n, a) => n + lo[a]);
+    p.entities = [];
+    p.metadata = {};
+    return p;
+  }
+  if (action === 'prefabPackage') {
+    const p = selection(site, data.min, data.max, { keys: data.members, regions: data.regions }),
+      other = new Site({ ...emptyProject(), name: data.name || p.name, size: p.size });
+    insertPrefab(other, p, [0, 0, 0], {}, {});
+    return gzipSync(
+      strToU8(
+        JSON.stringify({
+          liteSchema: 1,
+          site: other.pack(),
+          assets: resources.bundle(other.palette),
+          savedAt: new Date().toISOString(),
+        }),
+      ),
+      { mtime: 0 },
+    );
+  }
+  if (action === 'sponge') {
+    const p = site.project(),
+      added = [...site.overlay.values()].filter((b) => b.state >= 0);
+    if (!added.length) throw Error('没有新增建筑');
+    const min = [0, 1, 2].map((a) => Math.min(...added.map((b) => b.pos[a]))),
+      max = [0, 1, 2].map((a) => Math.max(...added.map((b) => b.pos[a])));
+    p.blocks = added.map((b) => ({ ...b, pos: b.pos.map((n, a) => n - min[a]) }));
+    p.size = max.map((n, a) => n - min[a] + 1);
+    p.origin = site.origin.map((n, a) => n + min[a]);
+    p.entities = [];
+    return exportSponge(p);
+  }
+  if (action === 'package') {
+    if (preview) throw Error('请先采用预览再保存或导出');
+    site.title = data.title || site.title;
+    return {
+      liteSchema: 1,
+      site: site.pack(),
+      assets: assets(),
+      savedAt: new Date().toISOString(),
+    };
+  }
+  if (action === 'workspaceAssets') return assets();
+  if (action === 'workspaceCheckpoint') {
+    await ensureBaseline();
+    return checkpointPackets.capture(site, {
+      ...data,
+      workspaceId: api.workspaceId,
+      revision: api.revision,
+      baseKey,
+    });
+  }
+  if (action === 'baselineReference') {
+    await ensureBaseline();
+    return {
+      baseKey,
+      ...(data.cachedKey !== baseKey ? { baseline: baseBytes } : {}),
+      revision: api.revision,
+      workspaceId: api.workspaceId,
+    };
+  }
+  if (action === 'draftAttachments') {
+    if (preview) throw Error('请先采用或取消提案');
+    api.guard(data);
+    const pack = assets();
+    if (!assetBytes) {
+      assetBytes = gzipSync(strToU8(JSON.stringify(pack)), { level: 1, mtime: 0 });
+      assetKey = 'assets:' + (await fingerprint(assetBytes));
+    }
+    return {
+      workspaceId: api.workspaceId,
+      revision: api.revision,
+      history: captureDraftHistory(site),
+      saveForm: readSaveForm(data.saveForm),
+      assetKey,
+      ...(data.cachedAssetKey === assetKey ? {} : { assetBytes }),
+    };
+  }
+  if (action === 'draft') {
+    if (preview) throw Error('请先采用预览');
+    site.title = data.title || site.title;
+    await ensureBaseline();
+    const pack = assets();
+    if (!assetBytes) {
+      assetBytes = gzipSync(strToU8(JSON.stringify(pack)), { level: 1, mtime: 0 });
+      assetKey = 'assets:' + (await fingerprint(assetBytes));
+    }
+    const { base, ...delta } = site.pack();
+    delta.history = captureDraftHistory(site);
+    return {
+      baseKey,
+      baseline: baseBytes,
+      assetKey,
+      assetBytes,
+      payload: gzipSync(
+        strToU8(
+          JSON.stringify({ liteSchema: 1, site: delta, saveForm: readSaveForm(data.saveForm) }),
+        ),
+        { level: 1, mtime: 0 },
+      ),
+    };
+  }
+  if (action === 'resume') {
+    const base = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.baseline)))),
+      pkg = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes))));
+    pkg.site.base = base;
+    if (data.assetBytes)
+      pkg.assets = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.assetBytes))));
+    return unpackPackage(pkg);
+  }
+  if (action === 'compressed') {
+    if (data.expectedRevision !== undefined) api.guard(data);
+    const pkg = await run('package', data);
+    return gzipSync(strToU8(JSON.stringify(pkg)), { mtime: 0 });
+  }
+  if (action === 'load') return unpackPackage(data.package);
+  if (action === 'context') {
+    const s = summary(),
+      diff = site.diff();
+    return {
+      schema: 'craftstudio-request/1',
+      interface: api.execute({ method: 'workspace.describe' }).value,
+      request: data.prompt,
+      site: {
+        name: s.name,
+        size: s.size,
+        worldOrigin: s.origin,
+        originConfirmed: s.originConfirmed,
+        sourceBlocks: s.sourceBlocks,
+        protected: s.protected,
+        sourceHash: site.sourceHash,
+      },
+      terrain: site.heightmap(data.focus || null),
+      rules: [
+        '基于真实场地，不生成参考山坡',
+        '默认不得改动原地形、河水、已有建筑和保留区',
+        '所有操作使用局部整数坐标；terrain 是原始文件的真实高度数据，null 不得当作平地',
+        'stride>1 的地形仅为概览，不能推断中间格的准确高度',
+        '输出 JSON {operations:[{type:set/fill/erase/replace,...}]}',
+        '调色板是已有材料参考，不限制新方块 ID；未知模型可以后补',
+        '生成器都是可选工具，可直接提交任意 set/fill/erase 操作',
+      ],
+      objects: design(site).objects,
+      prefabs: design(site).prefabs.map(({ blocks, ...p }) => p),
+      semanticOperations: [
+        'build(kind: house/windmill/wall/roof/stairs/arch/path,params:{at,width,depth,height,state,roof})',
+        'insertPrefab(id,at,turn,mirror,count,step)',
+        'restyle(id,from,state)',
+      ],
+      palette: s.palette,
+      changes: diff,
+      focus: data.focus ? site.inspect(data.focus) : null,
+    };
+  }
+  if (action === 'bridgeProject') {
+    const exported = await execute('export', { kind: data.kind || 'additions' });
+    return {
+      project: importNBT(exported.bytes || exported, 'CraftStudio build'),
+      offsetWorld: exported.offsetWorld || null,
+      offsetLocal: exported.offsetLocal || [0, 0, 0],
+    };
+  }
+  if (action === 'export') {
+    if (preview) throw Error('请先采用预览');
+    if (data.kind === 'full') return exportNBT(site.project());
+    const p = site.project(),
+      changes = [...site.overlay.values()].filter((b) => data.kind === 'patch' || b.state >= 0);
+    if (!changes.length) throw Error('没有可导出的变更');
+    const lo = [0, 1, 2].map((a) => Math.min(...changes.map((b) => b.pos[a]))),
+      hi = [0, 1, 2].map((a) => Math.max(...changes.map((b) => b.pos[a])));
+    let air = p.palette.findIndex((s) => s.Name === 'minecraft:air');
+    if (air < 0) {
+      air = p.palette.length;
+      p.palette.push({ Name: 'minecraft:air' });
+    }
+    p.blocks = changes.map((b) => ({
+      pos: b.pos.map((v, a) => v - lo[a]),
+      state: b.state < 0 ? air : b.state,
+      ...(b.nbt ? { nbt: b.nbt } : {}),
+    }));
+    p.entities = [];
+    p.metadata = {};
+    p.size = hi.map((v, a) => v - lo[a] + 1);
+    return {
+      bytes: exportNBT(p),
+      offsetLocal: lo,
+      offsetWorld: site.originConfirmed ? lo.map((v, a) => v + site.origin[a]) : null,
+      containsAir: data.kind === 'patch',
+    };
+  }
+  throw Error('未知前端任务 ' + action);
+}
+const runtime = new WorkerRuntime({
+  execute: run,
+  postMessage: (message, transfers) => self.postMessage(message, transfers),
+});
+self.onmessage = (event) => runtime.handle(event.data);

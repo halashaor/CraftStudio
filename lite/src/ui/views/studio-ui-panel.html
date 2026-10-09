@@ -1,0 +1,85 @@
+<summary>对象、构件与建筑生成</summary>
+<p class="small">
+  检查模式点击起点，Shift 点击终点选区。选区框跟随范围；拖动选区可沿地面移动，先开启“拖动选区”。
+</p>
+<label>选区起点<input id="studio-min" value="0 0 0" /></label
+><label>选区终点<input id="studio-max" value="0 0 0" /></label
+><button id="studio-select">显示选区</button
+><label class="check"><input id="studio-drag" type="checkbox" />拖动选区（只移动新增内容）</label
+><label>目标起点<input id="studio-at" value="0 0 0" /></label>
+<div class="row">
+  <label
+    >转向<select id="studio-turn">
+      <option value="0">0°</option>
+      <option value="1">90°</option>
+      <option value="2">180°</option>
+      <option value="3">270°</option>
+    </select></label
+  ><label class="check"><input id="studio-mirror" type="checkbox" />镜像</label>
+</div>
+<div class="row">
+  <label>阵列数量<input id="studio-count" type="number" value="1" min="1" max="100" /></label
+  ><label>阵列步长<input id="studio-step" value="16 0 0" /></label>
+</div>
+<div class="row">
+  <button id="studio-copy">复制 / 阵列</button><button id="studio-move">移动 / 旋转</button>
+</div>
+<label>构件名称<input id="studio-name" value="新构件" /></label
+><button id="studio-register">将选区登记为对象 / 图层</button
+><button id="studio-prefab">选区保存为可复用构件</button
+><button id="studio-prefab-library">选区保存到本地构件库</button
+><label>导入可复用构件<input id="studio-prefab-file" type="file" accept=".craftprefab" /></label>
+<div id="studio-prefabs"></div>
+<hr />
+<label
+  >生成器<select id="studio-kind">
+    <option value="house">石木住宅</option>
+    <option value="windmill">风车住宅</option>
+    <option value="wall">墙</option>
+    <option value="roof">双坡屋顶</option>
+    <option value="stairs">楼梯</option>
+    <option value="arch">拱门</option>
+    <option value="path">道路</option>
+  </select></label
+><label>宽、深、高<input id="studio-size" value="13 11 5" /></label
+><label>屋顶材料<input id="studio-roof" value="minecraft:dark_oak_planks" /></label
+><button id="studio-build">在目标位置生成</button
+><button id="studio-demo" class="primary full">在真实场地建两座测试住宅</button>
+<div id="studio-objects"></div>
+<hr />
+<h3>运动外观</h3>
+<label>当前对象 / 运动部件<select id="studio-motion-target"></select></label
+><label
+  >运动类型<select id="studio-motion-type">
+    <option value="rotate">旋转 / 风车</option>
+    <option value="translate">往返 / 活塞 / 升降</option>
+    <option value="swing">摆动 / 机械臂</option>
+    <option value="path">循环路线 / 装饰列车</option>
+    <option value="belt">传送带方向预览</option>
+  </select></label
+>
+<div class="row">
+  <label
+    >轴<select id="studio-axis">
+      <option>x</option>
+      <option selected>y</option>
+      <option>z</option>
+    </select></label
+  ><label>速度 RPM<input id="studio-rpm" type="number" value="16" /></label>
+</div>
+<label>位移向量 X Y Z<input id="studio-travel" value="0 5 0" /></label
+><label>循环周期（秒）<input id="studio-period" type="number" value="6" min="0.1" /></label
+><label
+  >路线相对坐标（可选 JSON）<textarea id="studio-route" rows="2">
+[[0,0,0],[8,0,0],[8,0,8],[0,0,8]]</textarea></label
+><button id="studio-animation">保存运动设置</button>
+<p class="small">
+  负速度反转；只预览外观，不计算产线。回放轨迹保存在工程中，NBT 输出静态施工方块。
+</p>
+<hr />
+<h3>裁切 / 合并文件</h3>
+<button id="studio-crop">将当前选区另存为裁切场地</button
+><label class="check"
+  ><input id="studio-merge-air" type="checkbox" />合并时应用蓝图中的显式空气删除</label
+><input id="studio-merge" type="file" accept=".nbt,.schem,.litematic" />
+<p class="small">合并到目标起点；带实体的蓝图单独打开以保留完整关联。</p>

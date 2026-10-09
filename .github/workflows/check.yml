@@ -16,13 +16,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: npm install
+      - run: npm ci
         working-directory: lite
       - run: node lite/check-publication.mjs
+      - run: npm run format:check
+        working-directory: lite
       - run: npm test
         working-directory: lite
       - run: npm run build && npm run check:sync
         working-directory: lite
+      - run: pip install -r requirements-dev.txt
+      - run: python -m black --check backend server.py mcp_server.py tests
       - run: python -m unittest discover -s tests -p "test_*.py"
   sync:
     needs: check
@@ -37,7 +41,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install && npm run build && npm run check:sync
+      - run: npm ci && npm run build && npm run check:sync
         working-directory: lite
       - name: Keep local and Lite outputs in sync
         run: |

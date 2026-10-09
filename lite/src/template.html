@@ -1,11 +1,380 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CraftStudio Lite · 真实场地建筑设计</title><link rel="icon" href="data:,"><style>__STYLE__</style></head><body>
-<header><div class="brand"><span>▧</span><div><strong>CraftStudio <em>Lite</em></strong><small>文件驱动 · 真实场地 · 可编辑 3D</small></div></div><nav id="steps"><button data-step="import" class="active"><b>01</b> 导入</button><button data-step="check"><b>02</b> 检查</button><button data-step="edit"><b>03</b> 设计</button><button data-step="save"><b>04</b> 保存</button></nav><div class="header-actions"><button id="open-library">本地工程库</button><button id="quick-save" class="primary">保存工程</button></div></header>
-<main><aside><section id="step-import"><div class="eyebrow">START WITH YOUR SITE</div><h1>从真实场地开始</h1><p class="muted">选择带地形的区域蓝图，或一个存档区域文件。建筑、山坡和河岸一起进入场景。</p><label id="dropzone" class="dropzone"><span>＋</span><strong>拖入文件，或点击选择</strong><small>NBT / schem / litematic / MCA / 工程</small><input id="file" type="file" accept=".nbt,.schem,.litematic,.mca,.json,.craftlite,.html"></label><button id="provided-source" class="full">打开你提供的 1.nbt 真实场地</button><details class="card"><summary>可选：补充模型与材质</summary><p class="muted">手动选择对应的原版 JAR、Mod JAR 或材质包 ZIP，按从低到高的优先级导入。</p><input id="resource-file" type="file" multiple accept=".jar,.zip"><div id="resource-info" class="small">使用方块轮廓预览；尚未附加资源。</div></details><details class="card"><summary>MCA 文件的读取选区</summary><label>世界起点 X Y Z<input id="mca-min" value="0 60 0"></label><label>世界终点 X Y Z<input id="mca-max" value="31 90 31"></label><p class="small">只读取选定文件内的区域，外置 MCC 暂不支持。选择大范围时建议先用蓝图与笔导出包含地下空间的 NBT。</p></details><details class="card" id="create-panel" open><summary>机械动力 · 运动结构</summary><label class="check"><input id="create-visible" type="checkbox" checked>显示旋转件与装置实体</label><label class="check"><input id="create-play" type="checkbox">按保存的转速播放</label><div class="row"><label>播放倍率<select id="create-rate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><button id="create-reset">回到保存位姿</button></div><label class="check"><input id="create-demo" type="checkbox">未知速度的部件使用演示速度</label><input id="create-rpm" type="number" value="16" aria-label="演示 RPM"><p id="create-info" class="small">Create 6.0.8 源码适配；附加 Create JAR 可读取原始 partial/OBJ 模型。</p><p class="small">动态预览保留原 NBT。播放反映已保存转速，不等于实时动力、应力和产线模拟。</p></details><div class="card"><h3>已有设计参考</h3><p class="muted">支持导入你给的 V3 HTML 中的结构变更数据，文件脚本不会被执行。</p><button id="provided-plan" class="full">预览 Sakura Grand V3 的改建方案</button><label class="file-inline">或选择参考 HTML<input id="reference-file" type="file" accept=".html"></label></div></section>
-<section id="step-check" hidden><div class="eyebrow">SITE FIRST</div><h1>先核对现场</h1><div id="source-summary" class="card"></div><button id="terrain-csv" class="full">导出真实场地逐列高度 CSV</button><div class="card"><h3>世界坐标原点</h3><div class="triple"><input id="origin-x" type="number" value="0" aria-label="原点 X"><input id="origin-y" type="number" value="0" aria-label="原点 Y"><input id="origin-z" type="number" value="0" aria-label="原点 Z"></div><label class="check"><input id="origin-known" type="checkbox">原点已确认，可输出世界坐标</label><button id="set-origin" class="full">更新坐标基准</button><div id="origin-evidence" class="small"></div></div><div class="card"><h3>保留区</h3><p class="small">先锁定主馆、旧楼梯、邻屋等固定参照；这些选区在设计中保持不变。</p><label>局部起点<input id="protect-min" value="0 0 0"></label><label>局部终点<input id="protect-max" value="0 0 0"></label><input id="protect-name" placeholder="例如：旧主馆和楼梯"><button id="add-protect" class="full">锁定这个选区</button><div id="protected-list"></div></div><details class="card"><summary>读取与显示报告</summary><div id="issues" class="small"></div></details><button data-next="edit" class="primary full">进入 3D 设计 →</button></section>
-<section id="step-edit" hidden><div class="eyebrow">DESIGN ON THE REAL GROUND</div><h1>在现场上设计</h1><div class="tool-row"><button data-tool="inspect" class="active">检查</button><button data-tool="place">放置</button><button data-tool="erase">删除</button><button data-tool="paint">画笔</button><button id="undo">↶</button><button id="redo">↷</button></div><div class="card brush-settings"><div class="row"><label>画笔直径<select id="brush-size"><option value="1">1 格</option><option value="3">3 格</option><option value="5">5 格</option><option value="7">7 格</option><option value="9">9 格</option></select></label><label>形状<select id="brush-shape"><option value="square">方形</option><option value="circle">圆形</option></select></label></div><p class="small">左键拖绘固定层；空格＋左键转动视角，右键／中键平移。Shift 画直线，E 取材，[ ] 调大小。一笔可一次撤销。</p></div><div class="card"><label>当前材料<input id="block-id" value="minecraft:stone_bricks" placeholder="namespace:方块ID"></label><input id="block-search" placeholder="从蓝图或附件中找材料"><div id="block-list"></div><details><summary>方块状态</summary><textarea id="block-properties" rows="2" placeholder='{"facing":"north"}'></textarea></details></div><div class="card"><h3>改动规则</h3><label class="check"><input id="allow-terrain" type="checkbox">明确允许改动地形与河水</label><label class="check"><input id="allow-existing" type="checkbox">明确允许改动原建筑与植被</label><p class="small">默认在原场地空位中新增。改动会记录原方块、目标方块与土方量；不重造山坡。</p></div><details class="card"><summary>选区填充与拆除</summary><label>局部起点 X Y Z<input id="edit-min" value="0 0 0"></label><label>局部终点 X Y Z<input id="edit-max" value="0 0 0"></label><div class="row"><button id="fill">填充</button><button id="erase-region">拆除</button></div></details><details class="card"><summary>顺着真实坡面的平台</summary><label>局部 X Z 起点<input id="platform-min" value="60 75"></label><label>局部 X Z 终点<input id="platform-max" value="72 87"></label><div class="triple"><label>地板 Y<input id="platform-y" type="number" value="40"></label><label>柱距<input id="platform-spacing" type="number" value="4"></label></div><p class="small">柱基下探至实际地面；山坡高于平台时提示调整标高，不自动削山。</p><button id="platform" class="full">预览平台与实际支撑</button></details><button id="ai-open" class="full">AI 提案：场地约束 → 结构预览</button><button data-next="save" class="primary full">查看变更并保存 →</button></section>
-<section id="step-save" hidden><div class="eyebrow">BUILDABLE CHANGES</div><h1>知道每一处怎么改</h1><div class="metrics"><div><strong id="count-add">0</strong><span>原空位新增</span></div><div><strong id="count-replace">0</strong><span>方块替换</span></div><div><strong id="count-remove">0</strong><span>拆除留空</span></div><div><strong id="count-earth">0</strong><span>原地形 / 水改动</span></div></div><div class="card"><label>工程名<input id="save-title" value="场地设计"></label><label>类型<select id="save-kind"><option value="project">工程</option><option value="component">构件</option><option value="blueprint">蓝图</option></select></label><label>标签<input id="save-tags" placeholder="山坡, 温泉, 改建"></label><label>版本备注<input id="save-note" placeholder="例如：保留旧楼梯，抬高浴厅标高"></label><div class="row"><button id="save-version" class="primary">保存到本地库</button><button id="save-copy">另存副本</button></div><p id="storage-status" class="small">准备本地存储…</p></div><div class="card"><h3>带走这份设计</h3><button id="download-project" class="full">完整轻量工程 .craftlite</button><button id="download-json" class="full">兼容完整版 .craft.json</button><button id="download-additions" class="full">新增 / 替换建筑 NBT</button><button id="download-patch" class="full">变更 NBT（含拆除空气）</button><button id="download-full" class="full">完整场地与结果 NBT</button><button id="download-csv" class="full">逐格变更 CSV</button><p class="small">变更 NBT 含空气，但是否执行拆除取决于游戏工具的粘贴策略。施工请结合变更表；完整工程保留原始地形与原始实体数据。</p></div><details class="card" open><summary>新增 / 替换材料</summary><div id="materials"></div></details></section></aside>
-<section id="viewport"><div class="scene-toolbar"><div id="view-modes"><button data-mode="after" class="active">完工方案</button><button data-mode="before">原始场地</button><button data-mode="diff">改了哪里</button><button data-mode="removed">拆除视图</button></div><div class="row"><button id="fit">总览</button><button id="top">俯视</button><button id="grid">网格</button></div></div><div id="scene"><div class="scene-heading"><span class="eyebrow">LOCAL FILE WORKSPACE</span><h2 id="scene-title">等待导入真实场地</h2><p id="scene-meta">先读取文件，再让建筑适应地形。</p></div><div id="busy" hidden><div class="spinner"></div><span id="busy-text">正在浏览器里解析文件…</span></div><div id="preview-banner" hidden><strong>这是方案预览</strong><span id="preview-info"></span><button id="accept" class="primary">采用改动</button><button id="cancel">返回当前设计</button></div><div id="pick-panel" hidden><button id="pick-close">×</button><strong id="pick-coords"></strong><div id="pick-details"></div><small id="pick-ground"></small></div><div class="legend"><span class="keep">原有保留</span><span class="add">新增</span><span class="replace">替换</span><span class="remove">拆除</span></div><div class="gesture">浏览：左键旋转 · 编辑：左键拖绘 · 空格+左键旋转 · 右键/中键平移</div></div><div class="scene-bottom"><label>分层施工 / 剖切 <input id="cut" type="range" min="0" max="59" value="59"><span id="cut-text">全部</span></label><label class="check"><input id="plants" type="checkbox" checked>植被</label><label class="check"><input id="ground" type="checkbox" checked>地形</label><label class="check"><input id="existing" type="checkbox" checked>原建筑</label><span id="mesh-status"></span></div></section></main>
-<footer><span class="status-dot"></span><span id="status">文件在浏览器本地处理</span><span class="foot-right">零后端 · 无需启动 Minecraft · 离线可用</span></footer><div id="toast" role="status" hidden></div>
-<dialog id="library-dialog"><div class="dialog-header"><div><span class="eyebrow">YOUR LOCAL WORK</span><h2>本地工程库</h2></div><button data-close="library-dialog">关闭</button></div><p class="muted">保存在当前浏览器中。需要换电脑或清理浏览器时，先下载完整工程或工程库备份。</p><div class="library-tools"><input id="library-query" placeholder="搜索名字和标签"><select id="library-filter"><option value="all">全部</option><option value="favorite">收藏</option><option value="trash">回收站</option></select><button id="library-backup">备份工程库</button><label class="file-inline">导入备份<input id="library-restore" type="file" accept=".craftlib"></label></div><div id="library-list"></div></dialog>
-<dialog id="ai-dialog"><div class="dialog-header"><div><span class="eyebrow">CONSTRAINTS BEFORE GENERATION</span><h2>让 AI 在真实场地上设计</h2></div><button data-close="ai-dialog">关闭</button></div><label>设计需求<textarea id="ai-prompt" rows="3" placeholder="保留主馆和旧楼梯，新增一座错层浴厅，标高依据实际坡面调整。"></textarea></label><button id="copy-context">复制场地、保留区和设计请求</button><details class="card"><summary>可选：直接调用你的 AI 接口</summary><p class="small">需要服务允许浏览器跨域请求；也可以把请求交给外部 AI，再粘贴结构 JSON。</p><input id="ai-url" placeholder="https://你的接口/v1"><input id="ai-model" placeholder="模型名称"><input id="ai-key" type="password" autocomplete="off" placeholder="Key 仅在当前页面使用"><button id="ai-call" class="full">请求结构提案</button></details><label>AI 返回的结构操作 JSON<textarea id="ai-json" rows="7" placeholder='{"operations":[{"type":"fill","min":[60,40,75],"max":[72,40,87],"state":{"Name":"create:cut_limestone_bricks"}}]}'></textarea></label><button id="ai-preview" class="primary full">在 3D 现场中预览提案</button></dialog>
-<script>__APP__</script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CraftStudio Lite · 真实场地建筑设计</title>
+    <link rel="icon" href="data:," />
+    <style>
+      __STYLE__
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span>▧</span>
+        <div>
+          <strong>CraftStudio <em>Lite</em></strong
+          ><small>文件驱动 · 真实场地 · 可编辑 3D</small>
+        </div>
+      </div>
+      <nav id="steps">
+        <button data-step="import" class="active"><b>01</b> 导入</button
+        ><button data-step="check"><b>02</b> 检查</button
+        ><button data-step="edit"><b>03</b> 设计</button
+        ><button data-step="save"><b>04</b> 保存</button>
+      </nav>
+      <div class="header-actions">
+        <button id="open-library">本地工程库</button
+        ><button id="quick-save" class="primary">保存工程</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <section id="step-import">
+          <div class="eyebrow">START WITH YOUR SITE</div>
+          <h1>从真实场地开始</h1>
+          <p class="muted">
+            选择带地形的区域蓝图，或一个存档区域文件。建筑、山坡和河岸一起进入场景。
+          </p>
+          <label id="dropzone" class="dropzone"
+            ><span>＋</span><strong>拖入文件，或点击选择</strong
+            ><small>NBT / schem / litematic / MCA / 工程</small
+            ><input
+              id="file"
+              type="file"
+              accept=".nbt,.schem,.litematic,.mca,.json,.craftlite,.html" /></label
+          ><button id="provided-source" class="full">打开你提供的 1.nbt 真实场地</button>
+          <details class="card">
+            <summary>可选：补充模型与材质</summary>
+            <p class="muted">
+              手动选择对应的原版 JAR、Mod JAR 或材质包 ZIP，按从低到高的优先级导入。
+            </p>
+            <input id="resource-file" type="file" multiple accept=".jar,.zip" />
+            <div id="resource-info" class="small">使用方块轮廓预览；尚未附加资源。</div>
+          </details>
+          <details class="card">
+            <summary>MCA 文件的读取选区</summary>
+            <label>世界起点 X Y Z<input id="mca-min" value="0 60 0" /></label
+            ><label>世界终点 X Y Z<input id="mca-max" value="31 90 31" /></label>
+            <p class="small">
+              只读取选定文件内的区域，外置 MCC
+              暂不支持。选择大范围时建议先用蓝图与笔导出包含地下空间的 NBT。
+            </p>
+          </details>
+          <details class="card" id="create-panel" open>
+            <summary>机械动力 · 运动结构</summary>
+            <label class="check"
+              ><input id="create-visible" type="checkbox" checked />显示旋转件与装置实体</label
+            ><label class="check"><input id="create-play" type="checkbox" />按保存的转速播放</label>
+            <div class="row">
+              <label
+                >播放倍率<select id="create-rate">
+                  <option value="0.25">0.25×</option>
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="2">2×</option>
+                </select></label
+              ><button id="create-reset">回到保存位姿</button>
+            </div>
+            <label class="check"
+              ><input id="create-demo" type="checkbox" />未知速度的部件使用演示速度</label
+            ><input id="create-rpm" type="number" value="16" aria-label="演示 RPM" />
+            <p id="create-info" class="small">
+              Create 6.0.8 源码适配；附加 Create JAR 可读取原始 partial/OBJ 模型。
+            </p>
+            <p class="small">
+              动态预览保留原 NBT。播放反映已保存转速，不等于实时动力、应力和产线模拟。
+            </p>
+          </details>
+          <div class="card">
+            <h3>已有设计参考</h3>
+            <p class="muted">支持导入你给的 V3 HTML 中的结构变更数据，文件脚本不会被执行。</p>
+            <button id="provided-plan" class="full">预览 Sakura Grand V3 的改建方案</button
+            ><label class="file-inline"
+              >或选择参考 HTML<input id="reference-file" type="file" accept=".html"
+            /></label>
+          </div>
+        </section>
+        <section id="step-check" hidden>
+          <div class="eyebrow">SITE FIRST</div>
+          <h1>先核对现场</h1>
+          <div id="source-summary" class="card"></div>
+          <button id="terrain-csv" class="full">导出真实场地逐列高度 CSV</button>
+          <div class="card">
+            <h3>世界坐标原点</h3>
+            <div class="triple">
+              <input id="origin-x" type="number" value="0" aria-label="原点 X" /><input
+                id="origin-y"
+                type="number"
+                value="0"
+                aria-label="原点 Y"
+              /><input id="origin-z" type="number" value="0" aria-label="原点 Z" />
+            </div>
+            <label class="check"
+              ><input id="origin-known" type="checkbox" />原点已确认，可输出世界坐标</label
+            ><button id="set-origin" class="full">更新坐标基准</button>
+            <div id="origin-evidence" class="small"></div>
+          </div>
+          <div class="card">
+            <h3>保留区</h3>
+            <p class="small">先锁定主馆、旧楼梯、邻屋等固定参照；这些选区在设计中保持不变。</p>
+            <label>局部起点<input id="protect-min" value="0 0 0" /></label
+            ><label>局部终点<input id="protect-max" value="0 0 0" /></label
+            ><input id="protect-name" placeholder="例如：旧主馆和楼梯" /><button
+              id="add-protect"
+              class="full"
+            >
+              锁定这个选区
+            </button>
+            <div id="protected-list"></div>
+          </div>
+          <details class="card">
+            <summary>读取与显示报告</summary>
+            <div id="issues" class="small"></div>
+          </details>
+          <button data-next="edit" class="primary full">进入 3D 设计 →</button>
+        </section>
+        <section id="step-edit" hidden>
+          <div class="eyebrow">DESIGN ON THE REAL GROUND</div>
+          <h1>在现场上设计</h1>
+          <div class="tool-row">
+            <button data-tool="inspect" class="active">检查</button
+            ><button data-tool="place">放置</button><button data-tool="erase">删除</button
+            ><button data-tool="paint">画笔</button><button id="undo">↶</button
+            ><button id="redo">↷</button>
+          </div>
+          <div class="card brush-settings">
+            <div class="row">
+              <label
+                >画笔直径<select id="brush-size">
+                  <option value="1">1 格</option>
+                  <option value="3">3 格</option>
+                  <option value="5">5 格</option>
+                  <option value="7">7 格</option>
+                  <option value="9">9 格</option>
+                </select></label
+              ><label
+                >形状<select id="brush-shape">
+                  <option value="square">方形</option>
+                  <option value="circle">圆形</option>
+                </select></label
+              >
+            </div>
+            <p class="small">
+              左键拖绘固定层；空格＋左键转动视角，右键／中键平移。Shift 画直线，E 取材，[ ]
+              调大小。一笔可一次撤销。
+            </p>
+          </div>
+          <div class="card">
+            <label
+              >当前材料<input
+                id="block-id"
+                value="minecraft:stone_bricks"
+                placeholder="namespace:方块ID" /></label
+            ><input id="block-search" placeholder="从蓝图或附件中找材料" />
+            <div id="block-list"></div>
+            <details>
+              <summary>方块状态</summary>
+              <textarea id="block-properties" rows="2" placeholder='{"facing":"north"}'></textarea>
+            </details>
+          </div>
+          <div class="card">
+            <h3>改动规则</h3>
+            <label class="check"
+              ><input id="allow-terrain" type="checkbox" />明确允许改动地形与河水</label
+            ><label class="check"
+              ><input id="allow-existing" type="checkbox" />明确允许改动原建筑与植被</label
+            >
+            <p class="small">
+              默认在原场地空位中新增。改动会记录原方块、目标方块与土方量；不重造山坡。
+            </p>
+          </div>
+          <details class="card">
+            <summary>选区填充与拆除</summary>
+            <label>局部起点 X Y Z<input id="edit-min" value="0 0 0" /></label
+            ><label>局部终点 X Y Z<input id="edit-max" value="0 0 0" /></label>
+            <div class="row">
+              <button id="fill">填充</button><button id="erase-region">拆除</button>
+            </div>
+          </details>
+          <details class="card">
+            <summary>顺着真实坡面的平台</summary>
+            <label>局部 X Z 起点<input id="platform-min" value="60 75" /></label
+            ><label>局部 X Z 终点<input id="platform-max" value="72 87" /></label>
+            <div class="triple">
+              <label>地板 Y<input id="platform-y" type="number" value="40" /></label
+              ><label>柱距<input id="platform-spacing" type="number" value="4" /></label>
+            </div>
+            <p class="small">柱基下探至实际地面；山坡高于平台时提示调整标高，不自动削山。</p>
+            <button id="platform" class="full">预览平台与实际支撑</button>
+          </details>
+          <button id="ai-open" class="full">AI 提案：场地约束 → 结构预览</button
+          ><button data-next="save" class="primary full">查看变更并保存 →</button>
+        </section>
+        <section id="step-save" hidden>
+          <div class="eyebrow">BUILDABLE CHANGES</div>
+          <h1>知道每一处怎么改</h1>
+          <div class="metrics">
+            <div><strong id="count-add">0</strong><span>原空位新增</span></div>
+            <div><strong id="count-replace">0</strong><span>方块替换</span></div>
+            <div><strong id="count-remove">0</strong><span>拆除留空</span></div>
+            <div><strong id="count-earth">0</strong><span>原地形 / 水改动</span></div>
+          </div>
+          <div class="card">
+            <label>工程名<input id="save-title" value="场地设计" /></label
+            ><label
+              >类型<select id="save-kind">
+                <option value="project">工程</option>
+                <option value="component">构件</option>
+                <option value="blueprint">蓝图</option>
+              </select></label
+            ><label>标签<input id="save-tags" placeholder="山坡, 温泉, 改建" /></label
+            ><label
+              >版本备注<input id="save-note" placeholder="例如：保留旧楼梯，抬高浴厅标高"
+            /></label>
+            <div class="row">
+              <button id="save-version" class="primary">保存到本地库</button
+              ><button id="save-copy">另存副本</button>
+            </div>
+            <p id="storage-status" class="small">准备本地存储…</p>
+          </div>
+          <div class="card">
+            <h3>带走这份设计</h3>
+            <button id="download-project" class="full">完整轻量工程 .craftlite</button
+            ><button id="download-json" class="full">兼容完整版 .craft.json</button
+            ><button id="download-additions" class="full">新增 / 替换建筑 NBT</button
+            ><button id="download-patch" class="full">变更 NBT（含拆除空气）</button
+            ><button id="download-full" class="full">完整场地与结果 NBT</button
+            ><button id="download-csv" class="full">逐格变更 CSV</button>
+            <p class="small">
+              变更 NBT
+              含空气，但是否执行拆除取决于游戏工具的粘贴策略。施工请结合变更表；完整工程保留原始地形与原始实体数据。
+            </p>
+          </div>
+          <details class="card" open>
+            <summary>新增 / 替换材料</summary>
+            <div id="materials"></div>
+          </details>
+        </section>
+      </aside>
+      <section id="viewport">
+        <div class="scene-toolbar">
+          <div id="view-modes">
+            <button data-mode="after" class="active">完工方案</button
+            ><button data-mode="before">原始场地</button><button data-mode="diff">改了哪里</button
+            ><button data-mode="removed">拆除视图</button>
+          </div>
+          <div class="row">
+            <button id="fit">总览</button><button id="top">俯视</button
+            ><button id="grid">网格</button>
+          </div>
+        </div>
+        <div id="scene">
+          <div class="scene-heading">
+            <span class="eyebrow">LOCAL FILE WORKSPACE</span>
+            <h2 id="scene-title">等待导入真实场地</h2>
+            <p id="scene-meta">先读取文件，再让建筑适应地形。</p>
+          </div>
+          <div id="busy" hidden>
+            <div class="spinner"></div>
+            <span id="busy-text">正在浏览器里解析文件…</span>
+          </div>
+          <div id="preview-banner" hidden>
+            <strong>这是方案预览</strong><span id="preview-info"></span
+            ><button id="accept" class="primary">采用改动</button
+            ><button id="cancel">返回当前设计</button>
+          </div>
+          <div id="pick-panel" hidden>
+            <button id="pick-close">×</button><strong id="pick-coords"></strong>
+            <div id="pick-details"></div>
+            <small id="pick-ground"></small>
+          </div>
+          <div class="legend">
+            <span class="keep">原有保留</span><span class="add">新增</span
+            ><span class="replace">替换</span><span class="remove">拆除</span>
+          </div>
+          <div class="gesture">浏览：左键旋转 · 编辑：左键拖绘 · 空格+左键旋转 · 右键/中键平移</div>
+        </div>
+        <div class="scene-bottom">
+          <label
+            >分层施工 / 剖切 <input id="cut" type="range" min="0" max="59" value="59" /><span
+              id="cut-text"
+              >全部</span
+            ></label
+          ><label class="check"><input id="plants" type="checkbox" checked />植被</label
+          ><label class="check"><input id="ground" type="checkbox" checked />地形</label
+          ><label class="check"><input id="existing" type="checkbox" checked />原建筑</label
+          ><span id="mesh-status"></span>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <span class="status-dot"></span><span id="status">文件在浏览器本地处理</span
+      ><span class="foot-right">零后端 · 无需启动 Minecraft · 离线可用</span>
+    </footer>
+    <div id="toast" role="status" hidden></div>
+    <dialog id="library-dialog">
+      <div class="dialog-header">
+        <div>
+          <span class="eyebrow">YOUR LOCAL WORK</span>
+          <h2>本地工程库</h2>
+        </div>
+        <button data-close="library-dialog">关闭</button>
+      </div>
+      <p class="muted">
+        保存在当前浏览器中。需要换电脑或清理浏览器时，先下载完整工程或工程库备份。
+      </p>
+      <div class="library-tools">
+        <input id="library-query" placeholder="搜索名字和标签" /><select id="library-filter">
+          <option value="all">全部</option>
+          <option value="favorite">收藏</option>
+          <option value="trash">回收站</option></select
+        ><button id="library-backup">备份工程库</button
+        ><label class="file-inline"
+          >导入备份<input id="library-restore" type="file" accept=".craftlib"
+        /></label>
+      </div>
+      <div id="library-list"></div>
+    </dialog>
+    <dialog id="ai-dialog">
+      <div class="dialog-header">
+        <div>
+          <span class="eyebrow">CONSTRAINTS BEFORE GENERATION</span>
+          <h2>让 AI 在真实场地上设计</h2>
+        </div>
+        <button data-close="ai-dialog">关闭</button>
+      </div>
+      <label
+        >设计需求<textarea
+          id="ai-prompt"
+          rows="3"
+          placeholder="保留主馆和旧楼梯，新增一座错层浴厅，标高依据实际坡面调整。"
+        ></textarea></label
+      ><button id="copy-context">复制场地、保留区和设计请求</button>
+      <details class="card">
+        <summary>可选：直接调用你的 AI 接口</summary>
+        <p class="small">需要服务允许浏览器跨域请求；也可以把请求交给外部 AI，再粘贴结构 JSON。</p>
+        <input id="ai-url" placeholder="https://你的接口/v1" /><input
+          id="ai-model"
+          placeholder="模型名称"
+        /><input
+          id="ai-key"
+          type="password"
+          autocomplete="off"
+          placeholder="Key 仅在当前页面使用"
+        /><button id="ai-call" class="full">请求结构提案</button>
+      </details>
+      <label
+        >AI 返回的结构操作 JSON<textarea
+          id="ai-json"
+          rows="7"
+          placeholder='{"operations":[{"type":"fill","min":[60,40,75],"max":[72,40,87],"state":{"Name":"create:cut_limestone_bricks"}}]}'
+        ></textarea></label
+      ><button id="ai-preview" class="primary full">在 3D 现场中预览提案</button>
+    </dialog>
+    <script>
+      __APP__;
+    </script>
+  </body>
+</html>

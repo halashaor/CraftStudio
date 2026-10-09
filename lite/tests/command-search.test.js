@@ -1,4 +1,23 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {searchCommands} from '../src/command-search.js';
-const commands=[{id:'extrude',label:'拉伸',category:'建模',aliases:'extrude extrusion'},{id:'curve',label:'贝塞尔曲线',category:'草图',aliases:'bezier curve'},{id:'array',label:'沿路径阵列',category:'排列',aliases:'path array'}];
-test('tool search supports labels, category and English aliases with all query words',()=>{assert.equal(searchCommands(commands,'拉伸')[0].id,'extrude');assert.equal(searchCommands(commands,'BEZIER')[0].id,'curve');assert.equal(searchCommands(commands,'路径 阵列')[0].id,'array');assert.equal(searchCommands(commands,'建模')[0].id,'extrude');assert.deepEqual(searchCommands(commands,'missing'),[]);});
-test('recent commands rank empty searches while explicit names retain priority',()=>{assert.equal(searchCommands(commands,'',['array'])[0].id,'array');assert.equal(searchCommands(commands,'拉伸',['array'])[0].id,'extrude');assert.deepEqual(searchCommands(commands,'',[]).map(c=>c.id),['extrude','curve','array']);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { searchCommands } from '../src/ui/command-search.js';
+const commands = [
+  { id: 'extrude', label: '拉伸', category: '建模', aliases: 'extrude extrusion' },
+  { id: 'curve', label: '贝塞尔曲线', category: '草图', aliases: 'bezier curve' },
+  { id: 'array', label: '沿路径阵列', category: '排列', aliases: 'path array' },
+];
+test('tool search supports labels, category and English aliases with all query words', () => {
+  assert.equal(searchCommands(commands, '拉伸')[0].id, 'extrude');
+  assert.equal(searchCommands(commands, 'BEZIER')[0].id, 'curve');
+  assert.equal(searchCommands(commands, '路径 阵列')[0].id, 'array');
+  assert.equal(searchCommands(commands, '建模')[0].id, 'extrude');
+  assert.deepEqual(searchCommands(commands, 'missing'), []);
+});
+test('recent commands rank empty searches while explicit names retain priority', () => {
+  assert.equal(searchCommands(commands, '', ['array'])[0].id, 'array');
+  assert.equal(searchCommands(commands, '拉伸', ['array'])[0].id, 'extrude');
+  assert.deepEqual(
+    searchCommands(commands, '', []).map((c) => c.id),
+    ['extrude', 'curve', 'array'],
+  );
+});

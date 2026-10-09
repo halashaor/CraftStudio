@@ -1,0 +1,266 @@
+import { closeSweepFrames } from '../modeling/closed-sweep.js';
+import { prepareVariableSweep, sweepSurfacePositions } from '../modeling/profile-sweep.js';
+import { workplane, profileFrame, toPlane } from '../sketch/workplane.js';
+import { closedProfiles } from '../sketch/sketch-profiles.js';
+import { sampleFigure, geometryPlan } from '../modeling/construction.js';
+import { resampleProfile, featurePlan } from '../modeling/features.js';
+export function interactivePreview(THREE, scene, requestRender) {
+  const root = new THREE.Group();
+  root.visible = false;
+  scene.add(root);
+  const material = new THREE.MeshLambertMaterial({
+      color: 0x74c7b1,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+    lineMaterial = new THREE.LineBasicMaterial({ color: 0xa7caff, depthTest: false });
+  const line = new THREE.Line(new THREE.BufferGeometry(), lineMaterial);
+  root.add(line);
+  let capacity = 0,
+    frames = 0,
+    last = {},
+    surface = null;
+  const meshes = new Map();
+  const emptySite = { cells: new Map(), overlay: new Map(), palette: [], design: { guides: [] } };
+  function clear() {
+    root.visible = false;
+    requestRender();
+  }
+  function draw({ type, config, guides = [], available = new Set(), lines = true, blocks = true }) {
+    const started = performance.now();
+    root.visible = true;
+    for (const mesh of meshes.values()) mesh.visible = false;
+    line.visible = false;
+    if (surface) {
+      root.remove(surface);
+      surface.geometry.dispose();
+      surface = null;
+    }
+    let samples = [],
+      ops = [],
+      exact = false;
+    try {
+      if (type === 'geometry') {
+        samples = sampleFigure({ ...config, sampleDensity: 2 });
+        const span = config.points
+            .slice(1)
+            .reduce((n, p, i) => n + Math.hypot(...p.map((v, a) => v - config.points[i][a])), 0),
+          box = config.points[0].map((n, a) => Math.abs(n - config.points.at(-1)[a]) + 1),
+          volume = box.reduce((a, b) => a * b, 1);
+        if (
+          blocks &&
+          !config.guidesOnly &&
+          config.terrain === 'none' &&
+          span < 160 &&
+          (!config.fill || volume < 6000)
+        )
+          ops = geometryPlan(emptySite, { ...config, sampleDensity: 2 }, available).operations;
+      } else if (type === 'feature') {
+        const selected = closedProfiles(guides).filter((g) => config.profileIds?.includes(g.id));
+        emptySite.design.guides = guides;
+        if (config.operation === 'sweep' && config.sweepMode === 'profile' && selected.length) {
+          const path = guides.find((g) => g.id === config.pathId)?.points;
+          if (path) {
+            const rawPlan = prepareVariableSweep(
+                path,
+                selected.map((g) => g.points),
+                selected.map((g) => g.recipe.workplane),
+                config.profileStations
+                  ? config
+                  : {
+                      ...config,
+                      profileStations: selected.map((g) =>
+                        g.recipe.workplaneSource?.kind === 'curve-station' &&
+                        g.recipe.workplaneSource.guideId === config.pathId
+                          ? g.recipe.workplaneSource.station
+                          : null,
+                      ),
+                    },
+              ),
+              plan = closeSweepFrames(rawPlan, path, config),
+              geometry = new THREE.BufferGeometry();
+            geometry.setAttribute(
+              'position',
+              new THREE.BufferAttribute(sweepSurfacePositions(plan), 3),
+            );
+            geometry.computeVertexNormals();
+            if (config.hollow || config.cut) {
+              surface = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), lineMaterial);
+              geometry.dispose();
+            } else surface = new THREE.Mesh(geometry, material);
+            root.add(surface);
+            samples = path;
+          }
+        } else if (selected.length) {
+          const points = resampleProfile(selected[0].points, 32),
+            frame = profileFrame(
+              selected[0].points,
+              config.plane || 'auto',
+              selected[0].recipe.workplane,
+            ),
+            local = points.map((p) => toPlane(p, frame));
+          samples = [...points, points[0]];
+          const range = (a) =>
+            local.reduce(
+              (out, p) => [Math.min(out[0], p[a]), Math.max(out[1], p[a])],
+              [Infinity, -Infinity],
+            );
+          const a = range(0),
+            b = range(1),
+            depth = Number(config.depth || 0),
+            volume = (a[1] - a[0]) * (b[1] - b[0]) * Math.abs(depth);
+          if (
+            config.operation === 'extrude' &&
+            blocks &&
+            volume < 6000 &&
+            !config.cut &&
+            frame.plane !== 'auto'
+          ) {
+            ops = featurePlan(emptySite, { ...config, available: [...available] }).operations;
+            exact = true;
+          } else if (config.operation === 'extrude' && blocks) {
+            const profile = new THREE.Shape(local.map((q) => new THREE.Vector2(q[0], q[1]))),
+              geometry = new THREE.ExtrudeGeometry(profile, {
+                depth: Math.abs(depth),
+                bevelEnabled: false,
+                steps: 1,
+              }),
+              matrix = new THREE.Matrix4().makeBasis(
+                ...[frame.u, frame.v, frame.normal].map((a) => new THREE.Vector3(...a)),
+              );
+            matrix.setPosition(
+              new THREE.Vector3(...frame.origin).addScaledVector(
+                new THREE.Vector3(...frame.normal),
+                (config.symmetric ? -depth / 2 : 0) + Math.min(0, depth),
+              ),
+            );
+            geometry.applyMatrix4(matrix);
+            if (config.hollow || config.cut) {
+              surface = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), lineMaterial);
+              geometry.dispose();
+            } else surface = new THREE.Mesh(geometry, material);
+            root.add(surface);
+          }
+        }
+      }
+      if (lines && samples.length) {
+        if (samples.length > capacity) {
+          capacity = 2 ** Math.ceil(Math.log2(samples.length));
+          line.geometry.dispose();
+          line.geometry = new THREE.BufferGeometry();
+          line.geometry.setAttribute(
+            'position',
+            new THREE.BufferAttribute(new Float32Array(capacity * 3), 3),
+          );
+        }
+        const attr = line.geometry.getAttribute('position');
+        samples.forEach((p, i) => attr.setXYZ(i, ...p));
+        attr.needsUpdate = true;
+        line.geometry.setDrawRange(0, samples.length);
+        line.frustumCulled = false;
+        line.visible = true;
+      }
+      const groups = new Map();
+      for (const op of ops.slice(0, 6000)) {
+        if (!op.state) continue;
+        const state = op.state,
+          key = /_stairs$/.test(state.Name)
+            ? 'stairs:' + JSON.stringify(state.Properties)
+            : /_slab$/.test(state.Name)
+              ? 'slab:' + state.Properties?.type
+              : 'cube';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(op);
+      }
+      for (const [key, list] of groups) {
+        const slab = key.startsWith('slab:') && !key.endsWith('double'),
+          stairs = key.startsWith('stairs:'),
+          parts = stairs
+            ? [
+                [
+                  [1, 0.5, 1],
+                  [0.5, 0.25, 0.5],
+                ],
+                [
+                  [1, 0.5, 0.5],
+                  [0.5, 0.75, 0.75],
+                ],
+              ]
+            : [
+                [
+                  [1, slab ? 0.5 : 1, 1],
+                  [0.5, slab ? (key.endsWith('top') ? 0.75 : 0.25) : 0.5, 0.5],
+                ],
+              ];
+        for (const [index, [size, center]] of parts.entries()) {
+          const id = key + ':' + index;
+          let mesh = meshes.get(id);
+          if (!mesh || mesh.instanceMatrix.count < list.length) {
+            if (mesh) {
+              root.remove(mesh);
+              mesh.geometry.dispose();
+            }
+            mesh = new THREE.InstancedMesh(
+              new THREE.BoxGeometry(...size),
+              material,
+              2 ** Math.ceil(Math.log2(Math.max(1, list.length))),
+            );
+            mesh.frustumCulled = false;
+            meshes.set(id, mesh);
+            root.add(mesh);
+          }
+          const matrix = new THREE.Matrix4(),
+            rotation = new THREE.Quaternion();
+          list.forEach((op, i) => {
+            const angle =
+              { south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 }[
+                op.state.Properties?.facing
+              ] || 0;
+            rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), stairs ? angle : 0);
+            const offset = new THREE.Vector3(...center).subScalar(0.5);
+            if (stairs && op.state.Properties?.half === 'top') offset.y = -offset.y;
+            offset.applyQuaternion(rotation).add(new THREE.Vector3(...op.pos).addScalar(0.5));
+            matrix.compose(offset, rotation, new THREE.Vector3(1, 1, 1));
+            mesh.setMatrixAt(i, matrix);
+          });
+          mesh.count = list.length;
+          mesh.visible = blocks;
+          mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+      frames++;
+      last = {
+        frames,
+        ms: performance.now() - started,
+        voxels: ops.length,
+        exact,
+        bounds: samples.length
+          ? [0, 1, 2].flatMap((a) =>
+              samples.reduce(
+                (out, p) => [Math.min(out[0], p[a]), Math.max(out[1], p[a])],
+                [Infinity, -Infinity],
+              ),
+            )
+          : [],
+      };
+      requestRender();
+      return last;
+    } catch (e) {
+      requestRender();
+      return { frames, error: e.message };
+    }
+  }
+  return {
+    draw,
+    clear,
+    stats: () => last,
+    dispose() {
+      scene.remove(root);
+      root.traverse((o) => o.geometry?.dispose());
+      material.dispose();
+      lineMaterial.dispose();
+    },
+  };
+}

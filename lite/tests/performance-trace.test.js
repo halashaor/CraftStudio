@@ -1,3 +1,48 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {PerformanceTrace} from '../src/performance-trace.js';import {WorkerSession} from '../src/worker-session.js';
-test('diagnostics are opt-in bounded and returned snapshots cannot mutate internal events',()=>{let now=0;const t=new PerformanceTrace(()=>now);assert.equal(t.begin(),null);t.record('ignored');assert.equal(t.read().events.length,0);t.start();const start=t.begin();now=5;t.finish('frame-submit',start,{triangles:2});assert.equal(t.read().events[0].durationMs,5);const copy=t.read();copy.events[0].stage='bad';assert.equal(t.read().events[0].stage,'frame-submit');for(let i=0;i<300;i++)t.record('test');assert.equal(t.read().events.length,256);t.stop();t.record('ignored');assert.equal(t.read().events.length,256);});
-test('worker timing metadata stays outside normal results and defaults to no tracing',async()=>{let worker,observed=[];const session=new WorkerSession(()=>worker={postMessage:r=>worker.request=r,terminate(){}},{onTiming:(action,timing)=>observed.push({action,...timing})});let result=session.call('summary');assert.equal(worker.request.trace,undefined);worker.onmessage({data:{id:worker.request.id,value:{ok:true}}});assert.deepEqual(await result,{ok:true});session.timings=()=>true;result=session.call('meshChunks');assert.equal(worker.request.trace,true);worker.onmessage({data:{id:worker.request.id,value:{chunks:[]},performance:{queueWaitMs:3,executeMs:5}}});assert.deepEqual(await result,{chunks:[]});assert.deepEqual(observed,[{action:'meshChunks',queueWaitMs:3,executeMs:5}]);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { PerformanceTrace } from '../src/runtime/performance-trace.js';
+import { WorkerSession } from '../src/runtime/worker-session.js';
+test('diagnostics are opt-in bounded and returned snapshots cannot mutate internal events', () => {
+  let now = 0;
+  const t = new PerformanceTrace(() => now);
+  assert.equal(t.begin(), null);
+  t.record('ignored');
+  assert.equal(t.read().events.length, 0);
+  t.start();
+  const start = t.begin();
+  now = 5;
+  t.finish('frame-submit', start, { triangles: 2 });
+  assert.equal(t.read().events[0].durationMs, 5);
+  const copy = t.read();
+  copy.events[0].stage = 'bad';
+  assert.equal(t.read().events[0].stage, 'frame-submit');
+  for (let i = 0; i < 300; i++) t.record('test');
+  assert.equal(t.read().events.length, 256);
+  t.stop();
+  t.record('ignored');
+  assert.equal(t.read().events.length, 256);
+});
+test('worker timing metadata stays outside normal results and defaults to no tracing', async () => {
+  let worker,
+    observed = [];
+  const session = new WorkerSession(
+    () => (worker = { postMessage: (r) => (worker.request = r), terminate() {} }),
+    { onTiming: (action, timing) => observed.push({ action, ...timing }) },
+  );
+  let result = session.call('summary');
+  assert.equal(worker.request.trace, undefined);
+  worker.onmessage({ data: { id: worker.request.id, value: { ok: true } } });
+  assert.deepEqual(await result, { ok: true });
+  session.timings = () => true;
+  result = session.call('meshChunks');
+  assert.equal(worker.request.trace, true);
+  worker.onmessage({
+    data: {
+      id: worker.request.id,
+      value: { chunks: [] },
+      performance: { queueWaitMs: 3, executeMs: 5 },
+    },
+  });
+  assert.deepEqual(await result, { chunks: [] });
+  assert.deepEqual(observed, [{ action: 'meshChunks', queueWaitMs: 3, executeMs: 5 }]);
+});

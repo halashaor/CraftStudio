@@ -1,0 +1,51 @@
+export function boundaryFitter(state, { roles = {}, available = [] } = {}) {
+  const names = new Set(available),
+    id = state.Name,
+    stem = id
+      .replace(/_stairs$|_slab$/, '')
+      .replace(/_planks$/, '')
+      .replace(/bricks$/, 'brick'),
+    slab = roles.slab || (names.has(stem + '_slab') ? { Name: stem + '_slab' } : null),
+    stairs = roles.stairs || (names.has(stem + '_stairs') ? { Name: stem + '_stairs' } : null),
+    base = /_(slab|stairs)$/.test(id)
+      ? [stem + 's', stem, stem + '_planks', stem + '_block'].find((n) => names.has(n))
+      : id,
+    full = roles.full || (base && base !== id ? { Name: base } : state),
+    side = { 3: 'north', 12: 'south', 5: 'west', 10: 'east' };
+  return (mask, centerInside) => {
+    const bottom = mask & 15,
+      top = (mask >> 4) & 15;
+    if (mask === 255) return { state: full, role: 'full' };
+    if (slab && ((bottom === 15 && top === 0) || (top === 15 && bottom === 0)))
+      return {
+        state: {
+          ...slab,
+          Properties: {
+            ...slab.Properties,
+            type: bottom === 15 ? 'bottom' : 'top',
+            waterlogged: 'false',
+          },
+        },
+        role: 'slab',
+      };
+    if (stairs && ((bottom === 15 && side[top]) || (top === 15 && side[bottom])))
+      return {
+        state: {
+          ...stairs,
+          Properties: {
+            ...stairs.Properties,
+            half: bottom === 15 ? 'bottom' : 'top',
+            facing: side[bottom === 15 ? top : bottom],
+            shape: 'straight',
+            waterlogged: 'false',
+          },
+        },
+        role: 'stairs',
+      };
+    return centerInside ? { state: full, role: 'full', fallback: mask !== 255 } : null;
+  };
+}
+
+export function boundaryMaterial(mask, centerInside, state, options) {
+  return boundaryFitter(state, options)(mask, centerInside);
+}

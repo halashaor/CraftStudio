@@ -1,23 +1,154 @@
-import {readFile,writeFile,realpath} from 'node:fs/promises';
-import {resolve} from 'node:path';import {randomUUID} from 'node:crypto';import assert from 'node:assert/strict';
-import {EngineStore} from './store.mjs';import {EngineController} from './controller.mjs';import {importNBT,stateKey} from '../lite/src/codec.js';
-const args=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');if(!arg.startsWith('--')||i<3)throw Error('Use --nbt=PATH --database=PATH [--vanilla=PATH --create=PATH --report=PATH]');return[arg.slice(2,i),arg.slice(i+1)];}));
-if(!args.nbt||!args.database)throw Error('Explicit input and independent database paths are required');
-const canonical=async path=>{const value=await realpath(path).catch(()=>resolve(path));return process.platform==='win32'?value.toLowerCase():value;};
-for(const name of ['database','report'])if(args[name])for(const input of ['nbt','vanilla','create'])if(args[input]&&await canonical(args[name])===await canonical(args[input]))throw Error('Output must not overwrite an input');
-if(args.report&&await canonical(args.report)===await canonical(args.database))throw Error('Output targets must be distinct');
-let store=new EngineStore(args.database),controller=await EngineController.open({store,key:'verify:'+randomUUID()});const key=controller.key;
-try{
- const files=[];for(const name of ['vanilla','create'])if(args[name])files.push({name:name+'.jar',bytes:new Uint8Array(await readFile(args[name])).buffer});if(files.length)await controller.call('resourceLibrary',{files});
- const bytes=new Uint8Array(await readFile(args.nbt)),original=importNBT(bytes,'source.nbt'),started=performance.now();await controller.call('import',{name:'verification.nbt',bytes:bytes.buffer});const importMs=performance.now()-started;
- const before=await controller.call('api',{method:'workspace.describe'}),pos=[before.value.size[0]+1,1,before.value.size[2]+1];if(pos.some(n=>n>=4096))throw Error('Verification needs one empty position beyond source bounds');
- const edit={id:'verify-durable-edit',method:'edit.apply',params:{workspaceId:before.workspaceId,expectedRevision:before.revision,operations:[{type:'set',pos,state:{Name:'craftstudio_verify:unknown_panel'}}]}};
- const accepted=await controller.call('api',edit);assert.ok(accepted.ok,accepted.error?.message);assert.equal(store.load(key).head.revision,accepted.revision);
- await controller.close();store.close();store=new EngineStore(args.database);controller=await EngineController.open({store,key});assert.deepEqual(await controller.call('api',edit),accepted);assert.equal((await controller.call('api',{method:'workspace.describe'})).value.history.undo,1);
- const exported=importNBT(await controller.call('export',{kind:'full'}),'export.nbt'),at=p=>p[0]+4096*(p[2]+4096*p[1]),records=new Map(original.blocks.map(b=>[at(b.pos),b])),sourceStates=original.palette.map(stateKey),exportedStates=exported.palette.map(stateKey);let count=0;
- for(const b of exported.blocks){const source=records.get(at(b.pos));if(source){assert.equal(exportedStates[b.state],sourceStates[source.state]);assert.deepEqual(b.nbt,source.nbt);count++;}}assert.equal(count,original.blocks.length);assert.deepEqual(exported.entities,original.entities);
- let d=await controller.call('api',{method:'workspace.describe'});assert.ok((await controller.call('api',{method:'history.undo',params:{expectedRevision:d.revision}})).ok);await controller.close();controller=await EngineController.open({store,key});d=await controller.call('api',{method:'workspace.describe'});assert.equal(d.value.history.redo,1);assert.ok((await controller.call('api',{method:'history.redo',params:{expectedRevision:d.revision}})).ok);
- d=await controller.call('api',{method:'workspace.describe'});const failedPos=[pos[0]+1,pos[1],pos[2]];controller.beforeCommit=async()=>{throw Error('simulated storage failure');};await assert.rejects(controller.call('api',{method:'edit.apply',params:{expectedRevision:d.revision,operations:[{type:'set',pos:failedPos,state:{Name:'craftstudio_verify:failed_marker'}}]}}),/not acknowledged/);assert.equal((await controller.call('api',{method:'workspace.describe'})).revision,d.revision);assert.equal((await controller.call('api',{method:'scene.getBlocks',params:{positions:[failedPos]}})).value[0].state,null);
- const report={schema:'craftstudio-durable-controller-verification/1',sourceBlocks:original.blocks.length,sourceEntities:original.entities.length,resourceArchives:files.length,importMs,persistedBeforeAcknowledgement:true,reopenReceiptReplayOnce:true,exactSourceStatesAndTags:true,undoRedoAcrossReopen:true,failedEditRolledBack:true,scope:'Node controller with independent SQLite database; not yet HTTP/UI handoff or browser working sets'};
- if(args.report)await writeFile(args.report,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
-}finally{await controller.close();store.close();}
+import { readFile, writeFile, realpath } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import assert from 'node:assert/strict';
+import { EngineStore } from './store.mjs';
+import { EngineController } from './controller.mjs';
+import { importNBT, stateKey } from '../lite/src/minecraft/codec.js';
+const args = Object.fromEntries(
+  process.argv.slice(2).map((arg) => {
+    const i = arg.indexOf('=');
+    if (!arg.startsWith('--') || i < 3)
+      throw Error('Use --nbt=PATH --database=PATH [--vanilla=PATH --create=PATH --report=PATH]');
+    return [arg.slice(2, i), arg.slice(i + 1)];
+  }),
+);
+if (!args.nbt || !args.database)
+  throw Error('Explicit input and independent database paths are required');
+const canonical = async (path) => {
+  const value = await realpath(path).catch(() => resolve(path));
+  return process.platform === 'win32' ? value.toLowerCase() : value;
+};
+for (const name of ['database', 'report'])
+  if (args[name])
+    for (const input of ['nbt', 'vanilla', 'create'])
+      if (args[input] && (await canonical(args[name])) === (await canonical(args[input])))
+        throw Error('Output must not overwrite an input');
+if (args.report && (await canonical(args.report)) === (await canonical(args.database)))
+  throw Error('Output targets must be distinct');
+let store = new EngineStore(args.database),
+  controller = await EngineController.open({ store, key: 'verify:' + randomUUID() });
+const key = controller.key;
+try {
+  const files = [];
+  for (const name of ['vanilla', 'create'])
+    if (args[name])
+      files.push({ name: name + '.jar', bytes: new Uint8Array(await readFile(args[name])).buffer });
+  if (files.length) await controller.call('resourceLibrary', { files });
+  const bytes = new Uint8Array(await readFile(args.nbt)),
+    original = importNBT(bytes, 'source.nbt'),
+    started = performance.now();
+  await controller.call('import', { name: 'verification.nbt', bytes: bytes.buffer });
+  const importMs = performance.now() - started;
+  const before = await controller.call('api', { method: 'workspace.describe' }),
+    pos = [before.value.size[0] + 1, 1, before.value.size[2] + 1];
+  if (pos.some((n) => n >= 4096))
+    throw Error('Verification needs one empty position beyond source bounds');
+  const edit = {
+    id: 'verify-durable-edit',
+    method: 'edit.apply',
+    params: {
+      workspaceId: before.workspaceId,
+      expectedRevision: before.revision,
+      operations: [{ type: 'set', pos, state: { Name: 'craftstudio_verify:unknown_panel' } }],
+    },
+  };
+  const accepted = await controller.call('api', edit);
+  assert.ok(accepted.ok, accepted.error?.message);
+  assert.equal(store.load(key).head.revision, accepted.revision);
+  await controller.close();
+  store.close();
+  store = new EngineStore(args.database);
+  controller = await EngineController.open({ store, key });
+  assert.deepEqual(await controller.call('api', edit), accepted);
+  assert.equal(
+    (await controller.call('api', { method: 'workspace.describe' })).value.history.undo,
+    1,
+  );
+  const exported = importNBT(await controller.call('export', { kind: 'full' }), 'export.nbt'),
+    at = (p) => p[0] + 4096 * (p[2] + 4096 * p[1]),
+    records = new Map(original.blocks.map((b) => [at(b.pos), b])),
+    sourceStates = original.palette.map(stateKey),
+    exportedStates = exported.palette.map(stateKey);
+  let count = 0;
+  for (const b of exported.blocks) {
+    const source = records.get(at(b.pos));
+    if (source) {
+      assert.equal(exportedStates[b.state], sourceStates[source.state]);
+      assert.deepEqual(b.nbt, source.nbt);
+      count++;
+    }
+  }
+  assert.equal(count, original.blocks.length);
+  assert.deepEqual(exported.entities, original.entities);
+  let d = await controller.call('api', { method: 'workspace.describe' });
+  assert.ok(
+    (
+      await controller.call('api', {
+        method: 'history.undo',
+        params: { expectedRevision: d.revision },
+      })
+    ).ok,
+  );
+  await controller.close();
+  controller = await EngineController.open({ store, key });
+  d = await controller.call('api', { method: 'workspace.describe' });
+  assert.equal(d.value.history.redo, 1);
+  assert.ok(
+    (
+      await controller.call('api', {
+        method: 'history.redo',
+        params: { expectedRevision: d.revision },
+      })
+    ).ok,
+  );
+  d = await controller.call('api', { method: 'workspace.describe' });
+  const failedPos = [pos[0] + 1, pos[1], pos[2]];
+  controller.beforeCommit = async () => {
+    throw Error('simulated storage failure');
+  };
+  await assert.rejects(
+    controller.call('api', {
+      method: 'edit.apply',
+      params: {
+        expectedRevision: d.revision,
+        operations: [
+          { type: 'set', pos: failedPos, state: { Name: 'craftstudio_verify:failed_marker' } },
+        ],
+      },
+    }),
+    /not acknowledged/,
+  );
+  assert.equal(
+    (await controller.call('api', { method: 'workspace.describe' })).revision,
+    d.revision,
+  );
+  assert.equal(
+    (
+      await controller.call('api', {
+        method: 'scene.getBlocks',
+        params: { positions: [failedPos] },
+      })
+    ).value[0].state,
+    null,
+  );
+  const report = {
+    schema: 'craftstudio-durable-controller-verification/1',
+    sourceBlocks: original.blocks.length,
+    sourceEntities: original.entities.length,
+    resourceArchives: files.length,
+    importMs,
+    persistedBeforeAcknowledgement: true,
+    reopenReceiptReplayOnce: true,
+    exactSourceStatesAndTags: true,
+    undoRedoAcrossReopen: true,
+    failedEditRolledBack: true,
+    scope:
+      'Node controller with independent SQLite database; not yet HTTP/UI handoff or browser working sets',
+  };
+  if (args.report) await writeFile(args.report, JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify(report));
+} finally {
+  await controller.close();
+  store.close();
+}

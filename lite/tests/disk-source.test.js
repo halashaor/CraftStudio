@@ -1,10 +1,197 @@
-import {decode,encode,digest} from '../../local-engine/checkpoint.mjs';
-import test from 'node:test';import assert from 'node:assert/strict';import {tmpdir} from 'node:os';import {join} from 'node:path';import {rmSync} from 'node:fs';import {randomUUID} from 'node:crypto';import {EngineStore} from '../../local-engine/store.mjs';import {EngineController} from '../../local-engine/controller.mjs';import {SourceReader} from '../../local-engine/source-reader.mjs';import {emptyProject} from '../src/codec.js';
-const fixture=()=>({...emptyProject('disk source'),size:[2112,4,4],palette:[{Name:'minecraft:stone'}],blocks:Array.from({length:130},(_,i)=>({pos:[i*16,1,1],state:0,...(i%10===0?{nbt:{id:'test:source',value:i}}:{})}))});
-async function setup(){const path=join(tmpdir(),'craftstudio-disk-'+randomUUID()+'.sqlite'),store=new EngineStore(path),c=await EngineController.open({store,key:'p'});await c.call('import',{name:'source.json',bytes:new TextEncoder().encode(JSON.stringify(fixture())).buffer});return{path,store,c};}
-test('file-backed canonical sources mount after commit, open without reading source payloads and never re-fetch all source during a saved edit',async()=>{const s=await setup();let c=s.c;try{let stats=await c.call('sourceResidency');assert.equal(stats.mode,'disk-chunks');assert.equal(stats.residentCompressedBytes,0);assert.equal(stats.diskReads,0);const packet=s.store.load('p',{lazySource:true}),ids=new Set(packet.head.baseChunks.map(c=>c[1]));assert.ok(packet.sourceDatabase);assert.ok(packet.blobs.every(b=>!ids.has(b.id)));assert.equal(packet.sourceSizes.length,130);await c.close();c=await EngineController.open({store:s.store,key:'p'});stats=await c.call('sourceResidency');assert.equal(stats.diskReads,0);assert.equal(stats.decodedReads,0);const result=await c.call('api',{method:'scene.getBlocks',params:{positions:fixture().blocks.slice(0,100).map(b=>b.pos)}});assert.equal(result.value.length,100);stats=await c.call('sourceResidency');assert.equal(stats.diskReads,100);assert.equal(stats.residentChunks,64);const d=await c.call('api',{method:'workspace.describe'});assert.equal((await c.call('api',{method:'edit.apply',params:{expectedRevision:d.revision,operations:[{type:'set',pos:[1600,1,1],state:{Name:'custom:panel'}}],policy:{allowTerrain:true}}})).ok,true);const after=await c.call('sourceResidency');assert.ok(after.diskReads-stats.diskReads<=2);assert.equal(after.residentCompressedBytes,0);assert.deepEqual((await c.call('package')).site.base.blocks,fixture().blocks);await assert.rejects(c.call('engineMountSource',{database:s.path}),/internal/);}finally{await c.close();s.store.close();rmSync(s.path,{force:true});}});
-test('cold source corruption is rejected on access and full export; unread healthy chunks remain readable',async()=>{const s=await setup();let c=s.c;try{await c.close();const packet=s.store.load('p'),row=packet.head.baseChunks.find(c=>c[0]===129);s.store.db.prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?').run(new Uint8Array([1,2,3]),row[1]);c=await EngineController.open({store:s.store,key:'p'});assert.equal((await c.call('sourceResidency')).diskReads,0);assert.equal((await c.call('api',{method:'scene.getBlocks',params:{positions:[[0,1,1]]}})).value[0].state.Name,'minecraft:stone');const corrupt=await c.call('api',{method:'scene.getBlocks',params:{positions:[[2064,1,1]]}});assert.equal(corrupt.ok,false);assert.match(corrupt.error.message,/corrupt/);await assert.rejects(c.call('package'),/corrupt/);assert.throws(()=>s.store.load('p'),/corrupt/);}finally{await c.close();s.store.close();rmSync(s.path,{force:true});}});
-test('source reader binds immutable allowed IDs and a read-only SQLite connection',async()=>{const s=await setup();let reader;try{const packet=s.store.load('p',{lazySource:true}),id=packet.head.baseChunks[0][1];reader=new SourceReader(s.path,[id]);assert.ok(reader.read(id).length>0);assert.throws(()=>reader.read('f'.repeat(64)),/Unknown/);assert.throws(()=>reader.db.exec('DELETE FROM designer_engine_blobs'),/readonly|read.only/i);}finally{reader?.close();await s.c.close();s.store.close();rmSync(s.path,{force:true});}});
+import { decode, encode, digest } from '../../local-engine/checkpoint.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { EngineStore } from '../../local-engine/store.mjs';
+import { EngineController } from '../../local-engine/controller.mjs';
+import { SourceReader } from '../../local-engine/source-reader.mjs';
+import { emptyProject } from '../src/minecraft/codec.js';
+const fixture = () => ({
+  ...emptyProject('disk source'),
+  size: [2112, 4, 4],
+  palette: [{ Name: 'minecraft:stone' }],
+  blocks: Array.from({ length: 130 }, (_, i) => ({
+    pos: [i * 16, 1, 1],
+    state: 0,
+    ...(i % 10 === 0 ? { nbt: { id: 'test:source', value: i } } : {}),
+  })),
+});
+async function setup() {
+  const path = join(tmpdir(), 'craftstudio-disk-' + randomUUID() + '.sqlite'),
+    store = new EngineStore(path),
+    c = await EngineController.open({ store, key: 'p' });
+  await c.call('import', {
+    name: 'source.json',
+    bytes: new TextEncoder().encode(JSON.stringify(fixture())).buffer,
+  });
+  return { path, store, c };
+}
+test('file-backed canonical sources mount after commit, open without reading source payloads and never re-fetch all source during a saved edit', async () => {
+  const s = await setup();
+  let c = s.c;
+  try {
+    let stats = await c.call('sourceResidency');
+    assert.equal(stats.mode, 'disk-chunks');
+    assert.equal(stats.residentCompressedBytes, 0);
+    assert.equal(stats.diskReads, 0);
+    const packet = s.store.load('p', { lazySource: true }),
+      ids = new Set(packet.head.baseChunks.map((c) => c[1]));
+    assert.ok(packet.sourceDatabase);
+    assert.ok(packet.blobs.every((b) => !ids.has(b.id)));
+    assert.equal(packet.sourceSizes.length, 130);
+    await c.close();
+    c = await EngineController.open({ store: s.store, key: 'p' });
+    stats = await c.call('sourceResidency');
+    assert.equal(stats.diskReads, 0);
+    assert.equal(stats.decodedReads, 0);
+    const result = await c.call('api', {
+      method: 'scene.getBlocks',
+      params: {
+        positions: fixture()
+          .blocks.slice(0, 100)
+          .map((b) => b.pos),
+      },
+    });
+    assert.equal(result.value.length, 100);
+    stats = await c.call('sourceResidency');
+    assert.equal(stats.diskReads, 100);
+    assert.equal(stats.residentChunks, 64);
+    const d = await c.call('api', { method: 'workspace.describe' });
+    assert.equal(
+      (
+        await c.call('api', {
+          method: 'edit.apply',
+          params: {
+            expectedRevision: d.revision,
+            operations: [{ type: 'set', pos: [1600, 1, 1], state: { Name: 'custom:panel' } }],
+            policy: { allowTerrain: true },
+          },
+        })
+      ).ok,
+      true,
+    );
+    const after = await c.call('sourceResidency');
+    assert.ok(after.diskReads - stats.diskReads <= 2);
+    assert.equal(after.residentCompressedBytes, 0);
+    assert.deepEqual((await c.call('package')).site.base.blocks, fixture().blocks);
+    await assert.rejects(c.call('engineMountSource', { database: s.path }), /internal/);
+  } finally {
+    await c.close();
+    s.store.close();
+    rmSync(s.path, { force: true });
+  }
+});
+test('cold source corruption is rejected on access and full export; unread healthy chunks remain readable', async () => {
+  const s = await setup();
+  let c = s.c;
+  try {
+    await c.close();
+    const packet = s.store.load('p'),
+      row = packet.head.baseChunks.find((c) => c[0] === 129);
+    s.store.db
+      .prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?')
+      .run(new Uint8Array([1, 2, 3]), row[1]);
+    c = await EngineController.open({ store: s.store, key: 'p' });
+    assert.equal((await c.call('sourceResidency')).diskReads, 0);
+    assert.equal(
+      (await c.call('api', { method: 'scene.getBlocks', params: { positions: [[0, 1, 1]] } }))
+        .value[0].state.Name,
+      'minecraft:stone',
+    );
+    const corrupt = await c.call('api', {
+      method: 'scene.getBlocks',
+      params: { positions: [[2064, 1, 1]] },
+    });
+    assert.equal(corrupt.ok, false);
+    assert.match(corrupt.error.message, /corrupt/);
+    await assert.rejects(c.call('package'), /corrupt/);
+    assert.throws(() => s.store.load('p'), /corrupt/);
+  } finally {
+    await c.close();
+    s.store.close();
+    rmSync(s.path, { force: true });
+  }
+});
+test('source reader binds immutable allowed IDs and a read-only SQLite connection', async () => {
+  const s = await setup();
+  let reader;
+  try {
+    const packet = s.store.load('p', { lazySource: true }),
+      id = packet.head.baseChunks[0][1];
+    reader = new SourceReader(s.path, [id]);
+    assert.ok(reader.read(id).length > 0);
+    assert.throws(() => reader.read('f'.repeat(64)), /Unknown/);
+    assert.throws(() => reader.db.exec('DELETE FROM designer_engine_blobs'), /readonly|read.only/i);
+  } finally {
+    reader?.close();
+    await s.c.close();
+    s.store.close();
+    rmSync(s.path, { force: true });
+  }
+});
 
-test('previous structural validation never bypasses the digest check after cache eviction',async()=>{const s=await setup();try{assert.equal((await s.c.call('api',{method:'scene.getBlocks',params:{positions:[[0,1,1]]}})).value[0].state.Name,'minecraft:stone');await s.c.call('api',{method:'scene.getBlocks',params:{positions:fixture().blocks.slice(1,101).map(b=>b.pos)}});const packet=s.store.load('p'),id=packet.head.baseChunks.find(row=>row[0]===0)[1];s.store.db.prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?').run(new Uint8Array([1]),id);const r=await s.c.call('api',{method:'scene.getBlocks',params:{positions:[[0,1,1]]}});assert.equal(r.ok,false);assert.match(r.error.message,/corrupt/);}finally{await s.c.close();s.store.close();rmSync(s.path,{force:true});}});
-test('a valid digest with invalid cell structure is rejected before being considered validated',async()=>{const s=await setup();let c=s.c;try{await c.close();const packet=s.store.load('p'),row=packet.head.baseChunks.find(row=>row[0]===0),entries=decode(packet.blobs.find(b=>b.id===row[1]).bytes);entries[0][1].pos=[16,1,1];const bytes=encode(entries),id=digest(bytes);row[1]=id;packet.blobs.push({id,bytes});s.store.commit('p',packet,packet.sequence);c=await EngineController.open({store:s.store,key:'p'});for(let i=0;i<2;i++){const r=await c.call('api',{method:'scene.getBlocks',params:{positions:[[0,1,1]]}});assert.equal(r.ok,false);assert.match(r.error.message,/baseline chunk cell/);}}finally{await c.close();s.store.close();rmSync(s.path,{force:true});}});
+test('previous structural validation never bypasses the digest check after cache eviction', async () => {
+  const s = await setup();
+  try {
+    assert.equal(
+      (await s.c.call('api', { method: 'scene.getBlocks', params: { positions: [[0, 1, 1]] } }))
+        .value[0].state.Name,
+      'minecraft:stone',
+    );
+    await s.c.call('api', {
+      method: 'scene.getBlocks',
+      params: {
+        positions: fixture()
+          .blocks.slice(1, 101)
+          .map((b) => b.pos),
+      },
+    });
+    const packet = s.store.load('p'),
+      id = packet.head.baseChunks.find((row) => row[0] === 0)[1];
+    s.store.db
+      .prepare('UPDATE designer_engine_blobs SET payload=? WHERE id=?')
+      .run(new Uint8Array([1]), id);
+    const r = await s.c.call('api', {
+      method: 'scene.getBlocks',
+      params: { positions: [[0, 1, 1]] },
+    });
+    assert.equal(r.ok, false);
+    assert.match(r.error.message, /corrupt/);
+  } finally {
+    await s.c.close();
+    s.store.close();
+    rmSync(s.path, { force: true });
+  }
+});
+test('a valid digest with invalid cell structure is rejected before being considered validated', async () => {
+  const s = await setup();
+  let c = s.c;
+  try {
+    await c.close();
+    const packet = s.store.load('p'),
+      row = packet.head.baseChunks.find((row) => row[0] === 0),
+      entries = decode(packet.blobs.find((b) => b.id === row[1]).bytes);
+    entries[0][1].pos = [16, 1, 1];
+    const bytes = encode(entries),
+      id = digest(bytes);
+    row[1] = id;
+    packet.blobs.push({ id, bytes });
+    s.store.commit('p', packet, packet.sequence);
+    c = await EngineController.open({ store: s.store, key: 'p' });
+    for (let i = 0; i < 2; i++) {
+      const r = await c.call('api', {
+        method: 'scene.getBlocks',
+        params: { positions: [[0, 1, 1]] },
+      });
+      assert.equal(r.ok, false);
+      assert.match(r.error.message, /baseline chunk cell/);
+    }
+  } finally {
+    await c.close();
+    s.store.close();
+    rmSync(s.path, { force: true });
+  }
+});
