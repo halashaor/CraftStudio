@@ -14,7 +14,7 @@ import { SketchBrowser } from '../sketch/sketch-browser.js';
 import { savedViewsUI } from '../view/saved-views-ui.js';
 import { generationLinks } from '../modeling/generation-links.js';
 import { measurementUI } from '../measurement/measurement-ui.js';
-import { closedProfiles } from '../sketch/sketch-profiles.js';
+import { createDesignCommands } from './design-commands.js';
 import { commandSearch } from './command-search.js';
 import { sceneShortcutBlocked, textEditing, dialogOwnsKeyboard } from './keyboard-context.js';
 import { isolationUI } from '../view/isolation-ui.js';
@@ -83,6 +83,10 @@ export function cadShell({
     ],
     notice,
   });
+  const busyReason = () =>
+    operations.busyReason() || (getSummary()?.preview ? '请先采用或取消 AI 提案预览' : '');
+  const selectionReason = () =>
+    busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : '');
   function prepareOperation(owner) {
     if (!operations.prepare(owner)) return false;
     chooseTool('inspect');
@@ -560,9 +564,9 @@ export function cadShell({
         run: () => $('isolation-enter').click(),
         reason: () => selectionReason(),
       },
-      { label: '移动 M', run: () => direct.begin('move'), reason: () => selectionReason() },
-      { label: '复制 C', run: () => direct.begin('copy'), reason: () => selectionReason() },
-      { label: '旋转 R', run: () => direct.begin('rotate'), reason: () => selectionReason() },
+      { label: '移动 M', run: () => runCommand('move'), reason: () => selectionReason() },
+      { label: '复制 C', run: () => runCommand('copy'), reason: () => selectionReason() },
+      { label: '旋转 R', run: () => runCommand('rotate'), reason: () => selectionReason() },
       { label: '重复上次变换 Shift+R', run: repeatTransform, reason: repeatReason },
       { label: '更多变换参数', run: () => open(modify), reason: () => selectionReason() },
       {
@@ -783,13 +787,13 @@ export function cadShell({
     }
     if (sceneShortcutBlocked(document.activeElement)) return;
     if (!e.ctrlKey && !e.altKey) {
-      if (e.key.toLowerCase() === 'm') direct.begin('move');
-      if (e.key.toLowerCase() === 'c') direct.begin('copy');
+      if (e.key.toLowerCase() === 'm') runCommand('move');
+      if (e.key.toLowerCase() === 'c') runCommand('copy');
       if (e.key.toLowerCase() === 'r') {
         if (e.shiftKey) {
           e.preventDefault();
           repeatTransform();
-        } else direct.begin('rotate');
+        } else runCommand('rotate');
       }
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -1017,267 +1021,6 @@ export function cadShell({
     library,
     notice,
   });
-  const commands = [],
-    busyReason = () =>
-      operations.busyReason() || (getSummary()?.preview ? '请先采用或取消 AI 提案预览' : ''),
-    selectionReason = () => busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : ''),
-    invoke = (id, category) => () => {
-      if (category) workspace.selectCategory(category);
-      $(id).click();
-    };
-  const add = (id, label, category, run, aliases = '', unavailable = busyReason, shortcut = '') =>
-    commands.push({ id, label, category, run, aliases, unavailable, shortcut });
-  for (const [id, label, aliases] of [
-    ['inspect', '选择', 'select selection'],
-    ['place', '放置方块', 'place block'],
-    ['paint', '画笔', 'brush paint draw'],
-    ['erase', '擦除', 'erase delete'],
-    ['sample', '取材', 'eyedropper sample'],
-  ])
-    add(id, label, '编辑', () => chooseTool(id), aliases);
-  for (const [id, label, target, key, aliases] of [
-    ['move', '移动选择', 'cad-move-direct', 'M', 'move translate 挪动 移位置 抬高 降低 升高'],
-    ['rotate', '旋转选择', 'cad-rotate-direct', 'R', 'rotate'],
-    ['copy', '复制选择', 'cad-copy-direct', 'C', 'copy duplicate 拷贝 副本 重复'],
-  ])
-    add(id, label, '编辑', invoke(target, 'edit'), aliases, selectionReason, key);
-  add(
-    'repeat-transform',
-    '重复上次变换 · 预览',
-    '编辑',
-    repeatTransform,
-    'repeat last transform 再复制一次 再移动一次 重复位移 重复旋转',
-    repeatReason,
-    'Shift+R',
-  );
-  add(
-    'prefab-library',
-    '浏览工程构件库',
-    '素材',
-    () => dock('components'),
-    'prefab components library 构件库 窗 门 柱 收藏建筑',
-    () => '',
-  );
-  add(
-    'prefab-import',
-    '导入构件文件',
-    '素材',
-    () => {
-      dock('components');
-      $('studio-prefab-file').click();
-    },
-    'import prefab craftprefab 构件文件',
-    busyReason,
-  );
-  add(
-    'selection-sets',
-    '常用命名选择',
-    '编辑',
-    () => {
-      $('selection-sets-panel').open = true;
-      $('selection-sets-panel').scrollIntoView({ block: 'nearest' });
-    },
-    'named selection sets 常用选择 保存选择 恢复选择',
-    () => '',
-  );
-  add(
-    'paste',
-    '粘贴预览',
-    '编辑',
-    invoke('cad-paste-direct', 'edit'),
-    'paste clipboard',
-    () => busyReason() || (!direct.hasClipboard() ? '请先用 Ctrl+C 复制选择' : ''),
-    'Ctrl+V',
-  );
-  for (const [kind, label, aliases] of [
-    ['line', '线段', 'line'],
-    ['polyline', '连续折线', 'polyline path 折线 路径'],
-    ['rectangle', '矩形轮廓', 'rectangle'],
-    ['circle', '圆形轮廓', 'circle'],
-    ['polygon', '多边形轮廓', 'polygon'],
-    ['bezier', '贝塞尔曲线', 'bezier curve 控制曲线'],
-    ['spline', '贯穿点曲线', 'spline interpolated curve 插值曲线 平滑路径 长曲线 途经点'],
-    ['ellipse', '椭圆轮廓', 'ellipse 椭圆'],
-    ['arc', '圆弧', 'arc 拱线 弧线'],
-    ['box', '长方体', 'box cuboid 盒子 体积'],
-  ])
-    add(
-      'figure-' + kind,
-      label,
-      '草图',
-      () => {
-        workspace.selectCategory('draw');
-        $('cad-figure').click();
-        $('figure-kind').value = kind;
-        $('figure-kind').dispatchEvent(new Event('change'));
-      },
-      aliases,
-    );
-  add(
-    'object-rename',
-    '重命名对象',
-    '编辑',
-    () => objectNames.begin(),
-    'rename name F2 改名字 命名',
-    () =>
-      busyReason() ||
-      (hasOperation()
-        ? '请先确认或取消当前预览'
-        : !selectionActive || !objectOnly || !selectedObjects.size
-          ? '请先选择对象'
-          : ''),
-    'F2',
-  );
-  add(
-    'object-batch-rename',
-    '批量命名对象',
-    '编辑',
-    () => objectNames.beginBatch(),
-    'batch rename name 编号 批量重命名 前缀 后缀 文字替换',
-    () => selectionReason() || (!objectOnly || !selectedObjects.size ? '请先选择对象' : ''),
-    'Ctrl+F2',
-  );
-  add(
-    'material-palettes',
-    '工程配色方案',
-    '素材',
-    () => {
-      dock('assets');
-      const panel = $('asset-project-palettes');
-      panel.open = true;
-      panel.scrollIntoView({ block: 'nearest' });
-    },
-    'palette 配色 收藏素材 材料组合',
-  );
-  add(
-    'palette-collect',
-    '从选区收集配色素材',
-    '素材',
-    () => {
-      dock('assets');
-      $('asset-project-palettes').open = true;
-      $('asset-project-palette-collect').click();
-    },
-    'collect materials 收集素材 保存选区材质',
-    () =>
-      selectionReason() ||
-      (!$('asset-project-palette').value ? '请先打开工程配色方案并选择一个方案' : ''),
-  );
-  for (const [id, label, button, aliases] of [
-    ['view-back', '上一视角', 'view-previous', 'previous view 返回视角 看回去'],
-    ['view-forward', '下一视角', 'view-next', 'next view 前进视角'],
-  ])
-    add(
-      id,
-      label,
-      '视图',
-      () => $(button).click(),
-      aliases,
-      () => busyReason() || (!$(button) || $(button).disabled ? '没有可恢复的相机视角' : ''),
-    );
-  add(
-    'precise-rectangle',
-    '精确矩形沿路径生成',
-    '建模',
-    () => {
-      direct.cancel();
-      designer.close();
-      chooseTool('inspect');
-      workspace.selectCategory('model');
-      $('feature-operation').value = 'sweep';
-      $('feature-sweep-mode').value = 'rectangle-fit';
-      construction.open('feature', { operation: 'sweep' });
-    },
-    '半砖步道 薄梁 半格截面 rectangle precise rail',
-    () =>
-      busyReason() ||
-      (!(getSummary()?.design.guides || []).some((g) => g.points?.length >= 2)
-        ? '请先绘制并保存一条路径'
-        : ''),
-  );
-  add(
-    'space-review',
-    '空间浏览',
-    '视图',
-    () => $('studio-walk').click(),
-    '室内浏览 漫游 看内部 fly walk',
-    () => busyReason() || (hasOperation() ? '请先确认或取消当前预览' : ''),
-  );
-  add('feature', '建模工具', '建模', invoke('cad-feature', 'model'), 'feature modelling');
-  const profileReason = (count) =>
-    busyReason() ||
-    (closedProfiles(getSummary()?.design.guides || []).length < count
-      ? count === 1
-        ? '请先绘制并保存闭合轮廓'
-        : '放样需要至少两个已保存的闭合轮廓'
-      : '');
-  for (const [op, label, aliases] of [
-    ['extrude', '拉伸', 'extrude extrusion'],
-    ['loft', '截面放样', 'loft'],
-    ['sweep', '沿路径生成', 'sweep path'],
-  ])
-    add(
-      'feature-' + op,
-      label,
-      '建模',
-      () => {
-        workspace.selectCategory('model');
-        $('feature-operation').value = op;
-        $('cad-feature').click();
-      },
-      aliases,
-      () =>
-        op === 'sweep'
-          ? busyReason() ||
-            (!(getSummary()?.design.guides || []).length ? '请先绘制并保存路径' : '')
-          : profileReason(op === 'loft' ? 2 : 1),
-    );
-  const aliases = {
-    array: 'array duplicate repeat',
-    pathArray: 'path array',
-    radialArray: 'radial array',
-    align: 'align',
-    distribute: 'distribute',
-    mirror: 'mirror',
-    offset: 'offset profile',
-    updateOffset: 'rebuild offset source 更新偏移 来源',
-    pushpull: 'push pull',
-    boolean: 'boolean union subtract',
-    editFeature: 'edit feature',
-    paint: 'paint material recolor 换材质 配色',
-    instance: 'linked instance',
-    syncInstances: 'update component',
-    makeUniqueInstance: 'make unique',
-    detachInstance: 'detach',
-    inspect: 'inspect dimensions',
-  };
-  for (const option of $('designer-operation').options)
-    add(
-      'designer-' + option.value,
-      option.textContent,
-      '排列 / 编辑',
-      () => {
-        direct.cancel();
-        construction.close();
-        chooseTool('inspect');
-        workspace.selectCategory('model');
-        designer.open(option.value);
-      },
-      aliases[option.value] || '',
-      option.value === 'updateOffset'
-        ? () =>
-            busyReason() ||
-            (!(getSummary()?.design.guides || []).some((g) => g.provenance?.kind === 'offset')
-              ? '没有带来源记录的偏移轮廓'
-              : '')
-        : option.value === 'offset'
-          ? () =>
-              busyReason() ||
-              (!(getSummary()?.design.guides || []).some((g) => closedProfiles([g]).length)
-                ? '请先保存一个闭合且共面的轮廓'
-                : '')
-          : selectionReason,
-    );
   window.addEventListener('craftstudio-edit-feature', (e) =>
     task(async () => {
       if (busyReason()) throw Error(busyReason());
@@ -1299,97 +1042,35 @@ export function cadShell({
       designer.open('updateOffset', { guideId: e.detail.guideId, repair: !!e.detail.repair });
     }),
   );
-  for (const [mode, label, aliases] of [
-    ['flatten', '局部整平', 'flatten terrain'],
-    ['smooth', '平滑地形', 'smooth terrain'],
-    ['slope', '连续坡道', 'slope ramp'],
-  ])
-    add(
-      'terrain-' + mode,
-      label,
-      '场地',
-      () => {
-        workspace.selectCategory('site');
-        $('terrain-operation').value = mode;
-        $('cad-terrain').click();
-      },
-      aliases,
-      selectionReason,
-    );
-  add(
-    'measure',
-    '测量间距 / 高差',
-    '视图',
-    () => measurement.open(),
-    'ruler measure distance height slope angle polyline length 夹角 折线 总长',
-    () => operations.busyReason(),
-  );
-  add(
-    'materials',
-    '素材库',
-    '素材',
-    () => dock('assets'),
-    'materials blocks palette',
-    () => '',
-    'Ctrl+F',
-  );
-  add(
-    'new-project',
-    '新建空白工程',
-    '文件',
-    invoke('new-project-open'),
-    'new blank project 从零设计',
+  const commands = createDesignCommands({
+    $,
+    workspace,
+    chooseTool,
+    dock,
+    direct,
+    construction,
+    designer,
+    measurement,
+    objectNames,
+    viewPresets,
+    operations,
+    hasOperation,
+    getSummary,
+    hasNamedSelection: () => selectionActive && objectOnly && selectedObjects.size > 0,
+    repeatTransform,
+    repeatReason,
     busyReason,
-  );
-  add(
-    'delivery',
-    '导出施工交付包',
-    '文件',
-    () => {
-      open(output);
-      $('delivery-kind').focus();
-    },
-    'export delivery blueprint zip 建造 打包',
-    busyReason,
-  );
-  add('library', '本地工程库', '文件', invoke('open-library'), 'projects library', busyReason);
-  add(
-    'saved-views',
-    '收藏视角',
-    '视图',
-    () => viewPresets.open(),
-    'views bookmark camera',
-    () => '',
-  );
-  add('fit', '总览场景', '视图', invoke('fit'), 'frame fit all', () => '', 'F');
-  add('top', '俯视', '视图', invoke('top'), 'top view', () => '');
-  add(
-    'frame-selection',
-    '聚焦选择',
-    '视图',
+    selectionReason,
     zoomSelection,
-    'frame selected focus zoom',
-    selectionReason,
-  );
-  add(
-    'isolate-selection',
-    '隔离编辑当前选择',
-    '视图',
-    invoke('isolation-enter'),
-    'local view isolate',
-    selectionReason,
-  );
-  add('exit-isolation', '退出一层隔离', '视图', invoke('isolation-exit'), 'exit local view', () =>
-    getSummary()?.view?.isolated ? '' : '当前未隔离',
-  );
-  add(
-    'clear-isolation',
-    '恢复全部场景',
-    '视图',
-    invoke('isolation-all'),
-    'global view clear isolation',
-    () => (getSummary()?.view?.isolated ? '' : '当前未隔离'),
-  );
+    openDelivery: () => open(output),
+  });
+  const commandMap = new Map(commands.map((command) => [command.id, command]));
+  function runCommand(id) {
+    const command = commandMap.get(id);
+    const reason = command.unavailable();
+    if (reason) return notice(reason);
+    return command.run();
+  }
   const commandFinder = commandSearch({ $, commands, library, notice, requestRender });
   viewPresets.mount();
   syncVectors();
