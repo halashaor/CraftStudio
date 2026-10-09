@@ -473,6 +473,31 @@ export function cadShell({
     direct.paste();
   };
   $('cad-copy-direct').after(pasteButton);
+  function repeatReason() {
+    return (
+      selectionReason() ||
+      (direct.isActive()
+        ? '先确认或取消当前变换'
+        : !direct.canRepeat()
+          ? '先确认一次移动、复制或旋转'
+          : '')
+    );
+  }
+  function repeatTransform() {
+    const reason = repeatReason();
+    if (reason) return notice(reason);
+    modify.dialog.close();
+    construction.close();
+    designer.close();
+    direct.repeat();
+  }
+  const repeatButton = document.createElement('button');
+  repeatButton.id = 'cad-repeat-transform';
+  repeatButton.textContent = '重复上次变换 · 预览';
+  repeatButton.title = 'Shift+R · 对当前选择复用上次已确认的移动、复制或旋转';
+  repeatButton.onclick = repeatTransform;
+  modify.body.prepend(repeatButton);
+
   const construction = constructionUI({
     getSummary,
     library,
@@ -764,6 +789,7 @@ export function cadShell({
       { label: '移动 M', run: () => direct.begin('move'), reason: () => selectionReason() },
       { label: '复制 C', run: () => direct.begin('copy'), reason: () => selectionReason() },
       { label: '旋转 R', run: () => direct.begin('rotate'), reason: () => selectionReason() },
+      { label: '重复上次变换 Shift+R', run: repeatTransform, reason: repeatReason },
       { label: '更多变换参数', run: () => open(modify), reason: () => selectionReason() },
       {
         label: '重命名 F2',
@@ -988,7 +1014,12 @@ export function cadShell({
     if (!e.ctrlKey && !e.altKey) {
       if (e.key.toLowerCase() === 'm') direct.begin('move');
       if (e.key.toLowerCase() === 'c') direct.begin('copy');
-      if (e.key.toLowerCase() === 'r') direct.begin('rotate');
+      if (e.key.toLowerCase() === 'r') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          repeatTransform();
+        } else direct.begin('rotate');
+      }
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
@@ -1249,6 +1280,15 @@ export function cadShell({
     ['copy', '复制选择', 'cad-copy-direct', 'C', 'copy duplicate 拷贝 副本 重复'],
   ])
     add(id, label, '编辑', invoke(target, 'edit'), aliases, selectionReason, key);
+  add(
+    'repeat-transform',
+    '重复上次变换 · 预览',
+    '编辑',
+    repeatTransform,
+    'repeat last transform 再复制一次 再移动一次 重复位移 重复旋转',
+    repeatReason,
+    'Shift+R',
+  );
   add(
     'paste',
     '粘贴预览',

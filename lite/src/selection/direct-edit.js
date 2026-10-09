@@ -1,4 +1,5 @@
 import { confirmedSelection } from './transform-result.js';
+import { TransformRepeat } from './transform-repeat.js';
 import { PreviewHistory } from '../runtime/preview-history.js';
 import { dimensionInput } from '../ui/dimension-expression.js';
 import {
@@ -71,7 +72,8 @@ export function directEdit({
     copyToken = 0,
     dragPointerId = null,
     loadingContext = null;
-  const history = new PreviewHistory(),
+  const repeatTransform = new TransformRepeat(),
+    history = new PreviewHistory(),
     fieldStarts = new Map(),
     expressionBindings = new Map();
   let dragStart = null;
@@ -546,6 +548,7 @@ export function directEdit({
             },
       );
       committed = true;
+      repeatTransform.record(snapshot, v);
       refresh(receipt);
       markDirty();
       const selection = confirmedSelection(snapshot, v, receipt);
@@ -684,17 +687,41 @@ export function directEdit({
     const at = pointer ? pointerAnchor(pointer) || clipboard.at : [...clipboard.at];
     await begin('paste', { prefab: clipboard.prefab, at });
   }
+  async function repeat() {
+    if (active || loading || applying) {
+      notice('请先确认或取消当前变换');
+      return;
+    }
+    const recipe = repeatTransform.read(getSummary()?.workspaceId);
+    if (!recipe) {
+      notice('先确认一次移动、复制或旋转');
+      return;
+    }
+    await begin(recipe.mode);
+    if (!active || active.workspaceId !== recipe.workspaceId) return;
+    const before = capture(),
+      pose = repeatTransform.pose(recipe, active.size);
+    proxy.rotation.y = pose.angle;
+    proxy.position.set(...pose.offset);
+    update();
+    record(before);
+    $('direct-edit-label').textContent =
+      '重复上次' + { move: '移动', copy: '复制', rotate: '旋转' }[recipe.mode] + ' · 预览';
+  }
   return {
     begin,
     cancel,
     copy,
     paste,
+    repeat,
+    canRepeat: () => !!repeatTransform.read(getSummary()?.workspaceId),
     isActive: () => !!active || loading,
     isBusy: () => applying,
     hasClipboard: () => !!clipboard || !!copying,
     previewHistory,
     historyState,
     ensureFresh: (s) => {
+      repeatTransform.clearFor(s.workspaceId);
       if (
         loading &&
         !active &&

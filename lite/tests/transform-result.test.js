@@ -72,6 +72,16 @@ test('paste then move selects actual placement only, even after undo history rea
   assert.equal(blocks[0].state.Name, 'minecraft:glass');
   assert.equal(blocks[1].state, null);
   assert.equal(blocks[2].state.Name, 'minecraft:oak_planks');
+  assert.deepEqual(
+    (await rpc('objects.list')).value.find((object) => object.name.includes('粘贴')).min,
+    [12, 1, 1],
+  );
+  await rpc('history.undo');
+  await rpc('history.redo');
+  assert.deepEqual(
+    (await rpc('objects.list')).value.find((object) => object.name.includes('粘贴')).min,
+    [12, 1, 1],
+  );
   assert.ok((await rpc('history.undo')).ok);
   blocks = (
     await rpc('scene.getBlocks', {
