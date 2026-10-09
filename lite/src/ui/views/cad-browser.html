@@ -1,0 +1,19 @@
+<div class="dock-title">设计浏览器</div>
+<div class="dock-tabs">
+  <button data-dock="objects" class="active">对象</button><button data-dock="assets">素材</button
+  ><button data-dock="components">构件</button>
+</div>
+<section id="dock-objects">
+  <input id="cad-object-search" placeholder="查找对象或草图" type="search" />
+  <div class="tree-root">▾ 当前设计</div>
+  <div id="cad-original-row">▧ 原始场地 <span>保留</span></div>
+  <div id="cad-object-list"></div>
+  <button id="cad-group-selection" class="full">将选择建立为对象</button>
+</section>
+<section id="dock-assets" hidden></section>
+<section id="dock-components" hidden>
+  <h3>当前工程构件</h3>
+  <p class="muted">拖入场景，或点击插入。构件仍可自由编辑。</p>
+  <div id="cad-components-container"></div>
+  <button id="cad-component-library" class="full">打开本地构件库</button>
+</section>

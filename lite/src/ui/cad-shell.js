@@ -1,3 +1,4 @@
+import { MaterialPicker } from '../materials/material-picker.js';
 import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
 import { viewportContextMenu } from './viewport-context-menu.js';
 import { objectNameUI } from '../selection/object-name-ui.js';
@@ -16,7 +17,7 @@ import { closedProfiles } from '../sketch/sketch-profiles.js';
 import { commandSearch } from './command-search.js';
 import { sceneShortcutBlocked, textEditing, dialogOwnsKeyboard } from './keyboard-context.js';
 import { isolationUI } from '../view/isolation-ui.js';
-import { brushUI } from '../selection/brush-ui.js';
+import { cadLayout } from './cad-layout.js';
 import { workspaceUI } from './workspace-ui.js';
 import { designerUI } from '../modeling/designer-ui.js';
 import { constructionUI } from '../modeling/construction-ui.js';
@@ -51,212 +52,22 @@ export function cadShell({
   let workspace = null,
     sketchBrowser = null,
     collectionBrowser = null;
-  document.body.classList.add('cad-workspace');
-  const main = document.querySelector('main'),
-    oldAside = document.querySelector('main>aside');
-  oldAside.id = 'legacy-aside';
-  const left = document.createElement('aside');
-  left.id = 'cad-browser';
-  left.innerHTML = `<div class="dock-title">设计浏览器</div><div class="dock-tabs"><button data-dock="objects" class="active">对象</button><button data-dock="assets">素材</button><button data-dock="components">构件</button></div><section id="dock-objects"><input id="cad-object-search" placeholder="查找对象或草图" type="search"><div class="tree-root">▾ 当前设计</div><div id="cad-original-row">▧ 原始场地 <span>保留</span></div><div id="cad-object-list"></div><button id="cad-group-selection" class="full">将选择建立为对象</button></section><section id="dock-assets" hidden></section><section id="dock-components" hidden><h3>当前工程构件</h3><p class="muted">拖入场景，或点击插入。构件仍可自由编辑。</p><div id="cad-components-container"></div><button id="cad-component-library" class="full">打开本地构件库</button></section>`;
-  main.prepend(left);
-  const right = document.createElement('aside');
-  right.id = 'cad-inspector';
-  right.innerHTML = `<div class="dock-title">属性检查器</div><div id="cad-selection-info" class="inspector-section"><h3>当前选择</h3><p id="cad-selection-label">点击或拖框选择；Shift 增加，Ctrl 减去。</p><label>点击选择<select id="cad-selection-target"><option value="blocks">方块</option><option value="objects">对象优先</option></select></label><p class="small">对象优先按实际成员选中整对象；重叠处 Alt+点击切换，没有对象时仍选方块。</p><label>选区组合<select id="cad-selection-mode"><option value="replace">重新选择</option><option value="add">增加范围</option><option value="subtract">减去范围</option><option value="intersect">保留交集</option></select></label><p class="small" id="cad-selection-combine-hint">左→右完整框入，右→左相交选入；Shift 增加，Ctrl 减去。选区黄色外框表示范围。</p><div class="row"><button id="cad-selection-focus" title="保留当前朝向和透视 / 正交模式，聚焦所选范围">聚焦选择</button><button id="cad-selection-modify">变换</button><button id="cad-selection-clear">取消选择</button></div></div><div id="cad-brush-settings" class="inspector-section"><h3>放置与画笔</h3></div><div id="cad-selected-properties"></div><div class="inspector-section"><h3>本次设计改动</h3><div id="cad-change-summary"></div><button id="cad-history" class="full">查看编辑记录</button></div>`;
-  main.append(right);
-  function dialog(id, title) {
-    const d = document.createElement('dialog');
-    d.id = id;
-    d.className = 'cad-dialog';
-    const header = document.createElement('div');
-    header.className = 'dialog-header';
-    header.innerHTML = '<h2></h2><button>关闭</button>';
-    header.querySelector('h2').textContent = title;
-    header.querySelector('button').onclick = () => d.close();
-    d.append(header);
-    const body = document.createElement('div');
-    body.className = 'cad-dialog-body';
-    d.append(body);
-    document.body.append(d);
-    return { dialog: d, body };
-  }
-  const file = dialog('cad-file-dialog', '文件与资源'),
-    site = dialog('cad-site-dialog', '场地与显示'),
-    output = dialog('cad-output-dialog', '保存与导出'),
-    modify = dialog('cad-modify-dialog', '变换与选区编辑'),
-    build = dialog('cad-build-dialog', '辅助创建'),
-    motion = dialog('cad-motion-dialog', '运动外观'),
-    component = dialog('cad-component-dialog', '创建可复用构件'),
-    advanced = dialog('cad-advanced-dialog', '高级方块设置'),
-    history = dialog('cad-history-dialog', '编辑记录');
-  for (const [name, d] of [
-    ['import', file],
-    ['check', site],
-    ['save', output],
-  ]) {
-    const section = $('step-' + name);
-    section.hidden = false;
-    d.body.append(section);
-  }
-  const edit = $('step-edit'),
-    tools = edit.querySelector('.tool-row');
-  const ribbon = document.createElement('div');
-  ribbon.id = 'cad-ribbon';
-  ribbon.innerHTML = `<div class="ribbon-group" id="cad-tools"></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-move-direct" title="移动 M">移动</button><button id="cad-copy-direct" title="复制 C">复制</button><button id="cad-rotate-direct" title="旋转 R">旋转</button><button id="cad-modify-open">更多 ▾</button><button id="cad-create-open">创建 ▾</button><button id="cad-components-open">构件库</button></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-assets-open">素材库</button><button id="cad-ai-open">AI 设计</button></div><span id="cad-active-tool">选择</span>`;
-  document.querySelector('header').after(ribbon);
-  $('cad-tools').append(...tools.children);
-  const labels = { inspect: '选择', place: '放置', erase: '擦除', paint: '画笔', sample: '取材' };
-  document.querySelectorAll('[data-tool]').forEach((b) => {
-    b.textContent = labels[b.dataset.tool];
-    b.title = {
-      inspect: '选择 V · 左键选择，拖动框选',
-      place: '放置 P · 每次一个方块',
-      erase: '擦除 X',
-      paint: '画笔 B · 拖动连续绘制',
-    }[b.dataset.tool];
-  });
-  const sample = document.createElement('button');
-  sample.dataset.tool = 'sample';
-  sample.textContent = '取材';
-  sample.title = '点击场景中的方块取材';
-  sample.onclick = () => chooseTool('sample');
-  $('cad-tools').append(sample);
-  const chip = document.createElement('button');
-  chip.id = 'cad-material-chip';
-  chip.title = '更换当前素材';
-  chip.textContent = '当前素材';
-  $('cad-ribbon').insertBefore(chip, $('cad-active-tool'));
-  const brush = edit.querySelector('.brush-settings');
-  $('cad-brush-settings').append(brush);
-  brush.querySelector('.small').textContent =
-    '右键旋转，中键平移；空格＋左键临时旋转。Shift 画直线，E 取材，[ ] 调大小。';
-  const brushOptions = brushUI({ $, library, notice });
-  const material = $('block-id').closest('.card');
-  advanced.body.append(material);
-  $('block-search').hidden = true;
-  $('block-list').hidden = true;
-  const rules = $('allow-terrain').closest('.card');
-  site.body.append(rules);
-  modify.body.append($('edit-min').closest('details'));
-  build.body.append($('platform-min').closest('details'));
-  const panel = $('studio-panel');
-  const take = (id, to) => {
-    const node = $(id);
-    if (!node) return;
-    const unit = node.closest('label') || node;
-    to.append(unit);
-  };
-  const fieldgroup = (title, to) => {
-    const f = document.createElement('section');
-    f.className = 'cad-form-group';
-    f.innerHTML = '<h3></h3>';
-    f.firstChild.textContent = title;
-    to.append(f);
-    return f;
-  };
-  const selection = fieldgroup('选择范围', modify.body);
-  for (const id of ['studio-min', 'studio-max', 'studio-select', 'studio-drag'])
-    take(id, selection);
-  const transform = fieldgroup('移动、复制与阵列', modify.body);
-  for (const id of [
-    'studio-at',
-    'studio-turn',
-    'studio-mirror',
-    'studio-count',
-    'studio-step',
-    'studio-copy',
-    'studio-move',
-  ])
-    take(id, transform);
-  const comp = fieldgroup('构件信息', component.body);
-  for (const id of [
-    'studio-name',
-    'studio-register',
-    'studio-prefab',
-    'studio-prefab-library',
-    'studio-prefab-file',
-  ])
-    take(id, comp);
-  $('cad-components-container').append($('studio-prefabs'));
-  const gen = fieldgroup('参数辅助（生成后可自由编辑）', build.body);
-  for (const id of ['studio-kind', 'studio-size', 'studio-build', 'studio-demo']) take(id, gen);
-  const roofLabel = $('studio-roof').closest('label');
-  advanced.body.append(roofLabel);
-  const roofButton = document.createElement('button');
-  roofButton.id = 'cad-roof-material';
-  roofButton.textContent = '选择屋顶素材';
-  roofButton.onclick = () =>
-    requestMaterial(
-      (state, name) => {
-        $('studio-roof').value = state.Name;
-        $('cad-roof-material').textContent = '屋顶：' + name;
-      },
-      { isActive: () => build.dialog.open },
-      build.dialog,
-      '参数辅助 · 屋顶',
-    );
-  gen.append(roofButton);
-  const objects = $('studio-objects');
-  objects.classList.add('cad-object-tree');
-  $('cad-object-list').append(objects);
-  const animate = fieldgroup('选择装置与运动方式', motion.body);
-  for (const id of [
-    'studio-motion-target',
-    'studio-motion-type',
-    'studio-axis',
-    'studio-rpm',
-    'studio-travel',
-    'studio-period',
-    'studio-animation',
-  ])
-    take(id, animate);
-  motion.body.append($('studio-route').closest('label'));
-  motion.body.append($('create-panel'));
-  motion.dialog.hidden = true;
-  $('create-play').checked = true;
-  $('create-demo').checked = true;
-  $('create-rpm').value = '16';
-  const merge = fieldgroup('区域裁切与蓝图合并', file.body);
-  for (const id of ['studio-crop', 'studio-merge-air', 'studio-merge']) take(id, merge);
-  panel.remove();
-  const views = $('studio-views');
-  views.open = true;
-  site.body.append(views);
-  edit.hidden = true;
-  oldAside.hidden = true;
-  const pick = $('pick-panel');
-  $('cad-selected-properties').append(pick);
-  pick.style.position = 'static';
-  const toolbar = document.querySelector('.scene-toolbar');
-  toolbar.querySelectorAll('button').forEach((b) => (b.title = b.textContent));
-  const cube = document.createElement('div');
-  cube.id = 'cad-view-cube';
-  cube.innerHTML =
-    '<button id="cad-view-top">俯</button><button id="cad-view-front">前</button><button id="cad-view-side">侧</button><button id="cad-view-iso">轴测</button>';
-  $('scene').append(cube);
-  document.querySelector('header .brand').after(document.querySelector('.scene-heading'));
-  const samples = document.createElement('details');
-  samples.className = 'card';
-  samples.innerHTML = '<summary>示例工程与设计参考</summary>';
-  for (const id of [
-    'provided-source',
-    'provided-demo',
-    'trial-rebuild',
-    'trial-redesign',
-    'provided-plan',
-  ])
-    if ($(id)) samples.append($(id));
-  file.body.append(samples);
-  const empty = document.createElement('div');
-  empty.id = 'cad-empty';
-  empty.innerHTML =
-    '<h2>你的建筑工作空间</h2><p>导入真实场地，或从素材开始自由建造。</p><button id="cad-empty-file">打开场地</button><button id="cad-empty-assets">选择素材</button>';
-  $('scene').append(empty);
-  const statusText = document.querySelector('.gesture');
-  statusText.textContent = '左键选择 / 拖框 · 右键旋转 · 中键平移 · F 总览';
-  document.querySelector('.scene-heading .eyebrow').hidden = true;
-  document.querySelector('.foot-right').textContent = '本地保存 · 每格一个方块';
-  let activeDock = 'objects',
-    materialReceiver = null;
+  const {
+    file,
+    site,
+    output,
+    modify,
+    build,
+    motion,
+    component,
+    advanced,
+    history,
+    objects,
+    labels,
+    brushOptions,
+  } = cadLayout({ $, chooseTool, library, notice, requestMaterial });
+  const materialPicker = new MaterialPicker({ $, openShelf: () => dock('assets') });
+  let activeDock = 'objects';
   let selectionActive = false;
   let selectedObjects = new Set(),
     objectCandidates = new Set(),
@@ -272,15 +83,8 @@ export function cadShell({
     task,
     host: $('dock-assets'),
     getSelection: () => (selectionActive ? structuredClone(studio.getSelection()) : null),
-    onChoose: (state, name, target) => {
-      if (materialReceiver) {
-        const receiver = materialReceiver;
-        if (receiver.active()) {
-          receiver.callback(state, name);
-          return 'parameter';
-        }
-        clearMaterialReceiver();
-      }
+    onChoose: (state, name) => {
+      if (materialPicker.choose(state, name)) return 'parameter';
       $('block-id').value = state.Name;
       $('block-properties').value = state.Properties ? JSON.stringify(state.Properties) : '';
       materialChanged(state, name);
@@ -289,41 +93,12 @@ export function cadShell({
     },
   });
   $('cad-inspector').insertBefore(assets.detail, $('cad-selected-properties'));
-  function materialHeading() {
-    const heading = $('workspace-shelf')?.querySelector('.workspace-shelf-header > strong');
-    if (heading)
-      heading.textContent = materialReceiver
-        ? '选择素材 · ' + materialReceiver.label
-        : '素材与构件';
-  }
-  function clearMaterialReceiver() {
-    materialReceiver = null;
-    materialHeading();
-  }
   function requestMaterial(callback, owner, node, label) {
-    materialReceiver = { callback, active: () => owner.isActive() && !node.hidden, label, node };
-    dock('assets');
-    materialHeading();
+    materialPicker.request(callback, owner, node, label);
   }
-  const materialObserver = new MutationObserver((records) => {
-    if (
-      materialReceiver &&
-      records.some(
-        (r) =>
-          r.target === materialReceiver.node &&
-          ((r.attributeName === 'hidden' && (r.oldValue === null || r.target.hidden)) ||
-            (r.attributeName === 'open' && !r.target.open)),
-      )
-    )
-      clearMaterialReceiver();
-  });
-  materialObserver.observe(build.dialog, {
-    attributes: true,
-    attributeFilter: ['open'],
-    attributeOldValue: true,
-  });
+  materialPicker.observe(build.dialog, 'open');
   function dock(name) {
-    if (name !== 'assets') clearMaterialReceiver();
+    if (name !== 'assets') materialPicker.clear();
     activeDock = name;
     for (const n of ['objects', 'assets', 'components']) $('dock-' + n).hidden = n !== name;
     document
@@ -336,10 +111,10 @@ export function cadShell({
   }
   document.querySelectorAll('[data-dock]').forEach((b) => (b.onclick = () => dock(b.dataset.dock)));
   const open = (d) => {
-    clearMaterialReceiver();
-    if (typeof direct !== 'undefined') direct.cancel();
-    if (typeof construction !== 'undefined') construction.close();
-    if (typeof designer !== 'undefined') designer.close();
+    materialPicker.clear();
+    direct.cancel();
+    construction.close();
+    designer.close();
     for (const other of [file, site, output, modify, build, motion, component, advanced, history])
       if (other !== d && other.dialog.open) other.dialog.close();
     if (!workspace?.openDialog(d.dialog)) d.dialog.showModal();
@@ -363,11 +138,11 @@ export function cadShell({
     chooseTool('place');
   };
   $('cad-material-chip').onclick = () => {
-    clearMaterialReceiver();
+    materialPicker.clear();
     dock('assets');
   };
   $('cad-assets-open').onclick = () => {
-    clearMaterialReceiver();
+    materialPicker.clear();
     dock('assets');
   };
   $('cad-ai-open').onclick = () => $('ai-dialog').showModal();
@@ -540,11 +315,7 @@ export function cadShell({
     pickMaterial: (callback, label) =>
       requestMaterial(callback, construction, $('construction-panel'), label || '建模材料'),
   });
-  materialObserver.observe($('construction-panel'), {
-    attributes: true,
-    attributeFilter: ['hidden'],
-    attributeOldValue: true,
-  });
+  materialPicker.observe($('construction-panel'), 'hidden');
   window.addEventListener('craftstudio-edit-sketch', (e) => {
     direct.cancel();
     designer.close();
@@ -595,11 +366,7 @@ export function cadShell({
     notice,
     requestRender,
   });
-  materialObserver.observe($('designer-panel'), {
-    attributes: true,
-    attributeFilter: ['hidden'],
-    attributeOldValue: true,
-  });
+  materialPicker.observe($('designer-panel'), 'hidden');
   window.addEventListener('craftstudio-transform-start', () => {
     construction.close();
     designer.close();
@@ -719,10 +486,10 @@ export function cadShell({
   $('ai-preview').textContent = '查看方案';
   $('ai-open').hidden = true;
   function toolChanged(tool) {
-    clearMaterialReceiver();
+    materialPicker.clear();
     if (measurement.isActive()) measurement.close();
     brushOptions.toolChanged(tool);
-    if (tool !== 'inspect' && typeof direct !== 'undefined') {
+    if (tool !== 'inspect') {
       direct.cancel();
       construction.close();
       designer.close();

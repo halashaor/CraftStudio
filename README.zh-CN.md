@@ -102,6 +102,8 @@ Sponge 和 Litematica 转换不会完整保留所有实体、生物群系、计�
 
 ## 工作区与视角
 
+打开任务时，工具组随之定位：编辑草图进入“草图”，拉伸和排列进入“建模”，地形处理进入“场地”，直接变换进入“编辑”。只浏览其他工具组会保留当前预览；打开另一项操作沿用原有确认／取消规则。工具组用于导航，不是独立工程。
+
 草图列表提供**定位**，无需先进入编辑。建模预览活动时，**F**优先定位当前轮廓与预览，不受旧方块选区影响；否则定位方块选择或整个场景。工具面板的定位按钮共用预览范围，覆盖完整圆形及拉伸深度，保留投影、朝向和缩放设置，Home 返回上一视角。双击对象行仍定位该对象。视口选中对象会揭示对应列表行；进入草图编辑会揭示并标记来源行，仅在当前筛选藏住目标时清除筛选。关闭或暂存后清除编辑标记，继续编辑时恢复。这些导航不修改工程几何。
 
 在视口中右键点击而不拖动，可打开聚焦、隔离和常用变换菜单；不可用动作会显示前置条件。上／下方向键、Home／End 和 Enter 可导航及执行可用项。Esc 先关闭菜单并返回视口，不取消后面的预览；点击外部输入框保留输入焦点。菜单作用于已有选择，不会自动选中右键位置的对象。
@@ -343,7 +345,7 @@ const result = await window.CraftStudio.request({
 
 草稿状态与自动保存调度集中在 `lite/src/storage/draft-controller.js`，检查点元数据及缓存资源补传集中在 `lite/src/storage/checkpoint-draft.js`。主界面通过回调组合这些服务。并发保存请求共用正在进行的草稿保存，保存期间的新编辑继续保留待保存状态；手动保存成功后取消多余的定时写入。存储错误在持久化边界处理。
 
-源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。
+源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。`ui/cad-layout.js` 挂载主界面及模板，`ui/cad-shell.js` 组合设计交互，`materials/material-picker.js` 将选材交给请求它的操作或画笔。
 
 在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
 

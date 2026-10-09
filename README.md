@@ -102,6 +102,8 @@ Sponge and Litematica conversions do not preserve every entity, biome, scheduled
 
 ## Workspace and navigation
 
+Opening a task selects its tool group: sketch editing uses Sketch, extrusion and layout use Modeling, terrain uses Site, and direct transforms use Edit. Browsing another tool group keeps the current preview; opening a different operation uses the existing confirmation/cancellation behavior. Tool groups are navigation, not separate documents.
+
 The sketch browser provides **Frame** without entering edit mode. While a construction preview is active, **F** frames the current contour and preview before any older block selection; otherwise it frames the selected blocks or scene. The tool’s Frame button uses the same preview bounds, including full circles and extrusion depth. Projection, orientation and zoom settings are retained; Home returns to the previous view. Double-clicking an object row still frames that object. Viewport object picks reveal their row, and entering sketch editing reveals and marks its source row; conflicting list filters are cleared only when needed. Closing or pausing the editor clears the editing marker, and continuing restores it. These navigation actions do not edit project geometry.
 
 Right-click without dragging opens the viewport context menu for focus, isolation and common transforms. Unavailable actions show their prerequisite. Use Up/Down, Home/End and Enter to navigate and activate enabled items. Escape closes the menu before canceling a background preview, then returns focus to the viewport; clicking an outside input leaves focus there. This menu operates on the existing selection and does not select the object under the right-click automatically.
@@ -343,7 +345,7 @@ The browser entry point composes focused feature modules. File opening lives in 
 
 Draft state and autosave scheduling belong to `lite/src/storage/draft-controller.js`; checkpoint metadata and cached asset resend belong to `lite/src/storage/checkpoint-draft.js`. The app composes these services through callbacks. Concurrent save requests share the pending draft, later edits retain their unsaved state, and successful manual persistence cancels redundant scheduled writes. Storage errors are handled at the persistence boundary.
 
-The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`.
+The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`. `ui/cad-layout.js` mounts the shell and its templates; `ui/cad-shell.js` composes design interactions; `materials/material-picker.js` routes material choices to the requesting operation or brush.
 
 Run `npm run format` or `npm run format:check` from `lite` for JavaScript, templates and CSS. Python development uses `pip install -r requirements-dev.txt` and `python -m black backend server.py mcp_server.py tests`; these tools are not runtime requirements. CI checks both formatting and behavior.
 

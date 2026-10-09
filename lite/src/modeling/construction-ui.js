@@ -3200,6 +3200,7 @@ export function constructionUI({
     );
   }
   return {
+    workspaceCategory: () => ({ geometry: 'draw', feature: 'model', terrain: 'site' })[type],
     highlightSources: (ids) => {
       snapping.highlightSources(ids);
     },

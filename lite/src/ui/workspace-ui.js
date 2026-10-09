@@ -117,9 +117,13 @@ export function workspaceUI({
   }
   selectCategory('edit');
   const panels = [
-    { node: $('construction-panel'), close: construction.close },
-    { node: $('designer-panel'), close: designer.close },
-    { node: $('direct-edit-bar'), close: direct.cancel },
+    {
+      node: $('construction-panel'),
+      close: construction.close,
+      category: construction.workspaceCategory,
+    },
+    { node: $('designer-panel'), close: designer.close, category: () => 'model' },
+    { node: $('direct-edit-bar'), close: direct.cancel, category: () => 'edit' },
     { node: $('measurement-panel'), close: measurement.close },
   ];
   for (const p of panels) {
@@ -137,7 +141,18 @@ export function workspaceUI({
     const node = $(id);
     node.classList.add('workspace-task-panel', 'workspace-dialog');
     tasks.append(node);
-    panels.push({ node, close: () => node.close() });
+    panels.push({
+      node,
+      close: () => node.close(),
+      category: () =>
+        ({
+          'cad-build-dialog': 'model',
+          'cad-site-dialog': 'site',
+          'cad-modify-dialog': 'edit',
+          'cad-component-dialog': 'edit',
+          'cad-advanced-dialog': 'edit',
+        })[id],
+    });
   }
   const visible = (p) => (p.node.tagName === 'DIALOG' ? p.node.open : !p.node.hidden);
   let current = null,
@@ -153,6 +168,8 @@ export function workspaceUI({
       .map((r) => panels.find((p) => p.node === r.target))
       .filter((p) => p && visible(p))
       .at(-1);
+    const category = opened?.category?.();
+    if (category) selectCategory(category);
     if (opened && opened !== current) {
       current = opened;
       for (const p of panels) if (p !== opened && visible(p)) p.close();

@@ -1,0 +1,36 @@
+<div class="dock-title">属性检查器</div>
+<div id="cad-selection-info" class="inspector-section">
+  <h3>当前选择</h3>
+  <p id="cad-selection-label">点击或拖框选择；Shift 增加，Ctrl 减去。</p>
+  <label
+    >点击选择<select id="cad-selection-target">
+      <option value="blocks">方块</option>
+      <option value="objects">对象优先</option>
+    </select></label
+  >
+  <p class="small">对象优先按实际成员选中整对象；重叠处 Alt+点击切换，没有对象时仍选方块。</p>
+  <label
+    >选区组合<select id="cad-selection-mode">
+      <option value="replace">重新选择</option>
+      <option value="add">增加范围</option>
+      <option value="subtract">减去范围</option>
+      <option value="intersect">保留交集</option>
+    </select></label
+  >
+  <p class="small" id="cad-selection-combine-hint">
+    左→右完整框入，右→左相交选入；Shift 增加，Ctrl 减去。选区黄色外框表示范围。
+  </p>
+  <div class="row">
+    <button id="cad-selection-focus" title="保留当前朝向和透视 / 正交模式，聚焦所选范围">
+      聚焦选择</button
+    ><button id="cad-selection-modify">变换</button
+    ><button id="cad-selection-clear">取消选择</button>
+  </div>
+</div>
+<div id="cad-brush-settings" class="inspector-section"><h3>放置与画笔</h3></div>
+<div id="cad-selected-properties"></div>
+<div class="inspector-section">
+  <h3>本次设计改动</h3>
+  <div id="cad-change-summary"></div>
+  <button id="cad-history" class="full">查看编辑记录</button>
+</div>
