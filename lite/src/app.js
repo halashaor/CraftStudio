@@ -310,6 +310,7 @@ let storageOK = false,
   mode = 'after',
   tool = 'inspect',
   active = null,
+  hasDocument = false,
   selected = null,
   dirty = false,
   autosaveTimer = null,
@@ -724,7 +725,10 @@ function refresh(s, reset = false) {
   $('origin-evidence').textContent = s.originConfirmed
     ? '坐标基准已确定；点选与变更表会显示世界坐标。'
     : '目前只使用局部坐标，请设置世界原点后用于施工。';
-  if (reset) $('save-title').value = s.name;
+  if (reset) {
+    hasDocument = true;
+    $('save-title').value = s.name;
+  }
   if (!s.sourceBlocks && !s.changes) {
     if (initial || reset) {
       grid.visible = true;
@@ -1257,6 +1261,7 @@ async function renderNow(viewportOnly = false) {
 }
 let editEpoch = 0;
 function markDirty() {
+  hasDocument = true;
   editEpoch++;
   dirty = true;
   $('storage-status').textContent = '编辑已更新 · 等待空闲保存草稿';
@@ -1380,7 +1385,7 @@ async function persistDraft() {
 }
 
 async function checkpoint() {
-  if (!dirty || summary?.preview) return;
+  if (!hasDocument || (!dirty && active) || summary?.preview) return;
   if (!storageOK) throw Error('当前设计尚未保存，请先下载完整工程，再切换场景');
   if (!active) {
     const bytes = await projectBytes($('save-title').value || summary.name);
