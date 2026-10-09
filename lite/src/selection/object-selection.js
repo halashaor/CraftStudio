@@ -1,5 +1,19 @@
-import { coordKey } from '../core/site.js';
+import { coordKey, coords } from '../core/site.js';
 import { objectHidden } from '../components/collections.js';
+import { selectionPredicate } from './selection-mask.js';
+export function containedObjectIds(objects, ids, selection) {
+  const contains = selectionPredicate(selection);
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  return new Set(
+    [...ids].filter((id) => {
+      const object = byId.get(id);
+      return (
+        object?.cells?.length &&
+        object.cells.every((cell) => contains(Array.isArray(cell) ? cell : coords(cell)))
+      );
+    }),
+  );
+}
 export function objectsAtCell(design, position) {
   const key = position.join(','),
     encoded = coordKey(...position);

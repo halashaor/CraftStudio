@@ -1,4 +1,5 @@
 import { ObjectTreeUI } from './object-tree-ui.js';
+import { ObjectSelectionBinding } from '../selection/object-selection-binding.js';
 import { MaterialPicker } from '../materials/material-picker.js';
 import { OperationSession } from './operation-session.js';
 import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
@@ -7,7 +8,11 @@ import { objectNameUI } from '../selection/object-name-ui.js';
 import { componentContextUI } from '../components/component-context-ui.js';
 import { selectionPredicate } from '../selection/selection-mask.js';
 import { coords } from '../core/site.js';
-import { combineObjectIds, objectsAtCell } from '../selection/object-selection.js';
+import {
+  combineObjectIds,
+  objectsAtCell,
+  containedObjectIds,
+} from '../selection/object-selection.js';
 import { collectionsUI } from '../components/collections-ui.js';
 import { objectHidden } from '../components/collections.js';
 import { frameBounds, pointBounds } from '../view/frame-bounds.js';
@@ -70,6 +75,8 @@ export function cadShell({
   const materialPicker = new MaterialPicker({ $, openShelf: () => dock('assets') });
   let activeDock = 'objects';
   let selectionActive = false;
+  const selectionBinding = new ObjectSelectionBinding();
+  const wholeObjectIds = () => (selectionActive && objectOnly ? [...selectionBinding.ids] : []);
   let selectedObjects = new Set(),
     objectCandidates = new Set(),
     objectOnly = false,
@@ -227,9 +234,25 @@ export function cadShell({
           ? ' · ' + studio.getSelection().regions.length + ' 个组合区域'
           : '')
       : '点击或拖框选择；Shift 增加，Ctrl 减去。';
+    syncObjectSelectionLabel();
+  }
+  function syncObjectSelectionLabel() {
+    if (!selectedObjects.size || !objectOnly || !selectionBinding.ids.length) return false;
+    const named = getSummary().design.objects.filter((object) => selectedObjects.has(object.id));
+    if (!named.length) return false;
+    $('cad-selection-label').textContent =
+      named.length === 1
+        ? named[0].name + ' · ' + (named[0].cells?.length || 0) + ' 格'
+        : '已选择 ' + named.length + ' 个对象';
+    return true;
   }
   const direct = directEdit({
     beforeOpen: () => prepareOperation('direct'),
+    selectResult: (selection, mode) => {
+      if (['move', 'rotate'].includes(mode) && selectionBinding.matches(selection))
+        selectObjects([...selectionBinding.ids]);
+      else studio.selectRange(selection, 'replace');
+    },
     THREE,
     $,
     scene,
@@ -358,7 +381,7 @@ export function cadShell({
     policy,
     getSelection: () => studio.getSelection(),
     getObjects: () => {
-      if (selectedObjects.size && objectOnly) return [...selectedObjects];
+      if (selectionBinding.ids.length && objectOnly) return [...selectionBinding.ids];
       const r = studio.getSelection();
       if (r.regions) return [];
       return (getSummary()?.design.objects || [])
@@ -425,7 +448,7 @@ export function cadShell({
   const componentContext = componentContextUI({
     $,
     getSummary,
-    getObjectIds: () => (selectionActive && objectOnly ? [...selectedObjects] : []),
+    getObjectIds: wholeObjectIds,
     selectObjects,
     notice,
     openOperation: (operation, id) => {
@@ -467,6 +490,7 @@ export function cadShell({
     beforeOpen: () => prepareOperation('measurement'),
   });
   window.addEventListener('craftstudio-selection', () => {
+    selectionBinding.clear();
     objectCandidates.clear();
     objectOnly = false;
     selectedObjects.clear();
@@ -477,6 +501,7 @@ export function cadShell({
     objectNames.update(getSummary());
   });
   $('cad-selection-clear').onclick = () => {
+    selectionBinding.clear();
     $('pick-close').click();
     studio.clearSelection();
     direct.cancel();
@@ -554,7 +579,7 @@ export function cadShell({
     markDirty,
     task,
     getSummary,
-    getObjectIds: () => (selectionActive && objectOnly ? [...selectedObjects] : []),
+    getObjectIds: wholeObjectIds,
     getSelection: () => (selectionActive ? studio.getSelection() : null),
     selectObjects,
     selectRegion: (selection) => studio.selectRange(selection, 'replace'),
@@ -1045,7 +1070,7 @@ export function cadShell({
     getView: () => window.CraftStudio.viewState(),
     setView: (v) => window.CraftStudio.setView(v),
     getSelection: () => studio.getSelection(),
-    getObjectIds: () => [...selectedObjects],
+    getObjectIds: wholeObjectIds,
     hasSelection: () => selectionActive,
     notice,
     frameSelection: zoomSelection,
@@ -1152,6 +1177,17 @@ export function cadShell({
       const links = generationLinks(s.design);
       commandFinder.update();
       direct.ensureFresh(s);
+      const followed = selectionBinding.update(s);
+      if (followed) {
+        if (followed.ids.length) selectObjects(followed.ids);
+        else $('cad-selection-clear').click();
+      } else if (selectionActive && objectCandidates.size) {
+        selectedObjects = containedObjectIds(
+          s.design.objects,
+          objectCandidates,
+          studio.getSelection(),
+        );
+      }
       isolation.update(s);
       construction.update(s);
       designer.update(s);
@@ -1226,28 +1262,24 @@ export function cadShell({
     const currentSelection = studio.getSelection(),
       contains = selectionPredicate(currentSelection),
       candidates = getSummary().design.objects.filter((o) => objectCandidates.has(o.id)),
-      candidateMap = new Map(candidates.map((o) => [o.id, o])),
       point = (p) => (Array.isArray(p) ? p : coords(p));
-    selectedObjects = new Set(
-      [...objectCandidates].filter((id) => {
-        const object = candidateMap.get(id);
-        return object?.cells?.length && object.cells.every((p) => contains(point(p)));
-      }),
-    );
+    selectedObjects = containedObjectIds(candidates, objectCandidates, currentSelection);
     if (objectOnly && !candidates.some((o) => o.cells?.some((p) => contains(point(p))))) {
       $('cad-selection-clear').click();
       return;
     }
+    if (objectOnly)
+      selectionBinding.bind({
+        workspaceId: getSummary().workspaceId,
+        revision: getSummary().revision,
+        ids: [...selectedObjects],
+        candidates,
+        selection: currentSelection,
+      });
     for (const row of objects.children)
       row.classList.toggle('selected', selectedObjects.has(row.dataset.objectId));
     $('pick-panel').hidden = true;
-    if (selectedObjects.size && objectOnly) {
-      const named = getSummary().design.objects.filter((o) => selectedObjects.has(o.id));
-      $('cad-selection-label').textContent =
-        named.length === 1
-          ? named[0].name + ' · ' + (named[0].cells?.length || 0) + ' 格'
-          : '已选择 ' + named.length + ' 个对象';
-    } else syncVectors();
+    if (!syncObjectSelectionLabel()) syncVectors();
     const revealed = ids.filter((id) => selectedObjects.has(id));
     if (revealed.length) collectionBrowser.reveal({ objectIds: revealed });
     componentContext.update();

@@ -637,11 +637,11 @@ function refresh(s, reset = false) {
   viewNavigation?.workspace(s.workspaceId);
   const refreshStarted = performanceTrace.begin();
   const initial = !summary;
+  summary = s;
   studio?.update(s);
   cad?.update(s);
   const oldMax = +$('cut').max,
     oldCut = +$('cut').value;
-  summary = s;
   designerClient?.update(s);
   $('cut').max = String(s.size[1] - 1);
   $('cut').value = String(

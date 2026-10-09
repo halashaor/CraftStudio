@@ -29,6 +29,7 @@ export function directEdit({
   hitCell,
   getSummary,
   beforeOpen = () => true,
+  selectResult = (selection) => studio.selectRange(selection, 'replace'),
 }) {
   const parent = new THREE.Group(),
     proxy = new THREE.Group(),
@@ -556,7 +557,7 @@ export function directEdit({
       const selection = confirmedSelection(snapshot, v, receipt);
       applying = false;
       cancel();
-      studio.selectRange(selection, 'replace');
+      selectResult(selection, snapshot.mode);
       await render();
       notice(
         snapshot.mode === 'paste'
