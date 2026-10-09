@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Site } from '../src/core/site.js';
 import { emptyProject } from '../src/minecraft/codec.js';
 import { DesignAPI } from '../src/api/design-api.js';
-import { proposalOperations, acceptedProposal } from '../src/api/proposal.js';
+import { proposalOperations, proposalChanges, acceptedProposal } from '../src/api/proposal.js';
 const setup = () =>
   new Site({
     ...emptyProject(),
@@ -11,6 +11,39 @@ const setup = () =>
     palette: [{ Name: 'minecraft:stone' }],
     blocks: [{ pos: [1, 0, 1], state: 0 }],
   });
+
+test('proposal review counts only this candidate delta after previously confirmed building work', () => {
+  const site = setup();
+  site.operations(
+    [{ type: 'fill', min: [2, 1, 2], max: [11, 1, 2], state: { Name: 'minecraft:oak_planks' } }],
+    {},
+  );
+  const candidate = site.fork();
+  candidate.operations(
+    [
+      { type: 'set', pos: [15, 1, 2], state: { Name: 'minecraft:glass' } },
+      { type: 'set', pos: [2, 1, 2], state: { Name: 'minecraft:bricks' } },
+      { type: 'erase', min: [3, 1, 2], max: [3, 1, 2] },
+      { type: 'erase', min: [1, 0, 1], max: [1, 0, 1] },
+    ],
+    { allowTerrain: true },
+  );
+  assert.deepEqual(proposalChanges(site, proposalOperations(site, candidate)), {
+    add: 1,
+    replace: 1,
+    remove: 2,
+    terrain: 1,
+    total: 4,
+  });
+  assert.equal(site.summary().add, 10);
+  assert.deepEqual(proposalChanges(site, []), {
+    add: 0,
+    replace: 0,
+    remove: 0,
+    terrain: 0,
+    total: 0,
+  });
+});
 test('proposal deletion is null and adopting mixed edits is one undo with design restoration', () => {
   const site = setup(),
     candidate = site.fork();
@@ -73,6 +106,13 @@ test('typed NBT-only changes survive proposal diff and design-only commits are u
     { allowTerrain: true },
   );
   assert.equal(proposalOperations(site, candidate)[0].nbt.v.Long.v, '9223372036854775807');
+  assert.deepEqual(proposalChanges(site, proposalOperations(site, candidate)), {
+    add: 0,
+    replace: 1,
+    remove: 0,
+    terrain: 1,
+    total: 1,
+  });
   const api = new DesignAPI({ getSite: () => site });
   const designOnly = site.fork();
   designOnly.design.guides = [{ id: 'guide' }];

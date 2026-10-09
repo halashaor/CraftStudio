@@ -15,7 +15,11 @@ import { selectionPreviewSite, packMemberCoordinates } from './selection/selecti
 import { captureDraftHistory } from './storage/draft-history.js';
 import { objectHidden, hiddenObjectContains } from './components/collections.js';
 import { CheckpointPackets } from './storage/checkpoint-packet.js';
-import { proposalOperations as proposalDiff, acceptedProposal } from './api/proposal.js';
+import {
+  proposalOperations as proposalDiff,
+  proposalChanges,
+  acceptedProposal,
+} from './api/proposal.js';
 import { selectionPredicate } from './selection/selection-mask.js';
 import { isolationKeys } from './view/isolation.js';
 import { captureGeneration, generatedObject, editSketchPlan } from './modeling/generation.js';
@@ -1249,6 +1253,7 @@ async function execute(action, data) {
       id: crypto.randomUUID(),
       revision: api.revision,
       workspaceId: api.workspaceId,
+      changes: proposalChanges(site, previewOperations),
     };
     return summary();
   }

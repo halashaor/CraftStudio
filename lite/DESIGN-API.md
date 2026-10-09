@@ -21,6 +21,19 @@ Worker 的 `api` 动作使用同一请求。无需接触私有变量或模拟 UI
 
 有 ID 的写请求可重试，近期 256 个写请求保存回执；相同 ID 与不同内容会返回 `REQUEST_ID_REUSED`。工程切换后回执缓存清空。不要把这个缓存当作永久任务日志。
 
+## 提案审阅 / Proposal review
+
+| Method | Parameters | Result |
+|---|---|---|
+| proposal.prepare | expectedRevision, workspaceId?, operations | value.id identifies the new candidate; replaces the previous candidate |
+| proposal.inspect | cursor?, limit? | Current candidate identity, summary, paged operations, total and nextCursor |
+| proposal.commit | expectedRevision, workspaceId?, proposalId, policy? | Adopt this exact candidate as one undoable edit |
+| proposal.cancel | proposalId | Discard this exact candidate and retain confirmed content |
+
+Prepare/inspect return `value.changes: {add,replace,remove,terrain,total}`; the same values appear in `summary.proposal.changes`. Counts cover the complete cell diff against the currently confirmed scene, including removal of previously added blocks and NBT-only replacements. They exclude earlier confirmed building work and do not shrink to the current inspect page. `terrain` counts changed cells involving recognized ground or fluid states; placement permission remains controlled by the commit policy.
+
+提案预览不会修改已确认场景。人的采用／取消以及 Enter／Esc 走同一接口；保护校验失败时，候选提案保留。`proposalId` 来自 `prepare.value.id`，与外层请求 ID 不同；已结束或被替换的提案 ID 不能再次确认。分页时核对返回的候选 ID；若它变化，应重新读取。连接结果不确定时，先读取场景版本与当前提案状态，避免盲目生成或采用另一方案。
+
 ## 基础方法
 
 | 方法 | 主要参数 | 结果 |

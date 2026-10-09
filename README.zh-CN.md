@@ -317,6 +317,8 @@ AI 可通过共用 v1 API 的 `prefabs.list/read/put/place/remove` 操作同一�
 
 先调用 `designer_sessions`，再用 `designer_call` 的 `operation: "request"` 转发共用 Design API 请求。从 `workspace.describe` 开始；MCP 的版本请求必须同时带 `expectedRevision` 与 `workspaceId`。请求 ID 支持字符串或安全整数（含 0），同一 ID 只能重试相同内容。多个页面连接时指定 sessionId。读取、自由编辑、事务、提案和撤销都作用于当前页面引擎，并更新它的视口。
 
+提案确认栏显示候选方案相对当前已确认设计的新增、替换、拆除及地形／水涉及数量；之前完成的建筑保留在整体施工统计中。人的采用／取消按钮和视口 Enter／Esc 与连接客户端共用 `proposal.commit/cancel` 接口。本地计算版在保护检查失败后也会保留候选方案，可继续检查或取消；采用提案可一次撤销。
+
 其他操作：`capture` 返回原生 PNG 工具内容，可用 options.view 调整镜头；`export` 使用已有导出选项，返回服务 exports/ 下的文件；`save` 返回不可变版本回执。截图携带几何载入／失败标记，区块载入时可能是不完整画面。独立 Lite 保留页面 API，不启动此后端连接。
 
 观察等待结束不代表任务停止：用同一 jobId 调用 `designer_job`，不要盲目重复不确定的写入。关闭连接停止接收新任务，已开始的任务仍可能完成。unconfirmed 表示结果未确认，不表示没执行。回执为临时缓存（至多 64 条完成记录、约 10 分钟），不是永久日志；丢失回执或服务重启后，应先读取当前场景再决定后续操作。

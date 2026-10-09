@@ -39,6 +39,7 @@ test('worker proposals pin identity/revision, preserve deletion and allow one-un
   const first = await rpc('proposal.prepare', { expectedRevision: before.revision, operations });
   assert.ok(first.ok, first.error?.message);
   assert.equal(first.revision, before.revision);
+  assert.deepEqual(first.value.changes, { add: 1, replace: 0, remove: 1, terrain: 1, total: 2 });
   assert.equal(
     (
       await rpc('edit.brush', {
@@ -64,6 +65,7 @@ test('worker proposals pin identity/revision, preserve deletion and allow one-un
   );
   const inspected = await rpc('proposal.inspect', { limit: 1 });
   assert.equal(inspected.value.total, 2);
+  assert.deepEqual(inspected.value.changes, first.value.changes);
   assert.equal(inspected.value.operations[0].state, null);
   const rejected = await rpc('proposal.commit', {
     expectedRevision: before.revision,

@@ -1,5 +1,6 @@
 import { ResourceController } from './materials/resource-controller.js';
 import { PageRequests } from './api/page-requests.js';
+import { ProposalReviewUI } from './ui/proposal-review-ui.js';
 import { ProjectImporter } from './storage/project-import.js';
 import { TaskRunner } from './ui/task-runner.js';
 import { designerClientUI } from './integration/designer-client-ui.js';
@@ -654,9 +655,7 @@ function refresh(s, reset = false) {
   $('count-replace').textContent = s.replace.toLocaleString();
   $('count-remove').textContent = s.remove.toLocaleString();
   $('count-earth').textContent = (s.earth + s.water).toLocaleString();
-  $('preview-banner').hidden = !s.preview;
-  $('preview-info').textContent =
-    `新增 ${s.add.toLocaleString()} · 替换 ${s.replace.toLocaleString()} · 拆除 ${s.remove.toLocaleString()} · 地形/水改动 ${(s.earth + s.water).toLocaleString()}`;
+  proposalReview.update(s);
   $('undo').disabled = !s.undo && !s.preview && !cad?.isTransformActive();
   $('redo').disabled = !s.redo || s.preview || cad?.isTransformActive();
   $('origin-x').value = s.origin[0];
@@ -1537,18 +1536,14 @@ $('platform').onclick = () =>
     await render();
     notice('平台预览：最长支撑 ' + s.platformDepth + ' 格，下探到实际地面。');
   });
-$('accept').onclick = () =>
-  task(async () => {
-    refresh(await call('accept', { policy: policy(), proposalId: summary?.proposal?.id }));
-    await render();
-    markDirty();
-    notice('方案已采用；原始场地仍可随时对照。');
-  });
-$('cancel').onclick = () =>
-  task(async () => {
-    refresh(await call('cancel', { proposalId: summary?.proposal?.id }));
-    await render();
-  });
+const proposalReview = new ProposalReviewUI({
+  $,
+  getSummary: () => summary,
+  request: (request) => pageRequests.request(request),
+  policy,
+  task,
+  notice,
+});
 let lastDown,
   stroke = null,
   hoverHit = null,

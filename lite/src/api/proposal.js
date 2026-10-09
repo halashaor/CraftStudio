@@ -1,4 +1,4 @@
-import { coords } from '../core/site.js';
+import { coords, terrainType } from '../core/site.js';
 import { stateKey } from '../minecraft/codec.js';
 // Diff the candidate against live data, retaining deletion rather than inventing air.
 export function proposalOperations(site, candidate) {
@@ -22,6 +22,20 @@ export function proposalOperations(site, candidate) {
     });
   }
   return ops;
+}
+// Summarize the exact cell diff against the current design, not the imported baseline.
+export function proposalChanges(site, operations) {
+  const counts = { add: 0, replace: 0, remove: 0, terrain: 0, total: operations.length };
+  for (const operation of operations) {
+    const before = site.at(operation.pos);
+    if (operation.state === null) counts.remove++;
+    else if (before) counts.replace++;
+    else counts.add++;
+    const names = [before ? site.palette[before.state].Name : null, operation.state?.Name];
+    if (names.some((name) => name && ['ground', 'water'].includes(terrainType(name))))
+      counts.terrain++;
+  }
+  return counts;
 }
 export function acceptedProposal(site, candidate, operations, policy) {
   const accepted = site.fork();
