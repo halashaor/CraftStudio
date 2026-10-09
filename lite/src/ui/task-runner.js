@@ -4,15 +4,19 @@ export class TaskRunner {
     Object.assign(this, { blocked, begin, end, notice });
   }
   async run(operation, label) {
+    try {
+      return await this.execute(operation, label);
+    } catch (error) {
+      this.notice(error.message, true);
+    }
+  }
+  async execute(operation, label) {
     if (this.blocked()) {
-      this.notice('正在处理当前修改，请先完成这一笔');
-      return;
+      throw Error('正在处理当前修改，请先完成这一笔');
     }
     const state = this.begin(label);
     try {
       return await operation();
-    } catch (error) {
-      this.notice(error.message, true);
     } finally {
       this.end(state);
     }

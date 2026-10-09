@@ -123,8 +123,21 @@ class DesignerPages:
             if not self.alive(page):
                 raise ValueError("工作台尚未连接或连接已中断")
             operation = body.get("operation", "request")
-            if operation not in ("request", "capture", "export", "save"):
+            if operation not in ("request", "capture", "export", "save", "import"):
                 raise ValueError("Unknown designer operation")
+            if operation == "import":
+                options = body.get("options", {})
+                if (
+                    not options.get("workspaceId")
+                    or type(options.get("expectedRevision")) is not int
+                ):
+                    raise ValueError(
+                        "导入需传 workspaceId 和 expectedRevision，请先读取 workspace.describe"
+                    )
+                if not isinstance(options.get("name"), str) or not isinstance(
+                    options.get("dataBase64"), str
+                ):
+                    raise ValueError("导入需传文件 name 和 dataBase64")
             request = copy.deepcopy(body.get("request", {}))
             if operation == "request" and not isinstance(request.get("method"), str):
                 raise ValueError("需要设计器 method")

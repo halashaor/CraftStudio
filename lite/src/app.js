@@ -52,8 +52,9 @@ const workerSession = new WorkerSession(() => new Worker(workerURL), {
     if ($('import-cancel')) $('import-cancel').hidden = !phase;
     if (phase) $('busy-text').textContent = phase;
   },
-  beforeSwap: async (slot) => {
+  beforeSwap: async (slot, validateSwap) => {
     await checkpoint();
+    await validateSwap();
     if (slot.worker instanceof RemoteEngineWorker) {
       const session = await slot.worker.ready;
       await library.preference('engine-active', { key: session.key, projectId: null });
@@ -62,7 +63,7 @@ const workerSession = new WorkerSession(() => new Worker(workerURL), {
   timings: () => performanceTrace.enabled,
   onTiming: (action, timing) => performanceTrace.record('worker-execution', { action, ...timing }),
 });
-function call(action, data = {}, transfers = []) {
+function call(action, data = {}, transfers = [], options = {}) {
   if (
     summary?.preview &&
     (action === 'resume' ||
@@ -71,7 +72,7 @@ function call(action, data = {}, transfers = []) {
   )
     return Promise.reject(Error('请先采用或取消方案预览，再打开新场景'));
   const started = performanceTrace.begin(),
-    pending = workerSession.call(action, data, transfers);
+    pending = workerSession.call(action, data, transfers, options);
   if (started === null) return pending;
   return pending.then(
     (result) => {
@@ -101,6 +102,7 @@ window.CraftStudio = Object.freeze({
     read: () => performanceTrace.read(),
   }),
   request: (request) => pageRequests.request(request),
+  importFile: (input) => taskRunner.execute(() => importer.openInput(input), '正在导入场地或工程…'),
   displayState: () => ({
     mode,
     cut: +$('cut').value >= +$('cut').max ? null : +$('cut').value,
@@ -1304,6 +1306,7 @@ async function imported(data, reset = true) {
   step('check');
 }
 const importer = new ProjectImporter({
+  describe: () => call('api', { method: 'workspace.describe' }),
   checkpoint,
   call,
   remote: () => workerSession.active.worker instanceof RemoteEngineWorker,

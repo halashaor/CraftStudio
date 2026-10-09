@@ -89,13 +89,13 @@ export class WorkerSession {
     for (const p of slot.pending.values()) p.reject(Error(message));
     slot.pending.clear();
   }
-  call(action, data = {}, transfers = []) {
+  call(action, data = {}, transfers = [], options = {}) {
     if (
       action === 'resume' ||
       action === 'load' ||
       (action === 'import' && !/\.html?$/i.test(data.name || ''))
     )
-      return this.replace(action, data, transfers);
+      return this.replace(action, data, transfers, options);
     if (
       this.staging &&
       (writes.has(action) || (action === 'api' && !readMethods.has(data.method)))
@@ -111,7 +111,7 @@ export class WorkerSession {
     }
     return this.send(this.active, action, data, transfers);
   }
-  async replace(action, data, transfers) {
+  async replace(action, data, transfers, { validateSwap = async () => {} } = {}) {
     if (this.staging) throw Error('已有文件正在打开');
     const slot = this.slot(),
       stage = { slot, cancelled: false };
@@ -125,7 +125,8 @@ export class WorkerSession {
       const result = await this.send(slot, action, data, transfers);
       if (stage.cancelled) throw Error('已取消打开文件，原设计保留');
       this.status('正在保留当前设计');
-      await this.beforeSwap(slot);
+      await this.beforeSwap(slot, validateSwap);
+      await validateSwap();
       if (stage.cancelled) throw Error('已取消打开文件，原设计保留');
       const old = this.active;
       this.active = slot;

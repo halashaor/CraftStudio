@@ -4,6 +4,70 @@ import { PageRequests } from '../src/api/page-requests.js';
 import { ProjectImporter } from '../src/storage/project-import.js';
 import { TaskRunner } from '../src/ui/task-runner.js';
 
+test('explicit byte import preserves caller bytes and checks scope immediately before swap', async () => {
+  const { instance, events } = importer();
+  const head = { workspaceId: 'old', revision: 1 };
+  instance.describe = async () => head;
+  instance.call = async (action, data, transfers, options) => {
+    assert.equal(new Uint8Array(data.bytes)[0], 7);
+    await options.validateSwap();
+    return { workspaceId: 'new', revision: 0, name: data.name, sourceBlocks: 1 };
+  };
+  const bytes = Uint8Array.of(7);
+  const input = { name: 'site.nbt', bytes, workspaceId: 'old', expectedRevision: 1 };
+  assert.equal((await instance.openInput(input)).workspaceId, 'new');
+  assert.equal(bytes[0], 7);
+  events.length = 0;
+  instance.call = async (action, data, transfers, options) => {
+    head.revision++;
+    await options.validateSwap();
+  };
+  await assert.rejects(instance.openInput(input), /IMPORT_CONFLICT/);
+  assert.deepEqual(events, ['checkpoint']);
+});
+
+test('byte imports require explicit source scope and region; base64 is accepted', async () => {
+  const { instance } = importer();
+  instance.describe = async () => ({ workspaceId: 'old', revision: 1 });
+  await assert.rejects(
+    instance.openInput({ name: 'file.nbt', bytes: new ArrayBuffer(0) }),
+    /workspaceId/,
+  );
+  const options = { workspaceId: 'old', expectedRevision: 1, dataBase64: 'Bw==' };
+  await assert.rejects(instance.openInput({ ...options, name: 'r.mca' }), /region/);
+  await assert.rejects(
+    instance.openInput({ ...options, name: 'r.mca', region: { min: [0, 0, 0], max: [-1, 0, 0] } }),
+    /min\/max/,
+  );
+  assert.equal((await instance.openInput({ ...options, name: 'site.nbt' })).name, 'site.nbt');
+});
+
+test('programmatic tasks propagate failures instead of returning success-shaped undefined', async () => {
+  let busy = false;
+  const runner = new TaskRunner({
+    blocked: () => busy,
+    begin: () => {
+      busy = true;
+    },
+    end: () => {
+      busy = false;
+    },
+    notice: () => {},
+  });
+  await assert.rejects(
+    runner.execute(async () => {
+      throw Error('Invalid NBT');
+    }, 'import'),
+    /Invalid NBT/,
+  );
+  assert.equal(busy, false);
+  busy = true;
+  await assert.rejects(
+    runner.execute(async () => 42, 'import'),
+    /当前修改/,
+  );
+});
+
 test('staging stays invisible, commit marks dirty before rendering, preview stays unsaved', async () => {
   const events = [];
   const page = new PageRequests({
@@ -129,6 +193,6 @@ test('UI task restores original state after failures and blocks overlapping work
   await runner.run(async () => {
     throw Error('File damaged');
   }, 'opening');
-  assert.deepEqual(events.slice(-2), [['File damaged', true], 'inputs']);
+  assert.deepEqual(events.slice(-2), ['inputs', ['File damaged', true]]);
   assert.equal(busy, false);
 });

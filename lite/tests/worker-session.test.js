@@ -66,3 +66,21 @@ test('HTML reference imports stay in the current project flow', async () => {
   workers[0].reply({ preview: true });
   assert.ok((await promise).preview);
 });
+
+test('scope conflicts discovered after parsing never swap the active scene', async () => {
+  const { workers, session } = setup(),
+    old = session.active;
+  let checked = false;
+  const opening = session.call('import', { name: 'new.nbt' }, [], {
+    validateSwap: async () => {
+      checked = true;
+      throw Error('IMPORT_CONFLICT');
+    },
+  });
+  workers[1].reply({ name: 'new' });
+  await assert.rejects(opening, /IMPORT_CONFLICT/);
+  assert.equal(checked, true);
+  assert.equal(session.active, old);
+  assert.equal(workers[0].terminated, false);
+  assert.equal(workers[1].terminated, true);
+});

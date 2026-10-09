@@ -209,12 +209,12 @@ TOOLS[:0] = [
     },
     {
         "name": "designer_call",
-        "description": "Operate the connected visible designer using its shared API. request forwards any v1 method; capture returns the current 3D view (options.view can position the camera); export saves an artifact locally; save creates an immutable library version. Read workspace.describe before writes. A pending job continues running: poll designer_job with the same jobId, do not resubmit an uncertain write.",
+        "description": "Operate the connected visible designer using its shared API. request forwards any v1 method; capture returns the current 3D view (options.view can position the camera); export saves an artifact locally; save creates an immutable library version; import opens an explicit file using options {name,dataBase64,workspaceId,expectedRevision,region?} and returns the new workspace. .mca requires region {min,max}. Read workspace.describe before writes. A pending job continues running: poll designer_job with the same jobId, do not resubmit an uncertain write.",
         "inputSchema": schema(
             {
                 "sessionId": STRING,
                 "id": STRING,
-                "operation": {"enum": ["request", "capture", "export", "save"]},
+                "operation": {"enum": ["request", "capture", "export", "save", "import"]},
                 "request": {"type": "object"},
                 "options": {"type": "object"},
             },

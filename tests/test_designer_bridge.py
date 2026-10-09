@@ -25,6 +25,32 @@ def wire(value):
 
 
 class DesignerPageTests(unittest.TestCase):
+    def test_import_requires_explicit_scope_and_replays_one_job(self):
+        with self.assertRaisesRegex(ValueError, "workspaceId"):
+            self.pages.submit(
+                {
+                    "sessionId": self.sid,
+                    "operation": "import",
+                    "options": {"name": "site.nbt", "dataBase64": "AA=="},
+                }
+            )
+        body = {
+            "sessionId": self.sid,
+            "operation": "import",
+            "id": "open-once",
+            "options": {
+                "name": "site.nbt",
+                "dataBase64": "AA==",
+                "workspaceId": "w",
+                "expectedRevision": 1,
+            },
+        }
+        first = self.pages.submit(body)
+        self.assertEqual(first["jobId"], self.pages.submit(body)["jobId"])
+        job = self.pages.poll({"sessionId": self.sid})["job"]
+        self.assertEqual(job["workspaceId"], "w")
+        self.assertEqual(job["options"]["expectedRevision"], 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

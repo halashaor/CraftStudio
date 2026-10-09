@@ -281,6 +281,8 @@ The optional local engine now stores immutable source blocks in independently ve
 
 ### Connect an external MCP client to the visible page
 
+The connected page can also open an explicit file through `designer_call` with `operation: "import"`. Supply `options: {name, dataBase64, workspaceId, expectedRevision}`; `.mca` files additionally require `region: {min, max}`. Read `workspace.describe` first. The current design is checkpointed, parsing happens in a candidate scene, and document/version conflicts or parsing failures retain the active scene. The result identifies the newly opened workspace. This opens a file as a new scene; it does not merge it into existing geometry.
+
 Run the local workbench, open **AI design**, and enable **Connect current 3D workspace**. Configure a stdio MCP client to run `python /absolute/path/to/CraftStudio/mcp_server.py`. The default service is `http://127.0.0.1:18767`; set `CRAFTSTUDIO_URL` for a different local port. No extra Python package is required. The checkbox preference follows the browser tab across reloads; session IDs are refreshed, so rediscover pages after reconnecting.
 
 Use `designer_sessions`, then `designer_call` with `operation: "request"` and a normal shared Design API request. Start with `workspace.describe`; versioned MCP requests must include both `expectedRevision` and `workspaceId`. Request IDs may be strings or safe integers, including 0; reuse an ID only for the same request. Multiple connected pages require `sessionId`. Reads, free edits, transactions, proposals and undo use the actual page engine and update its viewport.

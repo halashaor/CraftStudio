@@ -281,6 +281,8 @@ Windows 可双击 `启动本地计算版.cmd` 或 `启动浏览器计算版.cmd`
 
 ### 外部 MCP 客户端接入可见页面
 
+连接后的页面也支持外部 AI 打开明确提供的文件：调用 `designer_call`，设 `operation: "import"`，传入 `options: {name, dataBase64, workspaceId, expectedRevision}`；`.mca` 另需 `region: {min, max}`。先读取 `workspace.describe`。当前设计先保存检查点，文件在候选场景解析；解析失败或工程、版本冲突时保留当前场景，成功后返回新工程身份。此操作打开新场景，不会把文件合并到已有建筑。
+
 启动本地工作台，在**AI 设计**中勾选**连接当前 3D 工作台**。MCP 客户端以 stdio 启动 `python /绝对路径/CraftStudio/mcp_server.py`。默认连接 `http://127.0.0.1:18767`；自定义端口使用 `CRAFTSTUDIO_URL`，不需要额外 Python 包。连接偏好随浏览器标签页保留；刷新后的 sessionId 会更新，应重新查询页面。
 
 先调用 `designer_sessions`，再用 `designer_call` 的 `operation: "request"` 转发共用 Design API 请求。从 `workspace.describe` 开始；MCP 的版本请求必须同时带 `expectedRevision` 与 `workspaceId`。请求 ID 支持字符串或安全整数（含 0），同一 ID 只能重试相同内容。多个页面连接时指定 sessionId。读取、自由编辑、事务、提案和撤销都作用于当前页面引擎，并更新它的视口。

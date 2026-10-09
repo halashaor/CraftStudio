@@ -24,6 +24,23 @@ const setup = (revision = 3) => {
   });
   return { client, page, calls, head };
 };
+
+test('file import forwards explicit input to the visible page and returns its new workspace', async () => {
+  const { client, page, calls } = setup();
+  const options = {
+    name: 'site.nbt',
+    dataBase64: 'AA==',
+    workspaceId: 'current',
+    expectedRevision: 3,
+  };
+  page.importFile = async (input) => {
+    calls.push(input);
+    return { workspaceId: 'new', revision: 0 };
+  };
+  const result = await client.perform({ operation: 'import', workspaceId: 'current', options });
+  assert.equal(result.workspaceId, 'new');
+  assert.equal(calls.at(-1), options);
+});
 test('queued writes never follow a user into another workspace', async () => {
   const { client, calls } = setup();
   await assert.rejects(

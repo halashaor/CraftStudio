@@ -294,3 +294,18 @@ Binary response leaves use `{$binary:{type,base64}}`; BigInt and non-finite scal
 Disconnect cancels unstarted jobs and marks dispatched results unconfirmed until a reply arrives. It does not claim already-started edits were undone. Cache expiry or restart does not prove a write had no effect; read the authoritative scene first. Completed receipts are ephemeral, not durable job history. Standalone Lite exposes the same page API without the local HTTP/MCP transport. Existing host/origin/token checks protect all page-bridge routes. No model-provider credentials or game bridge token are stored by this connection.
 
 当前页面连接不另建场景。版本号与工程身份必须一起传，暂存、提交、预览和撤销沿用共用引擎。任务等待超时不取消执行；已派发任务断开后可能已产生效果，不能当作失败后盲目重提。截图载入标记、正式版本回执和本地导出路径分别表示各自证据，不等同于游戏内施工。
+
+
+### Open an explicit file / 打开明确提供的文件
+
+`CraftStudio.importFile({name, bytes, workspaceId, expectedRevision, region?})` opens the same candidate scene used by file selection. `bytes` is an ArrayBuffer or Uint8Array; `dataBase64` can replace bytes. It returns `{workspaceId,revision,name,sourceBlocks,size}` for the opened scene. The method checkpoints existing work, verifies source scope before parsing and again before swapping, and rejects on errors instead of silently returning undefined. Cancellation uses the existing import cancel button. Unconfirmed previews must be adopted or cancelled first. Reference HTML remains a UI import, not an external scene replacement.
+
+MCP uses the same method through `designer_call`:
+
+```json
+{"id":"open-once","operation":"import","options":{"name":"terrain.nbt","dataBase64":"BASE64_FILE_BYTES","workspaceId":"SOURCE_WORKSPACE_ID","expectedRevision":1}}
+```
+
+For `.mca`, supply explicit integer XYZ `region.min` and `region.max`. Successful opening replaces the scene; it does not merge geometry. Read the new workspace before subsequent edits. Retrying the identical MCP ID returns its previous job; do not resubmit pending or uncertain imports. The HTTP request body limit remains 64 MiB including JSON/base64 overhead; larger local files use the file chooser and streamed local-engine upload. Both Lite and local pages expose importFile; standalone Lite does not expose local MCP transport.
+
+导入使用页面现有的检查点、候选解析和取消流程。需明确传入原工程身份与版本；成功返回新工程，后续操作必须重新读取状态。MCP 传文件名及 Base64，不读取任意磁盘路径，不扫描 Minecraft 安装目录。大文件从界面选择并交给本地引擎上传。

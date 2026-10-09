@@ -85,6 +85,7 @@ export class DesignerClient {
       if (workspaceId !== job.workspaceId) throw Error('WORKSPACE_CHANGED: 任务派发后工程已切换');
     }
     if (job.operation === 'request') return this.page.request(job.request);
+    if (job.operation === 'import') return this.page.importFile(job.options);
     if (job.operation === 'save') return this.page.save();
     if (job.operation === 'capture') {
       if (job.options.view) this.page.setView(job.options.view);
