@@ -1,3 +1,4 @@
+import { PlanningAPI } from './api/planning-api.js';
 import { renameObjects } from './selection/object-naming.js';
 import { mutatePrefab } from './components/prefab-library.js';
 import {
@@ -227,55 +228,14 @@ const api = new DesignAPI({
     createScene.changedCells(site);
   },
 });
-async function proposalRequest(request) {
-  try {
-    const p = request.params || {},
-      method = request.method;
-    let value;
-    if (method === 'proposal.prepare') {
-      api.guard(p);
-      if (p.space && p.space !== 'local')
-        throw Error('提案使用局部坐标；世界坐标可通过自由编辑事务转换');
-      await execute('preview', { operations: api.operations(site, p) });
-      value = { ...previewAnchor, summary: summary() };
-    } else if (method === 'proposal.inspect') {
-      if (!previewAnchor) throw Error('没有待检查的提案');
-      const start = p.cursor === undefined ? 0 : Number(p.cursor),
-        limit = Math.min(20000, p.limit ?? 1000);
-      if (!Number.isSafeInteger(start) || start < 0 || !Number.isInteger(limit) || limit < 1)
-        throw Error('提案分页参数无效');
-      value = {
-        ...previewAnchor,
-        summary: summary(),
-        operations: previewOperations.slice(start, start + limit),
-        nextCursor: start + limit < previewOperations.length ? String(start + limit) : null,
-        total: previewOperations.length,
-      };
-    } else {
-      if (!p.proposalId || p.proposalId !== previewAnchor?.id)
-        throw Error('提案已被替换或结束，请重新读取');
-      if (method === 'proposal.commit') api.guard(p);
-      value = await execute(method === 'proposal.commit' ? 'accept' : 'cancel', p);
-    }
-    return {
-      schema: 'craftstudio-design/1',
-      id: request.id ?? null,
-      ok: true,
-      workspaceId: api.workspaceId,
-      revision: api.revision,
-      value,
-    };
-  } catch (e) {
-    return {
-      schema: 'craftstudio-design/1',
-      id: request.id ?? null,
-      ok: false,
-      workspaceId: api.workspaceId,
-      revision: api.revision,
-      error: { code: e.code || 'PROPOSAL_REJECTED', message: e.message, details: e.details || {} },
-    };
-  }
-}
+const planningAPI = new PlanningAPI({
+  api,
+  execute,
+  summary,
+  proposal: () => previewAnchor,
+  operations: () => previewOperations,
+  preview: () => !!preview,
+});
 async function run(action, data) {
   if (action === 'toolContext') {
     if (!baseKey?.startsWith('baseline:')) await ensureBaseline();
@@ -329,96 +289,7 @@ async function run(action, data) {
   }
   if (action === 'undo' && preview) return execute('cancel', {});
   if (action === 'api') {
-    if (
-      ['proposal.prepare', 'proposal.inspect', 'proposal.commit', 'proposal.cancel'].includes(
-        data.method,
-      )
-    )
-      return proposalRequest(data);
-    if (
-      [
-        'construction.prepare',
-        'construction.commit',
-        'construction.cancel',
-        'design.inspect',
-        'view.isolate',
-      ].includes(data.method)
-    ) {
-      try {
-        if (data.params?.expectedRevision !== undefined) api.guard(data.params);
-        const value = await execute(
-          data.method === 'construction.cancel'
-            ? 'cancelConstruction'
-            : data.method === 'construction.prepare'
-              ? 'prepareConstruction'
-              : data.method === 'design.inspect'
-                ? 'designInspect'
-                : data.method === 'view.isolate'
-                  ? 'viewIsolation'
-                  : 'commitConstruction',
-          data.params || {},
-        );
-        if (data.method === 'construction.prepare' && !data.params?.includeMesh) {
-          delete value.buckets;
-          delete value.removedBuckets;
-          delete value.textures;
-        }
-        return {
-          schema: 'craftstudio-design/1',
-          id: data.id ?? null,
-          ok: true,
-          workspaceId: api.workspaceId,
-          revision: api.revision,
-          value,
-        };
-      } catch (e) {
-        return {
-          schema: 'craftstudio-design/1',
-          id: data.id ?? null,
-          ok: false,
-          workspaceId: api.workspaceId,
-          revision: api.revision,
-          error: { code: 'CONSTRUCTION_REJECTED', message: e.message, details: {} },
-        };
-      }
-    }
-    if (
-      preview &&
-      [
-        'views.put',
-        'views.remove',
-        'measurements.put',
-        'measurements.remove',
-        'edit.brush',
-        'edit.apply',
-        'transaction.commit',
-        'selection.transform',
-        'prefabs.put',
-        'prefabs.remove',
-        'prefabs.place',
-        'history.undo',
-        'history.redo',
-        'objects.put',
-        'objects.rename',
-        'selectionSets.put',
-        'selectionSets.remove',
-        'collections.put',
-        'collections.remove',
-        'palettes.put',
-        'palettes.remove',
-        'workplanes.put',
-        'workplanes.remove',
-      ].includes(data.method)
-    )
-      return {
-        schema: 'craftstudio-design/1',
-        id: data.id ?? null,
-        revision: api.revision,
-        workspaceId: api.workspaceId,
-        ok: false,
-        error: { code: 'PREVIEW_ACTIVE', message: '请先采用或取消预览' },
-      };
-    const reply = api.execute(data);
+    const reply = await planningAPI.request(data);
     if (reply.ok && data.method === 'workspace.describe') {
       reply.value.previewActive = !!preview;
       reply.value.view = {
@@ -430,17 +301,12 @@ async function run(action, data) {
           : null,
       };
       reply.value.proposal = previewAnchor ? { ...previewAnchor } : null;
-      reply.value.methods.push(
-        'proposal.prepare',
-        'proposal.inspect',
-        'proposal.commit',
-        'proposal.cancel',
-        'construction.prepare',
-        'construction.commit',
-        'construction.cancel',
-        'design.inspect',
-        'view.isolate',
-      );
+      reply.value.pending = {
+        transactionIds: [...api.transactions.keys()],
+        constructionId: constructionDraft?.id || null,
+        strokeActive: site.stroke,
+      };
+      reply.value.methods.push(...planningAPI.methods);
     }
     return reply;
   }

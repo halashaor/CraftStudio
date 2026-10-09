@@ -40,9 +40,6 @@ export class EngineController {
   #tail = Promise.resolve();
   #closed = false;
   #sequence = null;
-  #transactions = new Set();
-  #construction = false;
-  #stroke = false;
   #replacement = null;
   #cancelOnClose = false;
   constructor({
@@ -142,9 +139,6 @@ export class EngineController {
       await next.call('engineRestore', packet);
       this.#engine = next;
       this.#sequence = packet.sequence;
-      this.#transactions.clear();
-      this.#construction = false;
-      this.#stroke = false;
       await old.close();
     } catch (error) {
       this.#closed = true;
@@ -155,10 +149,11 @@ export class EngineController {
   async #replace(action, data, resource = false) {
     if (this.#cancelOnClose) throw Error('Replacement cancelled');
     const before = await this.#engine.call('api', { method: 'workspace.describe' });
+    const pending = before.value.pending;
     if (
-      this.#stroke ||
+      pending.strokeActive ||
       before.value.previewActive ||
-      (resource && (this.#transactions.size || this.#construction))
+      (resource && (pending.transactionIds.length || pending.constructionId))
     )
       throw Error('Finish or cancel the pending operation before replacing scene/resources');
     const candidate = this.factory(),
@@ -185,9 +180,6 @@ export class EngineController {
       replacement.committed = true;
       const old = this.#engine;
       this.#engine = candidate;
-      this.#transactions.clear();
-      this.#construction = false;
-      this.#stroke = false;
       await old.close();
       return result;
     } catch (error) {
@@ -206,31 +198,6 @@ export class EngineController {
       throw error;
     } finally {
       if (this.#replacement === replacement) this.#replacement = null;
-    }
-  }
-  #track(action, data, result) {
-    if (action === 'beginStroke') this.#stroke = true;
-    if (
-      ['endStroke', 'undo', 'redo'].includes(action) ||
-      (action === 'api' && ['history.undo', 'history.redo'].includes(data.method) && result.ok)
-    )
-      this.#stroke = false;
-    if (
-      action === 'prepareConstruction' ||
-      (action === 'api' && data.method === 'construction.prepare' && result.ok)
-    )
-      this.#construction = true;
-    if (
-      ['cancelConstruction', 'commitConstruction'].includes(action) ||
-      (action === 'api' &&
-        ['construction.cancel', 'construction.commit'].includes(data.method) &&
-        result.ok)
-    )
-      this.#construction = false;
-    if (action === 'api' && result.ok) {
-      if (data.method === 'transaction.begin') this.#transactions.add(result.value.transactionId);
-      if (['transaction.abort', 'transaction.commit'].includes(data.method))
-        this.#transactions.delete(data.params.transactionId);
     }
   }
   async #run(action, data, onTiming) {
@@ -264,7 +231,6 @@ export class EngineController {
     }
     onTiming?.({ stage: 'execute', ms: performance.now() - started });
     if (action === 'api' && !result.ok) return result;
-    this.#track(action, data, result);
     const inspectAfter = performance.now(),
       after = await this.#engine.call('api', { method: 'workspace.describe' });
     onTiming?.({ stage: 'describe-after', ms: performance.now() - inspectAfter });

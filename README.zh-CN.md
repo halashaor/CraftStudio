@@ -319,6 +319,8 @@ AI 可通过共用 v1 API 的 `prefabs.list/read/put/place/remove` 操作同一�
 
 提案确认栏显示候选方案相对当前已确认设计的新增、替换、拆除及地形／水涉及数量；之前完成的建筑保留在整体施工统计中。人的采用／取消按钮和视口 Enter／Esc 与连接客户端共用 `proposal.commit/cancel` 接口。本地计算版在保护检查失败后也会保留候选方案，可继续检查或取消；采用提案可一次撤销。
 
+成功请求的 ID 回执现已统一覆盖普通编辑、提案和建模的准备／提交／取消。完整重试原请求可取得原回执，不会重复执行；已确认操作的回执随本地计算版保存并可重开，临时预览回执只在当前引擎会话有效。提案分页游标绑定候选身份，中途替换会明确拒绝。`workspace.describe` 提供实际待处理任务，重放旧准备回执不会让宿主误以为旧预览仍在工作。
+
 其他操作：`capture` 返回原生 PNG 工具内容，可用 options.view 调整镜头；`export` 使用已有导出选项，返回服务 exports/ 下的文件；`save` 返回不可变版本回执。截图携带几何载入／失败标记，区块载入时可能是不完整画面。独立 Lite 保留页面 API，不启动此后端连接。
 
 观察等待结束不代表任务停止：用同一 jobId 调用 `designer_job`，不要盲目重复不确定的写入。关闭连接停止接收新任务，已开始的任务仍可能完成。unconfirmed 表示结果未确认，不表示没执行。回执为临时缓存（至多 64 条完成记录、约 10 分钟），不是永久日志；丢失回执或服务重启后，应先读取当前场景再决定后续操作。
@@ -354,6 +356,8 @@ const result = await window.CraftStudio.request({
 源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。`ui/cad-layout.js` 挂载主界面及模板，`ui/cad-shell.js` 组合设计交互，`materials/material-picker.js` 将选材交给请求它的操作或画笔。工具定义按功能放在 `ui/commands/`，由 `ui/design-commands.js` 组合为搜索目录。可用条件读取当前选择、几何与任务状态；移动／复制／旋转的快捷键与视口菜单复用这些定义。
 
 `ui/object-tree-ui.js` 负责对象行、来源关系与关联实例标记，按 ID 复用行、每次更新集中索引元数据，并在当前工程内保留来源展开状态。其他对象刷新时，不重建正在输入名称的控件。主界面提供选择与修改回调；`studio-ui.js` 负责选择几何与场景显示，不再重复重建对象树。
+
+Windows 启动脚本与 HTTP 服务共用 `backend/build-files.json` 校验运行代码，覆盖后端模块和引擎运行文件，避免整理目录后启动器仍读取旧文件名。
 
 在 `lite` 执行 `npm run format` 或 `npm run format:check`，统一 JavaScript、模板和 CSS 格式。Python 开发使用 `pip install -r requirements-dev.txt`，然后执行 `python -m black backend server.py mcp_server.py tests`；这些是开发工具，不是运行软件的依赖。CI 同时检查格式与行为。
 

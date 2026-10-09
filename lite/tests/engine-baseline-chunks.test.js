@@ -24,7 +24,7 @@ test('baseline chunks read only requested blobs, preserve original states/tags, 
       bytes: new TextEncoder().encode(JSON.stringify(fixture())).buffer,
     });
     const packet = await e.call('engineCapture');
-    assert.equal(packet.head.schema, 'craftstudio-engine-checkpoint/2');
+    assert.equal(packet.head.schema, 'craftstudio-engine-checkpoint/3');
     store.commit('p', packet, null);
     const manifest = store.baseline('p');
     assert.equal(manifest.totalBlocks, 3);
@@ -91,7 +91,7 @@ test('legacy single-blob checkpoints restore and upgrade to split baseline stora
     await restored.call('engineRestore', store.load('p'));
     const upgraded = await restored.call('engineCapture', { known: store.known() });
     store.commit('p', upgraded, 1);
-    assert.equal(upgraded.head.schema, 'craftstudio-engine-checkpoint/2');
+    assert.equal(upgraded.head.schema, 'craftstudio-engine-checkpoint/3');
     assert.equal(store.baseline('p').totalBlocks, 3);
     assert.deepEqual((await restored.call('package')).site.base.blocks, fixture().blocks);
   } finally {

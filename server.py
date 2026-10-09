@@ -25,37 +25,9 @@ from backend.designer_bridge import DesignerPages
 from backend.desktop_files import list_files, read_file, home_for
 
 ROOT = Path(__file__).resolve().parent
+BUILD_FILES = json.loads((ROOT / "backend/build-files.json").read_text(encoding="utf-8"))
 BACKEND_BUILD = (
-    hashlib.sha256(
-        b"".join(
-            (ROOT / name).read_bytes()
-            for name in (
-                "server.py",
-                "backend/assets.py",
-                "backend/designer_storage.py",
-                "backend/desktop_files.py",
-                "backend/chunk_storage.py",
-                "backend/chunk_export.py",
-                "backend/draft_storage.py",
-                "backend/engine_gateway.py",
-                "backend/designer_bridge.py",
-                "local-engine/run-service.mjs",
-                "local-engine/service.mjs",
-                "local-engine/controller.mjs",
-                "local-engine/workspace.mjs",
-                "local-engine/worker.mjs",
-                "local-engine/checkpoint.mjs",
-                "local-engine/lazy-baseline.mjs",
-                "local-engine/source-reader.mjs",
-                "local-engine/store.mjs",
-                "local-engine/uploads.mjs",
-                "lite/src/runtime/engine-wire.js",
-                "lite/dist/worker.bundle.js",
-            )
-        )
-    )
-    .hexdigest()
-    .upper()
+    hashlib.sha256(b"".join((ROOT / name).read_bytes() for name in BUILD_FILES)).hexdigest().upper()
 )
 STORAGE_ROOT = Path(os.environ.get("CRAFTSTUDIO_STORAGE_DIR", str(ROOT))).resolve()
 DATA_DIR, PROJECTS_DIR, EXPORTS_DIR = (

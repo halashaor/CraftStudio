@@ -7,6 +7,48 @@ import { WorkerSession } from '../src/runtime/worker-session.js';
 import { RemoteEngineWorker } from '../src/runtime/remote-worker.js';
 import { emptyProject, importNBT } from '../src/minecraft/codec.js';
 const token = 'synthetic-service-test-token';
+test('planning API retries survive new RPC envelopes and reconnect with the original typed acknowledgement', async () => {
+  const s = await setup();
+  try {
+    let lease = await s.rpc({ operation: 'open', key: 'planning-replay' }),
+      sequence = 0;
+    const call = async (data) =>
+      (await s.rpc({ operation: 'call', lease: lease.lease, id: ++sequence, action: 'api', data }))
+        .value;
+    const head = await call({ method: 'workspace.describe' });
+    const prepare = {
+      id: 'prepare-api',
+      method: 'proposal.prepare',
+      params: {
+        workspaceId: head.workspaceId,
+        expectedRevision: head.revision,
+        operations: [{ type: 'set', pos: [2, 1, 2], state: { Name: 'example:detail' } }],
+      },
+    };
+    const first = await call(prepare);
+    assert.ok(first.ok);
+    assert.deepEqual(await call(prepare), first);
+    const commit = {
+      id: 'commit-api',
+      method: 'proposal.commit',
+      params: {
+        workspaceId: head.workspaceId,
+        expectedRevision: head.revision,
+        proposalId: first.value.id,
+      },
+    };
+    const result = await call(commit);
+    assert.ok(result.ok);
+    assert.deepEqual(await call(commit), result);
+    await s.rpc({ operation: 'close', lease: lease.lease });
+    lease = await s.rpc({ operation: 'open', key: 'planning-replay' });
+    assert.deepEqual(await call(commit), result);
+    assert.equal((await call({ method: 'workspace.describe' })).value.history.undo, 1);
+    assert.equal((await call(prepare)).error.code, 'REVISION_CONFLICT');
+  } finally {
+    await s.close();
+  }
+});
 async function setup() {
   const store = new EngineStore(':memory:'),
     service = await createEngineService({

@@ -1,3 +1,4 @@
+import { requestReceipt, rememberReceipt } from './request-receipts.js';
 import {
   listSelectionSets,
   resolveSelectionSet,
@@ -221,26 +222,14 @@ export class DesignAPI {
     this.changed();
     return { changed: ops.length, summary: live.summary() };
   }
-  execute(request) {
+  execute(request, validatedReceipt = null) {
     try {
-      if (!request || typeof request !== 'object' || Array.isArray(request))
-        fail('INVALID_REQUEST', '请求需要 JSON 对象');
-      if (request.schema && request.schema !== 'craftstudio-design/1')
-        fail('UNSUPPORTED_SCHEMA', '不支持的接口版本');
+      const receipt = validatedReceipt || requestReceipt(request, this.receipts);
+      if (receipt.replay) return receipt.replay;
+      const { id, hasId } = receipt;
       const p = request.params || {},
         method = request.method,
-        live = this.getSite(),
-        id = request.id,
-        fingerprint = JSON.stringify({ method, params: p }),
-        hasId = id !== undefined && id !== null;
-      if (hasId && typeof id !== 'string' && !Number.isSafeInteger(id))
-        fail('INVALID_REQUEST_ID', '请求 ID 需要字符串或安全整数');
-      if (hasId && this.receipts.has(id)) {
-        const previous = this.receipts.get(id);
-        if (previous.fingerprint !== fingerprint)
-          fail('REQUEST_ID_REUSED', '同一请求 ID 不能用于不同操作');
-        return structuredClone(previous.result);
-      }
+        live = this.getSite();
       let value,
         mutated = false;
       const tx = p.transactionId ? this.transactions.get(p.transactionId) : null;
@@ -678,8 +667,7 @@ export class DesignAPI {
             'selection.transform',
           ].includes(method))
       ) {
-        this.receipts.set(id, { fingerprint, result: structuredClone(result) });
-        if (this.receipts.size > 256) this.receipts.delete(this.receipts.keys().next().value);
+        rememberReceipt(this.receipts, receipt, result);
       }
       return result;
     } catch (e) {

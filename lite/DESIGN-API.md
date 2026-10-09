@@ -19,20 +19,24 @@ Worker 的 `api` 动作使用同一请求。无需接触私有变量或模拟 UI
 
 返回 `{schema,id,ok,workspaceId,revision,value}`，失败返回 `error:{code,message,details}`。操作失败不会部分写入。读取时可提供 `expectedRevision`，防止分页途中场景变更。实际写入、撤销、重做必须带最新 `expectedRevision`；同时带 `workspaceId` 可检测工程切换。
 
-有 ID 的写请求可重试，近期 256 个写请求保存回执；相同 ID 与不同内容会返回 `REQUEST_ID_REUSED`。工程切换后回执缓存清空。不要把这个缓存当作永久任务日志。
+有 ID 的成功写请求可重试，近期 256 条成功回执共用同一命名空间，包含普通编辑、事务、提案和建模请求。重试应完整复用原请求（包括原版本号），返回原回执且不重新执行；同 ID 配不同内容会返回 `REQUEST_ID_REUSED`。数字 `0` 与字符串 `"0"` 是不同 ID。历史回执不代表当前状态，需要另读 `workspace.describe`。工程切换会清空缓存。
+
+本地计算版会将已确认操作的回执随检查点保存；重开后可继续重放。准备／取消预览、隔离和未提交事务的回执只在当前引擎会话有效，不会恢复已结束的临时任务。独立 Lite 的回执保留在当前 Worker 会话。不要把这些有界缓存当作永久任务日志。
 
 ## 提案审阅 / Proposal review
 
 | Method | Parameters | Result |
 |---|---|---|
 | proposal.prepare | expectedRevision, workspaceId?, operations | value.id identifies the new candidate; replaces the previous candidate |
-| proposal.inspect | cursor?, limit? | Current candidate identity, summary, paged operations, total and nextCursor |
+| proposal.inspect | cursor?, limit?, proposalId?, expectedRevision?, workspaceId? | Current candidate identity, summary, paged operations, total and nextCursor |
 | proposal.commit | expectedRevision, workspaceId?, proposalId, policy? | Adopt this exact candidate as one undoable edit |
 | proposal.cancel | proposalId | Discard this exact candidate and retain confirmed content |
 
 Prepare/inspect return `value.changes: {add,replace,remove,terrain,total}`; the same values appear in `summary.proposal.changes`. Counts cover the complete cell diff against the currently confirmed scene, including removal of previously added blocks and NBT-only replacements. They exclude earlier confirmed building work and do not shrink to the current inspect page. `terrain` counts changed cells involving recognized ground or fluid states; placement permission remains controlled by the commit policy.
 
-提案预览不会修改已确认场景。人的采用／取消以及 Enter／Esc 走同一接口；保护校验失败时，候选提案保留。`proposalId` 来自 `prepare.value.id`，与外层请求 ID 不同；已结束或被替换的提案 ID 不能再次确认。分页时核对返回的候选 ID；若它变化，应重新读取。连接结果不确定时，先读取场景版本与当前提案状态，避免盲目生成或采用另一方案。
+提案预览不会修改已确认场景。人的采用／取消以及 Enter／Esc 走同一接口；保护校验失败时，候选提案保留。`proposalId` 来自 `prepare.value.id`，与外层请求 ID 不同；新请求不能再次确认已结束或被替换的提案，原成功提交请求的重试则返回其回执。分页时原样传回 `nextCursor`，它已绑定提案身份；提案被替换或结束会返回 `PROPOSAL_CHANGED`。旧数值偏移仍兼容，建议同时提供 `proposalId`。可另带版本和工程保护。连接结果不确定时，先重试完整原请求或读取当前状态，避免盲目生成另一方案。
+
+`workspace.describe.value.pending` 返回 `transactionIds`、`constructionId` 和 `strokeActive`，反映当前引擎实际任务。重放旧准备／取消回执不会重新开启已结束的任务。`api/planning-api.js` 组合提案／建模入口，`api/request-receipts.js` 统一请求身份校验、回执重放和持久化分类；普通编辑与规划请求沿用同一缓存。
 
 ## 基础方法
 

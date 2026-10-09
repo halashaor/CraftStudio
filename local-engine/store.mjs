@@ -1,6 +1,13 @@
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { digest, encode, decode, references, decodeBaselineChunk } from './checkpoint.mjs';
+import {
+  digest,
+  encode,
+  decode,
+  references,
+  decodeBaselineChunk,
+  isChunkedCheckpoint,
+} from './checkpoint.mjs';
 export class EngineStore {
   constructor(path) {
     this.path = typeof path === 'string' && path !== ':memory:' ? resolve(path) : null;
@@ -82,7 +89,7 @@ export class EngineStore {
     if (digest(row.payload) !== row.digest) throw Error('Corrupt checkpoint header');
     const head = decode(row.payload),
       refs = references(head),
-      disk = lazySource && this.path && head.schema === 'craftstudio-engine-checkpoint/2',
+      disk = lazySource && this.path && isChunkedCheckpoint(head),
       sourceIds = new Set(disk ? head.baseChunks.map((c) => c[1]) : []),
       required = new Set(disk ? references({ ...head, baseChunks: [] }) : refs),
       sourceSizes = [],
@@ -115,7 +122,7 @@ export class EngineStore {
       throw Error('Engine checkpoint version conflict');
     const head = decode(row.payload);
     references(head);
-    if (head.schema !== 'craftstudio-engine-checkpoint/2')
+    if (!isChunkedCheckpoint(head))
       throw Error('Save the legacy workspace before reading baseline chunks');
     const read = (id) => {
         const b = this.db.prepare('SELECT payload FROM designer_engine_blobs WHERE id=?').get(id);

@@ -21,6 +21,8 @@ try {
 
 Node-only `engineCapture` returns an immutable baseline, overlay/history references, metadata, resources and accepted API receipts. Supply `{known: store.known()}` to omit already stored blob bytes. `engineRestore` restores a packet from storage, including undo/redo. Unconfirmed transactions, proposals, isolation and active pointer strokes are cleared.
 
+New checkpoints use `craftstudio-engine-checkpoint/3`. Readers retain support for v1/v2 and upgrade on the next save; older engine builds cannot open v3 heads. Confirmed receipt bodies use compressed typed-wire blobs with hash references, preserving optional values and typed data across reopening. Temporary preparation/cancellation/isolation and uncommitted-transaction receipts are excluded. Legacy inline JSON receipts remain readable. Actual pending task state comes from `workspace.describe.value.pending`, rather than inferring it from replayable command replies.
+
 `EngineStore(path)` provides `commit(key, packet, expectedSequence)`, `load(key)`, `known()` and `close()`. Commit checks hashes, references and version conditions inside a SQLite transaction. Exact head replay is idempotent; loading checks payload integrity. Use an independent database: this store is not connected to the running application's database.
 
 ## Tests and explicit file verification

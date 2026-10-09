@@ -44,7 +44,9 @@ test('chunk roots and persistent undo/redo survive a new process and SQLite reop
     store.commit('project', packet, 1);
     const edited = await set(e, 3);
     packet = await e.call('engineCapture', { known: store.known() });
-    assert.equal(packet.blobs.length, 1);
+    const receiptBlob = packet.head.receipts.find(([id]) => id === 'edit-3')[1].resultBlob;
+    assert.equal(packet.blobs.filter((blob) => blob.id !== receiptBlob).length, 1);
+    assert.equal(packet.blobs.filter((blob) => blob.id === receiptBlob).length, 1);
     store.commit('project', packet, 2);
     const oldWorkspace = packet.head.workspaceId;
     store.close();

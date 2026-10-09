@@ -1,3 +1,5 @@
+import { durableReceipt } from '../lite/src/api/request-receipts.js';
+import { encodeWire, decodeWire } from '../lite/src/runtime/engine-wire.js';
 import { SourceReader } from './source-reader.mjs';
 import { LazyBaseline } from './lazy-baseline.mjs';
 import { createHash } from 'node:crypto';
@@ -8,11 +10,15 @@ import { VoxelOverlayMap } from '../lite/src/core/voxel-overlay-map.js';
 export const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const encode = (value) => gzipSync(JSON.stringify(value), { level: 1, mtime: 0 });
 export const decode = (bytes) => JSON.parse(gunzipSync(bytes).toString('utf8'));
+export const isChunkedCheckpoint = (head) =>
+  ['craftstudio-engine-checkpoint/2', 'craftstudio-engine-checkpoint/3'].includes(head.schema);
 export function references(head) {
   if (
-    !['craftstudio-engine-checkpoint/1', 'craftstudio-engine-checkpoint/2'].includes(
-      head?.schema,
-    ) ||
+    ![
+      'craftstudio-engine-checkpoint/1',
+      'craftstudio-engine-checkpoint/2',
+      'craftstudio-engine-checkpoint/3',
+    ].includes(head?.schema) ||
     typeof head.workspaceId !== 'string' ||
     !head.workspaceId ||
     !Number.isSafeInteger(head.revision) ||
@@ -20,7 +26,7 @@ export function references(head) {
   )
     throw Error('Invalid engine checkpoint');
   const ids = [head.base, head.assets];
-  if (head.schema === 'craftstudio-engine-checkpoint/2') {
+  if (isChunkedCheckpoint(head)) {
     const seen = new Set();
     if (!Array.isArray(head.baseChunks)) throw Error('Invalid baseline manifest');
     for (const [bucket, id, count, nbtCount] of head.baseChunks) {
@@ -44,6 +50,7 @@ export function references(head) {
     }
   }
   for (const row of head.archives) ids.push(row.id);
+  for (const [, record] of head.receipts || []) if (record.resultBlob) ids.push(record.resultBlob);
   for (const frame of [head, ...head.undo, ...head.redo])
     for (const [bucket, id] of frame.overlay) {
       if (!Number.isInteger(bucket) || bucket < 0 || bucket > 0xffffff)
@@ -115,10 +122,15 @@ export class EngineCheckpoint {
         name: file.name,
         id: memo(file.bytes, () => Buffer.from(new Uint8Array(file.bytes))),
       }));
-    const receipts = [...api.receipts].filter(([, record]) => {
-      const method = JSON.parse(record.fingerprint).method;
-      return !method.startsWith('transaction.') || method === 'transaction.commit';
-    });
+    const receipts = [...api.receipts]
+      .filter(([, record]) => durableReceipt(record))
+      .map(([id, record]) => [
+        id,
+        {
+          fingerprint: record.fingerprint,
+          resultBlob: memo(record.result, () => Buffer.from(encodeWire(record.result))),
+        },
+      ]);
     let baseline = this.baseMemo.get(site.base);
     if (!baseline) {
       baseline = splitBaseline(site.base);
@@ -134,7 +146,7 @@ export class EngineCheckpoint {
       this.baseMemo.set(site.base, baseline);
     }
     const head = {
-      schema: 'craftstudio-engine-checkpoint/2',
+      schema: 'craftstudio-engine-checkpoint/3',
       base,
       baseChunks,
       baseKey,
@@ -179,9 +191,7 @@ export class EngineCheckpoint {
   restore({ head, blobs, sourceDatabase, sourceSizes = [] }) {
     const records = new Map(blobs.map((b) => [b.id, b.bytes])),
       diskIds = new Set(
-        sourceDatabase && head.schema === 'craftstudio-engine-checkpoint/2'
-          ? head.baseChunks.map((c) => c[1])
-          : [],
+        sourceDatabase && isChunkedCheckpoint(head) ? head.baseChunks.map((c) => c[1]) : [],
       );
     for (const id of references(head)) {
       if (records.has(id)) {
@@ -194,27 +204,26 @@ export class EngineCheckpoint {
       this.sourceReader = new SourceReader(sourceDatabase, diskIds);
     }
     const reader = this.sourceReader;
-    const baseline =
-      head.schema === 'craftstudio-engine-checkpoint/2'
-        ? {
-            header: { bytes: records.get(head.base) },
-            chunks: head.baseChunks.map(([bucket, id, count, nbtCount]) => {
-              const row = { bucket, id, count, nbtCount, diskBacked: diskIds.has(id) };
-              if (diskIds.has(id)) {
-                row.byteLength = sizes.get(id) ?? reader.size(id);
-                Object.defineProperty(row, 'bytes', {
-                  configurable: true,
-                  enumerable: true,
-                  get: () => reader.read(id),
-                });
-              } else {
-                row.bytes = records.get(id);
-                row.byteLength = row.bytes.length;
-              }
-              return row;
-            }),
-          }
-        : null;
+    const baseline = isChunkedCheckpoint(head)
+      ? {
+          header: { bytes: records.get(head.base) },
+          chunks: head.baseChunks.map(([bucket, id, count, nbtCount]) => {
+            const row = { bucket, id, count, nbtCount, diskBacked: diskIds.has(id) };
+            if (diskIds.has(id)) {
+              row.byteLength = sizes.get(id) ?? reader.size(id);
+              Object.defineProperty(row, 'bytes', {
+                configurable: true,
+                enumerable: true,
+                get: () => reader.read(id),
+              });
+            } else {
+              row.bytes = records.get(id);
+              row.byteLength = row.bytes.length;
+            }
+            return row;
+          }),
+        }
+      : null;
     const site = baseline
         ? lazySource(baseline).attach()
         : new Site(restoreBaseline(head, records)),
@@ -287,7 +296,13 @@ export class EngineCheckpoint {
       workspaceId: head.workspaceId,
       revision: head.revision,
       baseKey: head.baseKey,
-      receipts: structuredClone(head.receipts),
+      receipts: (head.receipts || []).map(([id, record]) => {
+        if (!record.resultBlob) return [id, structuredClone(record)];
+        const bytes = records.get(record.resultBlob),
+          result = decodeWire(bytes);
+        this.memo.set(result, { id: record.resultBlob, bytes });
+        return [id, { fingerprint: record.fingerprint, result }];
+      }),
       assets: decode(records.get(head.assets)),
       files: head.archives.map((file) => ({
         name: file.name,
