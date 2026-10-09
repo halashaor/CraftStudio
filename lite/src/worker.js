@@ -1,3 +1,4 @@
+import { screenBoxSelection } from './selection/screen-box.js';
 import { PlanningAPI } from './api/planning-api.js';
 import { importRegionInput } from './minecraft/region-set.js';
 import { renameObjects } from './selection/object-naming.js';
@@ -410,6 +411,13 @@ async function execute(action, data) {
     resources.addSaved(data.pack);
     return summary();
   }
+  if (action === 'screenBoxSelection') {
+    api.guard(data);
+    return screenBoxSelection(preview || site, {
+      ...data,
+      isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
+    });
+  }
   if (action === 'prepareConstruction') {
     if (preview) throw Error('请先采用或取消提案预览');
     const materialCatalogue = catalogue(site, resources),
@@ -536,7 +544,10 @@ async function execute(action, data) {
       throw Error('场景已变化，请重新生成预览');
     const lastHistory = site.undo.at(-1),
       previousDesign = structuredClone(site.design),
-      captured = captureGeneration(site, draft.plan.operations);
+      captured = captureGeneration(site, draft.plan.operations),
+      strokeCaptured = draft.plan.materializedStroke
+        ? captureGeneration(site, draft.plan.materializedStroke.operations)
+        : null;
     site.operations(draft.plan.operations, data.policy || {});
     if (site.undo.at(-1) === lastHistory) {
       site.undo.push({ overlay: site.overlay, size: [...site.size], design: previousDesign });
@@ -563,6 +574,16 @@ async function execute(action, data) {
         config: draft.config,
         guideId: draft.id,
         name: data.name || '生成特征',
+      });
+      if (object) site.design.objects.push(object);
+    }
+    if (draft.plan.materializedStroke) {
+      const source = draft.plan.materializedStroke;
+      const object = generatedObject(site, strokeCaptured, {
+        type: 'geometry',
+        config: source.recipe,
+        guideId: source.guideId,
+        name: data.name || '沿曲线方块',
       });
       if (object) site.design.objects.push(object);
     }

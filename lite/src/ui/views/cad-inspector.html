@@ -3,12 +3,25 @@
   <h3>当前选择</h3>
   <p id="cad-selection-label">点击或拖框选择；Shift 增加，Ctrl 减去。</p>
   <label
-    >点击选择<select id="cad-selection-target">
+    >选择内容<select id="cad-selection-target">
       <option value="blocks">方块</option>
       <option value="objects">对象优先</option>
     </select></label
   >
   <p class="small">对象优先按实际成员选中整对象；重叠处 Alt+点击切换，没有对象时仍选方块。</p>
+  <label
+    >框选命中<select id="cad-box-hit">
+      <option value="crossing">碰到就选中</option>
+      <option value="window">完全框入才选</option>
+      <option value="direction">按 CAD 拖动方向</option>
+    </select></label
+  >
+  <label
+    >方块框选深度<select id="cad-box-depth">
+      <option value="visible">只选可见方块</option>
+      <option value="through">穿透选择前后方块</option>
+    </select></label
+  >
   <label
     >选区组合<select id="cad-selection-mode">
       <option value="replace">重新选择</option>
@@ -18,7 +31,8 @@
     </select></label
   >
   <p class="small" id="cad-selection-combine-hint">
-    左→右完整框入，右→左相交选入；Shift 增加，Ctrl 减去。选区黄色外框表示范围。
+    框选按屏幕矩形选择当前内容；Shift 增加，Ctrl
+    减去。切到对象可选整栋建筑。黄色外框只是范围，孔洞不会自动选中。
   </p>
   <div class="row">
     <button id="cad-selection-focus" title="保留当前朝向和透视 / 正交模式，聚焦所选范围">

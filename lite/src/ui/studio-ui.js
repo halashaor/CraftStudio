@@ -1,3 +1,4 @@
+import { KeyboardMotion } from '../view/keyboard-motion.js';
 import { PrefabBrowser } from '../components/prefab-browser.js';
 import viewMarkup0 from './views/studio-ui-panel.html';
 import { reviewLook } from '../view/review-look.js';
@@ -41,6 +42,9 @@ export function studioUI({
   $('step-check').append(views);
   const outline = new THREE.Box3Helper(new THREE.Box3(), 0xf5bd52);
   outline.visible = false;
+  outline.material.depthTest = false;
+  outline.material.depthWrite = false;
+  outline.renderOrder = 9;
   scene.add(outline);
   let uiSignature = '',
     selectedStart = null,
@@ -312,7 +316,9 @@ export function studioUI({
     reviewLimits = null,
     reviewFrame = null,
     reviewTime = null,
-    reviewDrag = null;
+    reviewDrag = null,
+    keyboardNavigation = false;
+  const keyboardMotion = new KeyboardMotion();
   const reviewKeys = new Set();
   function finishReviewLook() {
     if (!reviewDrag) return;
@@ -373,6 +379,7 @@ export function studioUI({
     walk = false;
     finishReviewLook();
     reviewKeys.clear();
+    keyboardMotion.reset();
     cancelAnimationFrame(reviewFrame);
     reviewFrame = null;
     controls.minDistance = reviewLimits.min;
@@ -385,37 +392,43 @@ export function studioUI({
     requestRender();
   }
   function reviewTick(time) {
-    if (!walk) return;
+    if (!walk && !keyboardNavigation) return;
     const dt = reviewTime === null ? 0 : Math.min(0.05, (time - reviewTime) / 1000);
     reviewTime = time;
-    if (!dialogOwnsKeyboard() && !nativeControlTarget(document.activeElement)) {
+    if (
+      (walk || controls.enabled) &&
+      !dialogOwnsKeyboard() &&
+      !nativeControlTarget(document.activeElement)
+    ) {
       const camera = getCamera(),
         forward = new THREE.Vector3(),
         side = new THREE.Vector3(),
         delta = new THREE.Vector3();
       camera.getWorldDirection(forward);
       side.setFromMatrixColumn(camera.matrixWorld, 0);
-      if (reviewKeys.has('KeyW')) delta.add(forward);
-      if (reviewKeys.has('KeyS')) delta.sub(forward);
-      if (reviewKeys.has('KeyA')) delta.sub(side);
-      if (reviewKeys.has('KeyD')) delta.add(side);
-      if (reviewKeys.has('KeyQ')) delta.y--;
-      if (reviewKeys.has('KeyE')) delta.y++;
-      if (delta.lengthSq()) {
-        delta
-          .normalize()
-          .multiplyScalar(
-            dt * (reviewKeys.has('ShiftLeft') || reviewKeys.has('ShiftRight') ? 9 : 3),
-          );
+      const step = keyboardMotion.step(dt, reviewKeys, forward.toArray(), side.toArray());
+      if (step.some((n) => n !== 0)) {
+        delta.set(...step);
         camera.position.add(delta);
         controls.target.add(delta);
         controls.update();
         requestRender();
       }
+    } else {
+      reviewKeys.clear();
+      keyboardMotion.reset();
+    }
+    if (!walk && !reviewKeys.size && !keyboardMotion.moving) {
+      keyboardNavigation = false;
+      reviewFrame = null;
+      window.dispatchEvent(new Event('craftstudio-navigation-end'));
+      return;
     }
     reviewFrame = requestAnimationFrame(reviewTick);
   }
-  $('studio-walk').textContent = '进入空间浏览';
+  document.querySelector('.scene-toolbar .row').append($('studio-walk'));
+  $('studio-walk').title = '视口内可直接用 WASD、Q/E 平滑移动；漫游模式提供右键原地观察';
+  $('studio-walk').textContent = '漫游';
   $('studio-walk').onclick = () => {
     if (walk) {
       leaveReview();
@@ -424,6 +437,13 @@ export function studioUI({
     if (getSummary()?.preview) {
       notice('请先采用或取消 AI 提案');
       return;
+    }
+    if (keyboardNavigation) {
+      keyboardNavigation = false;
+      cancelAnimationFrame(reviewFrame);
+      reviewKeys.clear();
+      keyboardMotion.reset();
+      window.dispatchEvent(new Event('craftstudio-navigation-end'));
     }
     window.dispatchEvent(new Event('craftstudio-space-review-start'));
     reviewView = window.CraftStudio.viewState();
@@ -452,7 +472,7 @@ export function studioUI({
     'keydown',
     (event) => {
       if (
-        !walk ||
+        (!walk && (document.activeElement !== renderer.domElement || !controls.enabled)) ||
         event.isComposing ||
         event.ctrlKey ||
         event.metaKey ||
@@ -461,6 +481,7 @@ export function studioUI({
       )
         return;
       if (
+        walk &&
         event.key === 'Escape' &&
         (!nativeControlTarget(document.activeElement) ||
           document.activeElement === $('space-review-exit') ||
@@ -472,7 +493,7 @@ export function studioUI({
         return;
       }
       if (nativeControlTarget(document.activeElement)) return;
-      if (event.key === 'Enter') {
+      if (walk && event.key === 'Enter') {
         event.preventDefault();
         event.stopImmediatePropagation();
         leaveReview(false);
@@ -486,17 +507,34 @@ export function studioUI({
         event.preventDefault();
         event.stopImmediatePropagation();
         reviewKeys.add(event.code);
+        if (!walk && !keyboardNavigation && !event.code.startsWith('Shift')) {
+          keyboardNavigation = true;
+          reviewTime = null;
+          keyboardMotion.reset();
+          window.dispatchEvent(new Event('craftstudio-navigation-start'));
+          reviewFrame = requestAnimationFrame(reviewTick);
+        }
       }
     },
     true,
   );
   window.addEventListener('keyup', (event) => reviewKeys.delete(event.code));
+  renderer.domElement.addEventListener('blur', () => {
+    if (!walk) {
+      reviewKeys.clear();
+      keyboardMotion.reset();
+    }
+  });
   window.addEventListener('blur', () => {
     reviewKeys.clear();
+    keyboardMotion.reset();
     finishReviewLook();
   });
   document.addEventListener('focusin', (event) => {
-    if (nativeControlTarget(event.target)) reviewKeys.clear();
+    if (nativeControlTarget(event.target)) {
+      reviewKeys.clear();
+      keyboardMotion.reset();
+    }
   });
 
   for (const [id, key] of [

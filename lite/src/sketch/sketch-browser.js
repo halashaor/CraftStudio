@@ -46,7 +46,7 @@ export class SketchBrowser {
             const actions = guideActions(s.design.guides, g.id, guideProfiles);
             for (const [operation, label] of [
               ['extrude', '拉伸'],
-              ['sweep', '沿路径生成'],
+              ['sweep', '沿曲线摆方块'],
             ]) {
               const action = actions[operation],
                 b = document.createElement('button');

@@ -471,3 +471,7 @@ Type/state object filters keep related source sketches as context and omit unrel
 `await CraftStudio.export({format:"datapack",kind:"selection",target:"1.21.1",placement:"relative"})` returns a Java datapack ZIP with the same exact blueprint selection/air mask. Targets: `1.20.1` (pack 15, plural functions directory) and `1.21.1` (pack 48, singular function directory). Placement is `relative` (default) or `world` (requires confirmed world origin). The ZIP manifest carries the local/world offsets and independent numbered stages of at most 8192 commands. Block entities are initialized and retain typed SNBT; scene entities are omitted, and includeEntities:true rejects explicitly. Export is read-only and does not execute game commands, change gamerules, or upgrade data.
 
 The connected-page MCP bridge also accepts operation: "export" with these options and writes a .datapack.zip artifact using the existing revision guard and receipt mechanism.
+
+## Auxiliary curve block generation
+
+For geometry construction using an existing editGuideId, materializeGuide:true with guidesOnly:false creates the first linked stroke result on that guide. The source guide ID is retained, no duplicate guide is created, and normal placement protection applies. A guide that already has a geometry result rejects a second materialization; edit its existing result instead. Confirmation remains one undo step and later source edits use the existing generation records.

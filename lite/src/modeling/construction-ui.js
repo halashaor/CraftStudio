@@ -1,3 +1,4 @@
+import { SketchNodeDrag, nearestScreenNode } from '../sketch/sketch-node-drag.js';
 import viewMarkup0 from './views/construction-ui-panel.html';
 import { SketchSnapController } from '../sketch/snap-controller.js';
 import { validToolIntent } from '../storage/tool-intents.js';
@@ -162,6 +163,7 @@ export function constructionUI({
     historyVersion = 0;
   let polylineClosed = false,
     bezierSamples = null;
+  let nodeDrag = null;
   let movementAxes = 'free',
     dragPickedAxis = null;
   const profiles = () => closedProfiles(savedGuides);
@@ -250,7 +252,7 @@ export function constructionUI({
   handoff.id = 'sketch-model-handoff';
   handoff.hidden = true;
   handoff.innerHTML =
-    '<p id="sketch-model-handoff-info" class="small"></p><div class="row"><button id="sketch-model-extrude">从轮廓拉伸</button><button id="sketch-model-sweep">沿路径生成</button></div>';
+    '<button id="sketch-stroke-blocks" class="full primary">沿曲线摆方块</button><p id="sketch-model-handoff-info" class="small"></p><div class="row"><button id="sketch-model-extrude">从轮廓拉伸</button><button id="sketch-model-sweep">沿路径生成</button></div>';
   $('figure-guides-only').closest('label').after(handoff);
   const sketchKey = (c) =>
     JSON.stringify(
@@ -276,10 +278,10 @@ export function constructionUI({
   }
   function syncHandoff() {
     const auxiliary = auxiliaryEditing();
-    $('figure-guides-only').disabled = auxiliary;
-    if (auxiliary) $('figure-guides-only').checked = true;
-    handoff.hidden =
-      !active || type !== 'geometry' || drawing || !($('figure-guides-only').checked || auxiliary);
+    $('construction-apply').textContent =
+      type === 'geometry' && $('figure-guides-only').checked ? '保存辅助曲线' : '确认方块放置';
+    $('figure-guides-only').disabled = false;
+    handoff.hidden = !active || type !== 'geometry' || drawing || !$('figure-guides-only').checked;
     if (handoff.hidden) return;
     const actions = handoffActions(),
       ready =
@@ -289,9 +291,10 @@ export function constructionUI({
         initialSketchKey === sketchKey(config()) &&
         initialSourceKey ===
           JSON.stringify(savedGuides.find((g) => g.id === editingGuideId)?.recipe);
+    $('sketch-stroke-blocks').disabled = !ready || !actions?.sweep || !!actions.sweep.reason;
     $('sketch-model-handoff-info').textContent = auxiliary
-      ? '此处编辑辅助轮廓；实体使用下方建模入口生成。'
-      : '可以先保存辅助轮廓，再进入建模预览。';
+      ? '这是已保存辅助曲线；可直接沿线摆方块，也可用轮廓拉伸。'
+      : '直接沿曲线摆方块会先显示预览；也可只保存辅助线。';
     for (const [operation, id] of [
       ['extrude', 'sketch-model-extrude'],
       ['sweep', 'sketch-model-sweep'],
@@ -301,7 +304,7 @@ export function constructionUI({
       button.disabled = !ready || !!reason;
       button.title = reason || (!ready ? '请先完成有效轮廓预览' : '确认当前轮廓后进入实体预览');
       button.textContent =
-        (unchanged ? '' : '确认轮廓并') + (operation === 'extrude' ? '拉伸' : '沿路径生成');
+        (unchanged ? '' : '确认轮廓并') + (operation === 'extrude' ? '拉伸' : '生成路径截面');
     }
   }
   new MutationObserver(syncHandoff).observe(panel, {
@@ -367,6 +370,9 @@ export function constructionUI({
             constraint: $('sketch-constraint').value,
             referencePoints: savedGuides.find((g) => g.id === $('sketch-reference').value)?.points,
             guidesOnly: $('figure-guides-only').checked,
+            ...(editingGuideId && auxiliaryEditing() && !$('figure-guides-only').checked
+              ? { materializeGuide: true }
+              : {}),
             kind: $('figure-kind').value,
             sampleCount: bezierSamples,
             closed: polylineClosed,
@@ -760,6 +766,7 @@ export function constructionUI({
     historySignal();
   }
   function cancelControlDrag() {
+    if (nodeDrag?.cancel()) return true;
     if (!control.dragging || !dragStart) return false;
     const before = dragStart;
     dragStart = null;
@@ -782,7 +789,7 @@ export function constructionUI({
   }
   function parameterHistory(direction) {
     if (!active || drawing || committing) return false;
-    if (control.dragging) return cancelControlDrag();
+    if (control.dragging || nodeDrag?.state) return cancelControlDrag();
     if (type === 'terrain' && (slopePicking || slopeDrag)) {
       stopSlope(true);
       schedule();
@@ -2204,7 +2211,7 @@ export function constructionUI({
             ? anchors.length === 1
               ? '点击圆弧起点'
               : '点击圆弧终点'
-            : '点击终点；随后可拖动控制柄调整';
+            : '点击终点；随后直接拖动圆点调整，X / Y / Z 可约束方向';
   }
   function beginDrawing() {
     clearSurfaceIssues();
@@ -2630,6 +2637,14 @@ export function constructionUI({
     });
   };
 
+  function spatialDrawing() {
+    return (
+      $('sketch-pick-surface').checked &&
+      !workingFrame &&
+      !$('sketch-plane-lock').checked &&
+      ['bezier', 'spline', 'polyline', 'line'].includes($('figure-kind').value)
+    );
+  }
   function planePoint(e) {
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.set(
@@ -2645,8 +2660,17 @@ export function constructionUI({
       : level === undefined
         ? null
         : { origin: normal.toArray().map((n) => n * level), normal: normal.toArray() };
-    const objectPoint = snapping.snap(e, { plane });
+    const surfacePicking =
+      $('sketch-pick-surface').checked &&
+      !workingFrame &&
+      !$('sketch-plane-lock').checked &&
+      ['bezier', 'spline', 'polyline', 'line'].includes($('figure-kind').value);
+    const objectPoint = snapping.snap(e, { plane: surfacePicking ? null : plane });
     if (objectPoint) return objectPoint;
+    if (surfacePicking) {
+      const hit = cast(e);
+      if (hit && !hit.object.userData.readOnly) return hit.point.toArray();
+    }
     if (workingFrame) {
       const hit = new THREE.Vector3();
       if (
@@ -2717,6 +2741,42 @@ export function constructionUI({
     schedule();
     panel.dataset.previewState = 'pending';
   }
+  nodeDrag = new SketchNodeDrag({
+    THREE,
+    element: renderer.domElement,
+    getCamera,
+    navigation,
+    begin: (index) => {
+      pickIndex = index;
+      control.axis = null;
+      control.attach(pointNodes[index]);
+      dragStart = captureParameters();
+      panel.dataset.dragging = 'true';
+      nodeTools();
+    },
+    move: (index, position) => {
+      bezierSamples = null;
+      points[index] = snapDraggedNode(position, index);
+      pointNodes[index].position.set(...points[index]);
+      syncControlPolygon();
+      schedule();
+      requestRender();
+    },
+    finish: () => {
+      const before = dragStart;
+      dragStart = null;
+      panel.dataset.dragging = 'false';
+      recordParameters(before);
+      snapping.clear();
+      precise.request(true);
+    },
+    cancel: () => {
+      const before = dragStart;
+      dragStart = null;
+      panel.dataset.dragging = 'false';
+      if (before) restoreParameters(before);
+    },
+  });
   renderer.domElement.addEventListener(
     'pointerdown',
     (e) => {
@@ -2762,6 +2822,23 @@ export function constructionUI({
         1 - ((e.clientY - rect.top) / rect.height) * 2,
       );
       ray.setFromCamera(pointer, getCamera());
+      if (type === 'geometry' && !committing) {
+        const selected = nearestScreenNode(pointNodes, {
+          pointer: [e.clientX, e.clientY],
+          project: (node) => {
+            const p = node.position.clone().project(getCamera());
+            return [
+              rect.left + ((p.x + 1) * rect.width) / 2,
+              rect.top + ((1 - p.y) * rect.height) / 2,
+              p.z,
+            ];
+          },
+        });
+        if (selected && (!control.axis || control.axis === 'XYZ')) {
+          nodeDrag.start(e, selected);
+          return;
+        }
+      }
       const selected = ray.intersectObjects(pointNodes, false)[0];
       if (selected) {
         pickIndex = selected.object.userData.index;
@@ -2801,6 +2878,7 @@ export function constructionUI({
       p,
       $('figure-plane').value,
       workingFrame,
+      spatialDrawing(),
     );
     immediate();
   });
@@ -2898,7 +2976,14 @@ export function constructionUI({
       return;
     }
     if (Math.hypot(...p.map((n, a) => n - anchors[0][a])) < 0.1) return;
-    points = drawingPoints(kind, anchors, p, $('figure-plane').value, workingFrame);
+    points = drawingPoints(
+      kind,
+      anchors,
+      p,
+      $('figure-plane').value,
+      workingFrame,
+      spatialDrawing(),
+    );
     finishDrawing();
   });
   renderer.domElement.addEventListener('dblclick', (e) => {
@@ -3040,6 +3125,13 @@ export function constructionUI({
     }
   }
   $('construction-apply').onclick = () => confirmConstruction();
+  $('sketch-stroke-blocks').onclick = () => {
+    if ($('sketch-stroke-blocks').disabled || committing) return;
+    $('figure-guides-only').checked = false;
+    if (spatialDrawing()) $('figure-surface').value = 'bottom';
+    schedule();
+    notice('已按当前线宽和材质预览曲线方块；表面取点时方块位于曲线上方，检查后确认放置');
+  };
   for (const [operation, id] of [
     ['extrude', 'sketch-model-extrude'],
     ['sweep', 'sketch-model-sweep'],
@@ -3193,8 +3285,19 @@ export function constructionUI({
     const action = guideActions(savedGuides, id)[operation];
     if (action.reason) throw Error(action.reason);
     const sweepMode =
-      operation === 'sweep' && (defaultRectangle || !profiles().length) ? 'rectangle' : null;
+      operation === 'sweep' && (defaultRectangle || !profiles().length) ? 'rectangle-fit' : null;
+    const sourceRecipe = savedGuides.find((guide) => guide.id === id)?.recipe;
     if ((await open('feature', { ...action, operation, sweepMode })) === false) return;
+    if (operation === 'sweep' && sweepMode && sourceRecipe?.kind) {
+      $('feature-width').value = $('feature-height').value = String(sourceRecipe.width || 1);
+      $('feature-hollow').checked = $('feature-cut').checked = false;
+      $('feature-voxel').value = sourceRecipe.voxel === 'cube' ? 'cube' : 'smart';
+      featureRoles = structuredClone(sourceRecipe.roles || {});
+      if (sourceRecipe.state) material = structuredClone(sourceRecipe.state);
+      $('feature-material').textContent = '主体：' + materialName(material);
+      featureFields();
+      schedule();
+    }
     notice(
       operation === 'extrude'
         ? '已选中源轮廓，调整深度后确认放置'

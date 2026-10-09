@@ -1,3 +1,4 @@
+import { screenObjectMatches } from '../selection/screen-box.js';
 import { ObjectTreeUI } from './object-tree-ui.js';
 import { ObjectSelectionBinding } from '../selection/object-selection-binding.js';
 import { MaterialPicker } from '../materials/material-picker.js';
@@ -77,6 +78,8 @@ export function cadShell({
   let selectionActive = false;
   const selectionBinding = new ObjectSelectionBinding();
   const wholeObjectIds = () => (selectionActive && objectOnly ? [...selectionBinding.ids] : []);
+  let hoverMask = null,
+    hoverKey = null;
   let selectedObjects = new Set(),
     objectCandidates = new Set(),
     objectOnly = false,
@@ -723,7 +726,9 @@ export function cadShell({
       marquee.id = 'cad-marquee';
       document.body.append(marquee);
     }
-    const crossing = e.clientX < pointer.x;
+    const crossing =
+      $('cad-box-hit').value === 'crossing' ||
+      ($('cad-box-hit').value === 'direction' && e.clientX < pointer.x);
     marquee.dataset.crossing = String(crossing);
     marquee.dataset.operation = pointer.operation;
     marquee.dataset.label =
@@ -746,54 +751,76 @@ export function cadShell({
       menu.open(e.clientX, e.clientY);
     }
     if (marquee) {
+      const requestPointer = pointer;
       const rect = renderer.domElement.getBoundingClientRect(),
         lo = [Math.min(pointer.x, e.clientX), Math.min(pointer.y, e.clientY)],
         hi = [Math.max(pointer.x, e.clientX), Math.max(pointer.y, e.clientY)],
-        crossing = e.clientX < pointer.x;
-      const selected = (getSummary()?.design.objects || []).filter((o) => {
-        if (objectHidden(getSummary().design, o)) return false;
-        const points = [];
-        for (const x of [o.min[0], o.max[0] + 1])
-          for (const y of [o.min[1], o.max[1] + 1])
-            for (const z of [o.min[2], o.max[2] + 1]) {
-              const p = projectPoint([x, y, z]);
-              points.push([
-                rect.left + ((p.x + 1) * rect.width) / 2,
-                rect.top + ((1 - p.y) * rect.height) / 2,
-                p.z,
-              ]);
-            }
-        if (points.every((p) => p[2] < -1 || p[2] > 1)) return false;
-        const a = [0, 1].map((i) => Math.min(...points.map((p) => p[i]))),
-          b = [0, 1].map((i) => Math.max(...points.map((p) => p[i])));
-        return crossing
-          ? a.every((n, i) => n <= hi[i]) && b.every((n, i) => n >= lo[i])
-          : a.every((n, i) => n >= lo[i]) && b.every((n, i) => n <= hi[i]);
-      });
+        crossing =
+          $('cad-box-hit').value === 'crossing' ||
+          ($('cad-box-hit').value === 'direction' && e.clientX < pointer.x);
+      const selected =
+        $('cad-selection-target').value === 'objects'
+          ? (getSummary()?.design.objects || []).filter((o) => {
+              if (objectHidden(getSummary().design, o)) return false;
+              return screenObjectMatches(o, {
+                box: { min: lo, max: hi },
+                crossing,
+                project: (point) => {
+                  const p = projectPoint(point);
+                  return [
+                    rect.left + ((p.x + 1) * rect.width) / 2,
+                    rect.top + ((1 - p.y) * rect.height) / 2,
+                    p.z,
+                  ];
+                },
+              });
+            })
+          : [];
       if (selected.length) {
-        const min = [0, 1, 2].map((a) => Math.min(...selected.map((o) => o.min[a]))),
-          max = [0, 1, 2].map((a) => Math.max(...selected.map((o) => o.max[a])));
         selectObjects(
           selected.map((o) => o.id),
           pointer.operation,
         );
         $('pick-panel').hidden = true;
-      } else {
-        const last = cast(e);
-        if (
-          pointer.start &&
-          last &&
-          !pointer.start.object.userData.readOnly &&
-          !last.object.userData.readOnly
-        ) {
-          const a = hitCell(pointer.start).pos,
-            b = hitCell(last).pos;
-          studio.selectRange(
-            { min: a.map((n, i) => Math.min(n, b[i])), max: a.map((n, i) => Math.max(n, b[i])) },
-            pointer.operation,
+      } else if ($('cad-selection-target').value === 'blocks') {
+        const camera = getCamera(),
+          viewProjection = new THREE.Matrix4().multiplyMatrices(
+            camera.projectionMatrix,
+            camera.matrixWorldInverse,
+          ),
+          head = getSummary();
+        const parameters = {
+          workspaceId: head.workspaceId,
+          expectedRevision: head.revision,
+          matrix: viewProjection.toArray(),
+          inverse: viewProjection.clone().invert().toArray(),
+          viewport: [rect.width, rect.height],
+          box: {
+            min: lo.map((n, a) => n - [rect.left, rect.top][a]),
+            max: hi.map((n, a) => n - [rect.left, rect.top][a]),
+          },
+          crossing,
+          depth: $('cad-box-depth').value,
+          mode: window.CraftStudio.displayState().mode,
+          cut: +$('cut').value,
+          plants: $('plants').checked,
+          showGround: $('ground').checked,
+          showExisting: $('existing').checked,
+        };
+        task(async () => {
+          const range = await call('screenBoxSelection', parameters);
+          const current = getSummary();
+          if (current.workspaceId !== head.workspaceId || current.revision !== head.revision)
+            throw Error('场景已变化，请重新框选');
+          if (range) studio.selectRange(range, requestPointer.operation);
+          else if (requestPointer.operation === 'replace') $('cad-selection-clear').click();
+          notice(
+            range
+              ? '已框选 ' + range.members.length + ' 个方块'
+              : '框内没有命中的方块；可切换穿透或对象选择',
           );
-        }
-      }
+        }, '正在框选方块…');
+      } else if (requestPointer.operation === 'replace') $('cad-selection-clear').click();
       marquee.remove();
       marquee = null;
     }
@@ -1055,7 +1082,9 @@ export function cadShell({
       task(async () => {
         if (busyReason()) throw Error(busyReason());
         workspace.selectCategory('model');
-        await construction.openFromGuide(id, operation);
+        await construction.openFromGuide(id, operation, {
+          defaultRectangle: operation === 'sweep',
+        });
       }),
   });
   $('cad-selection-focus').onclick = () => {
@@ -1143,6 +1172,25 @@ export function cadShell({
   return {
     assets,
     pickObject,
+    hoverInfo: (pos) => {
+      if ($('cad-selection-target').value === 'objects') {
+        const object = objectsAtCell(getSummary().design, pos)[0];
+        if (object)
+          return { min: object.min, max: object.max, selected: selectedObjects.has(object.id) };
+      }
+      const range = studio.getSelection(),
+        key = JSON.stringify([range.min, range.max]);
+      if (
+        !hoverKey ||
+        hoverKey.members !== range.members ||
+        hoverKey.regions !== range.regions ||
+        hoverKey.key !== key
+      ) {
+        hoverKey = { members: range.members, regions: range.regions, key };
+        hoverMask = selectionPredicate(range);
+      }
+      return { min: pos, max: pos, selected: selectionActive && hoverMask(pos) };
+    },
     handleHistory,
     cancelOperations: () => {
       if (operations.busyReason()) throw Error('正在提交当前操作，请稍候');

@@ -1,3 +1,4 @@
+import { HoverFeedback } from './selection/hover-feedback.js';
 import { CreateSceneView } from './rendering/create-scene-view.js';
 import { ResourceController } from './materials/resource-controller.js';
 import { PageRequests } from './api/page-requests.js';
@@ -89,6 +90,14 @@ function call(action, data = {}, transfers = [], options = {}) {
     },
   );
 }
+window.addEventListener('craftstudio-navigation-start', () => {
+  host.dataset.keyboardMoving = 'true';
+  viewNavigation?.begin();
+});
+window.addEventListener('craftstudio-navigation-end', () => {
+  delete host.dataset.keyboardMoving;
+  viewNavigation?.end();
+});
 const pageRequests = new PageRequests({
   call,
   baselineRequest,
@@ -324,6 +333,27 @@ const pickBox = new THREE.LineSegments(
 );
 pickBox.visible = false;
 scene.add(pickBox);
+const hoverFeedback = new HoverFeedback(scene);
+controls.addEventListener('change', () => {
+  hoverFeedback.show(null);
+  delete host.dataset.hoveredCell;
+  delete host.dataset.hoverState;
+});
+function updateHover(hit) {
+  if (tool === 'inspect' && hit && !hit.object.userData.plane && !cad?.isTransformActive()) {
+    const { pos } = hitCell(hit),
+      target = cad?.hoverInfo(pos) || { min: pos, max: pos, selected: false };
+    hoverFeedback.show(target);
+    host.dataset.hoveredCell = pos.join(',');
+    host.dataset.hoverState = target.selected ? 'selected' : 'hover';
+  } else {
+    hoverFeedback.show(null);
+    delete host.dataset.hoveredCell;
+    delete host.dataset.hoverState;
+  }
+}
+window.addEventListener('craftstudio-selection', () => queueMicrotask(() => updateHover(hoverHit)));
+
 new ResizeObserver(() => {
   const w = host.clientWidth,
     h = host.clientHeight;
@@ -342,6 +372,7 @@ renderer.setAnimationLoop((now) => {
   controls.update();
   const dt = motionLast ? Math.min((now - motionLast) / 1000, 0.15) : 0;
   motionLast = now;
+  if (hoverFeedback.tick(dt, now)) needsRender = true;
   if ($('create-play').checked && document.visibilityState === 'visible') {
     createScene.time += dt * Number($('create-rate').value);
     if (updateMotion() && now - motionDrawLast >= 1000 / 30) {
@@ -1748,6 +1779,7 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     if (!hoverEvent || busy) return;
     const hit = cast(hoverEvent);
     hoverHit = hit;
+    updateHover(hit);
     if (hit && tool !== 'inspect') {
       const { pos, axis } = hitCell(
         hit,
@@ -1876,6 +1908,10 @@ renderer.domElement.addEventListener(
 );
 renderer.domElement.addEventListener('pointercancel', releaseStroke, true);
 renderer.domElement.addEventListener('pointerleave', () => {
+  updateHover(null);
+  hoverHit = null;
+  hoverEvent = null;
+  delete host.dataset.hoveredCell;
   if (!stroke) {
     brushPreview.visible = false;
     needsRender = true;
@@ -2291,7 +2327,7 @@ window.addEventListener('keydown', (e) => {
     $('brush-size').value = values[Math.max(0, Math.min(4, index + (key === ']' ? 1 : -1)))];
     $('brush-size').onchange();
   }
-  if (key === 'e' && hoverHit) {
+  if (key === 'i' && hoverHit) {
     const { pos } = hitCell(hoverHit);
     call('inspect', { pos })
       .then((d) => {

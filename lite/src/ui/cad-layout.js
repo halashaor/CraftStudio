@@ -83,7 +83,7 @@ export function cadLayout({ $, chooseTool, library, notice, requestMaterial }) {
   const brush = edit.querySelector('.brush-settings');
   $('cad-brush-settings').append(brush);
   brush.querySelector('.small').textContent =
-    '右键旋转，中键平移；空格＋左键临时旋转。Shift 画直线，E 取材，[ ] 调大小。';
+    '视口内 WASD 移动，Q/E 升降，Shift 加速；右键旋转，中键平移。Shift 画直线，I 取材，[ ] 调大小。';
   const brushOptions = brushUI({ $, library, notice });
   const material = $('block-id').closest('.card');
   advanced.body.append(material);
@@ -205,7 +205,8 @@ export function cadLayout({ $, chooseTool, library, notice, requestMaterial }) {
   empty.innerHTML = emptyMarkup;
   $('scene').append(empty);
   const statusText = document.querySelector('.gesture');
-  statusText.textContent = '左键选择 / 拖框 · 右键旋转 · 中键平移 · F 总览';
+  statusText.textContent =
+    '左键选择 / 拖框 · WASD 移动 · Q/E 升降 · Shift 加速 · 右键旋转 · F 定位';
   document.querySelector('.scene-heading .eyebrow').hidden = true;
   document.querySelector('.foot-right').textContent = '本地保存 · 每格一个方块';
   return {

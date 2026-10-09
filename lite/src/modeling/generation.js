@@ -249,6 +249,7 @@ export function editSketchPlan(site, config, available) {
   if (!source?.recipe?.kind) throw Error('请选择可编辑的已保存草图');
   const recipe = { ...clone(source.recipe), ...clone(config) };
   delete recipe.editGuideId;
+  delete recipe.materializeGuide;
   delete recipe.updateDependents;
   delete recipe.manualStrategy;
   if (
@@ -302,6 +303,26 @@ export function editSketchPlan(site, config, available) {
     );
     result.design = working.design;
     result.warnings.push(objects.length + ' 个关联对象保持原样，等待更新');
+  }
+  if (config.materializeGuide) {
+    if (objects.some((object) => object.generation?.type === 'geometry'))
+      throw Error('此辅助线已有方块结果，请编辑原生成结果');
+    const stroke = geometryPlan(working, { ...recipe, guidesOnly: false }, available);
+    result.operations = [
+      ...new Map(
+        [...result.operations, ...stroke.operations].map((operation) => [
+          coordKey(...operation.pos),
+          operation,
+        ]),
+      ).values(),
+    ];
+    result.materializedStroke = {
+      guideId: source.id,
+      recipe: { ...recipe, guidesOnly: false },
+      operations: stroke.operations,
+    };
+    result.usedRoles = stroke.usedRoles;
+    result.warnings.push(...stroke.warnings);
   }
   if (sketch.surfaceFit) result.surfaceFit = sketch.surfaceFit;
   result.warnings = [...new Set([...result.warnings, ...sketch.warnings])];

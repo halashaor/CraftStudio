@@ -1,5 +1,5 @@
 import { validateFrame, sketchLocal, sketchWorld } from './workplane.js';
-export function drawingPoints(kind, anchors, cursor, plane = 'xz', frame = null) {
+export function drawingPoints(kind, anchors, cursor, plane = 'xz', frame = null, spatial = false) {
   if (frame) {
     const f = validateFrame(frame);
     return drawingPoints(
@@ -12,7 +12,7 @@ export function drawingPoints(kind, anchors, cursor, plane = 'xz', frame = null)
   const [a, b, n] = { xz: [0, 2, 1], xy: [0, 1, 2], yz: [2, 1, 0] }[plane],
     start = anchors[0] || cursor,
     end = [...cursor];
-  end[n] = start[n];
+  if (!spatial) end[n] = start[n];
   if (kind === 'bezier') {
     const dx = end[a] - start[a],
       dy = end[b] - start[b];
