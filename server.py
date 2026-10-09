@@ -21,6 +21,7 @@ from backend.design import room, materials, validate, apply_operations, rotate
 from backend.storage import Library
 from backend.designer_storage import DesignerLibrary
 from backend.engine_gateway import EngineGateway
+from backend.designer_bridge import DesignerPages
 from backend.desktop_files import list_files, read_file, home_for
 
 ROOT = Path(__file__).resolve().parent
@@ -37,6 +38,7 @@ BACKEND_BUILD = (
                 "backend/chunk_export.py",
                 "backend/draft_storage.py",
                 "backend/engine_gateway.py",
+                "backend/designer_bridge.py",
                 "local-engine/run-service.mjs",
                 "local-engine/service.mjs",
                 "local-engine/controller.mjs",
@@ -65,6 +67,7 @@ LIBRARY = Library(DATA_DIR / "craftstudio.sqlite3")
 DESIGNER_LIBRARY = DesignerLibrary(DATA_DIR / "craftstudio.sqlite3")
 MIGRATION = LIBRARY.migrate_files(PROJECTS_DIR)
 TOKEN = secrets.token_urlsafe(32)
+DESIGNER_PAGES = DesignerPages(EXPORTS_DIR)
 ENGINE = EngineGateway(
     ROOT,
     DATA_DIR / "craftstudio-engine.sqlite3",
@@ -259,7 +262,13 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urllib.parse.urlparse(self.path)
             route, query = parsed.path, urllib.parse.parse_qs(parsed.query)
             arg = lambda name, default="": query.get(name, [default])[0]
-            if route == "/api/desktop/info":
+            if route == "/api/desktop/designer/sessions":
+                self.trusted(write=True)
+                self.respond(DESIGNER_PAGES.sessions())
+            elif route == "/api/desktop/designer/job":
+                self.trusted(write=True)
+                self.respond(DESIGNER_PAGES.job(arg("jobId"), arg("wait", "0")))
+            elif route == "/api/desktop/info":
                 self.respond(
                     {
                         "protocol": "craftstudio-desktop/1",
@@ -272,6 +281,7 @@ class Handler(BaseHTTPRequestHandler):
                             "workspace-delta/1",
                             "checkpoint-export/1",
                             "checkpoint-draft/1",
+                            "designer-page/1",
                         ]
                         + (["local-engine/1"] if ENGINE.ensure() else []),
                         "instances": instances(),
@@ -391,7 +401,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.trusted(write=True)
             length = int(self.headers.get("Content-Length", 0))
-            if length > 64 * 1024 * 1024:
+            route = urllib.parse.urlparse(self.path).path
+            if length > 64 * 1024 * 1024 and route != "/api/desktop/designer/reply":
                 raise ValueError("请求过大，请分区操作")
             if urllib.parse.urlparse(self.path).path == "/api/desktop/engine":
                 started = time.perf_counter()
@@ -401,7 +412,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             body = json.loads(self.rfile.read(length))
             route = urllib.parse.urlparse(self.path).path
-            if route == "/api/desktop/library":
+            if route.startswith("/api/desktop/designer/"):
+                self.respond(DESIGNER_PAGES.dispatch(route.rsplit("/", 1)[1], body))
+            elif route == "/api/desktop/library":
                 self.respond({"value": DESIGNER_LIBRARY.call(body["method"], body.get("args", []))})
             elif route == "/api/desktop/world":
                 home = home_for(body["instance"])

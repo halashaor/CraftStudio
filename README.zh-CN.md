@@ -279,6 +279,19 @@ Windows 可双击 `启动本地计算版.cmd` 或 `启动浏览器计算版.cmd`
 
 ## AI 与游戏连接
 
+### 外部 MCP 客户端接入可见页面
+
+启动本地工作台，在**AI 设计**中勾选**连接当前 3D 工作台**。MCP 客户端以 stdio 启动 `python /绝对路径/CraftStudio/mcp_server.py`。默认连接 `http://127.0.0.1:18767`；自定义端口使用 `CRAFTSTUDIO_URL`，不需要额外 Python 包。连接偏好随浏览器标签页保留；刷新后的 sessionId 会更新，应重新查询页面。
+
+先调用 `designer_sessions`，再用 `designer_call` 的 `operation: "request"` 转发共用 Design API 请求。从 `workspace.describe` 开始；MCP 的版本请求必须同时带 `expectedRevision` 与 `workspaceId`。请求 ID 支持字符串或安全整数（含 0），同一 ID 只能重试相同内容。多个页面连接时指定 sessionId。读取、自由编辑、事务、提案和撤销都作用于当前页面引擎，并更新它的视口。
+
+其他操作：`capture` 返回原生 PNG 工具内容，可用 options.view 调整镜头；`export` 使用已有导出选项，返回服务 exports/ 下的文件；`save` 返回不可变版本回执。截图携带几何载入／失败标记，区块载入时可能是不完整画面。独立 Lite 保留页面 API，不启动此后端连接。
+
+观察等待结束不代表任务停止：用同一 jobId 调用 `designer_job`，不要盲目重复不确定的写入。关闭连接停止接收新任务，已开始的任务仍可能完成。unconfirmed 表示结果未确认，不表示没执行。回执为临时缓存（至多 64 条完成记录、约 10 分钟），不是永久日志；丢失回执或服务重启后，应先读取当前场景再决定后续操作。
+
+旧兼容工具操作独立的 Python 工程，已标记 Legacy；当前页面连接时拒绝这些旧写入，包括旧游戏 apply。当前设计的游戏施工仍使用工作台游戏连接或交付文件。本次验证使用真实 stdio MCP 客户端，不等于已接入某个外部模型服务或完成 Minecraft 实机施工。
+
+
 共享页面／Worker 协议见 [设计接口说明](lite/DESIGN-API.md)：
 
 ```js

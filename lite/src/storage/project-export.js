@@ -83,17 +83,26 @@ export class ProjectExporter {
     const map = await this.call('heightmap');
     return csvRows([map.columns, ...map.rows]);
   }
-  async export({ format = 'nbt', kind = 'full', title, selection, includeProject = false } = {}) {
+  async export({
+    format = 'nbt',
+    kind = 'full',
+    title,
+    selection,
+    includeProject = false,
+    preserveTitle = false,
+  } = {}) {
     const snapshot = this.capture(title);
     if (format === 'delivery')
       return (await this.delivery({ kind, title, selection, includeProject })).bytes;
     if (format === 'craftlite') {
-      const bytes = await this.projectBytes(snapshot.title, snapshot.guard);
+      const bytes = await this.projectBytes(snapshot.title, { ...snapshot.guard, preserveTitle });
       this.refresh(await this.call('summary'));
       return bytes;
     }
     if (format === 'json')
-      return strToU8(await this.compatibilityJSON(snapshot.title, snapshot.guard));
+      return strToU8(
+        await this.compatibilityJSON(snapshot.title, { ...snapshot.guard, preserveTitle }),
+      );
     if (format === 'schem') return this.call('sponge', snapshot.guard);
     if (format === 'nbt' && ['full', 'additions', 'patch', 'selection'].includes(kind)) {
       const value = await this.blueprint(kind, selection, snapshot.guard);

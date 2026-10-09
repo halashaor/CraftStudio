@@ -15,7 +15,7 @@ await window.CraftStudio.request({
 });
 ```
 
-Worker 的 `api` 动作使用同一请求。无需接触私有变量或模拟 UI 点击。该入口在当前页面内提供；不会自动向外开放不经认证的 HTTP 写接口。现有 MCP/完整版 API 暂仍使用自己的接口，尚未统一到 v1。
+Worker 的 `api` 动作使用同一请求。无需接触私有变量或模拟 UI 点击。该入口在当前页面内提供；不会自动向外开放不经认证的 HTTP 写接口。当前页面 MCP 连接通过 designer_call 转发这个入口；旧 Python 兼容 API 仍保留独立工程，连接当前页面时拒绝旧命名空间写入。
 
 返回 `{schema,id,ok,workspaceId,revision,value}`，失败返回 `error:{code,message,details}`。操作失败不会部分写入。读取时可提供 `expectedRevision`，防止分页途中场景变更。实际写入、撤销、重做必须带最新 `expectedRevision`；同时带 `workspaceId` 可检测工程切换。
 
@@ -270,3 +270,27 @@ This page API returns ZIP bytes. Omit `selection` to use the current UI selectio
 For `format: 'nbt'`, `kind: 'full'` returns raw NBT bytes. Partial kinds (`additions`, `patch`, `selection`) return `{bytes, offsetLocal, offsetWorld, containsAir, size, blocks, materials}`. `format: 'craftlite'` returns portable project bytes, `format: 'json'` UTF-8 project JSON bytes, and `format: 'schem'` additions as Sponge bytes.
 
 NBT 完整范围返回字节；局部范围返回含 bytes 和放置偏移的对象。原有 craftlite / schem 路径保留，json 返回 UTF-8 工程数据。
+
+## Connected-page MCP / 当前页面 MCP
+
+Enable the local workbench AI panel's page connection, then start `python mcp_server.py` as a stdio MCP server. `CRAFTSTUDIO_URL` defaults to `http://127.0.0.1:18767`. `designer_sessions` returns live page IDs and last-reported metadata; `workspace.describe` is the authoritative read.
+
+```json
+{"operation":"request","request":{"method":"workspace.describe"}}
+```
+
+Pass that result's workspaceId and revision in subsequent versioned requests:
+
+```json
+{"sessionId":"PAGE_ID","id":"build-once","operation":"request","request":{"method":"edit.apply","params":{"workspaceId":"WORKSPACE_ID","expectedRevision":1,"operations":[{"type":"set","pos":[4,2,4],"state":{"Name":"example:freeform_block"}}]}}}
+```
+
+`designer_call` returns `{jobId,status,result}` when completed, or a pending job. Poll `designer_job({jobId,wait:20})` using the same job; wait is observation only. A queued task stays bound to its document, even after human file switching. Reuse an ID only with identical request content. IDs support strings and safe integers; numeric 0 and string "0" are distinct. Direct page API writes still keep their previous optional workspaceId contract; this MCP boundary requires it whenever expectedRevision is supplied.
+
+Operations: request forwards all shared API methods; capture accepts optional `{view: ...}` and returns native PNG plus scene/camera metadata; export accepts existing format/kind/selection/includeProject/title options and writes the resulting artifact under service exports/; save uses current page form fields and returns `{projectId,version,workspaceId,revision,unconfirmedPreview,laterEdits,draftSaved}`. Save revision describes the formal frozen snapshot, not later edits. Capture geometryLoading/geometryFailed flags must be checked before assuming the image is complete.
+
+Binary response leaves use `{$binary:{type,base64}}`; BigInt and non-finite scalar tags remain explicit. Captures use MCP image content; exports return local paths instead of huge binary text. Replies reuse the engine wire codec, not a second scene serializer.
+
+Disconnect cancels unstarted jobs and marks dispatched results unconfirmed until a reply arrives. It does not claim already-started edits were undone. Cache expiry or restart does not prove a write had no effect; read the authoritative scene first. Completed receipts are ephemeral, not durable job history. Standalone Lite exposes the same page API without the local HTTP/MCP transport. Existing host/origin/token checks protect all page-bridge routes. No model-provider credentials or game bridge token are stored by this connection.
+
+当前页面连接不另建场景。版本号与工程身份必须一起传，暂存、提交、预览和撤销沿用共用引擎。任务等待超时不取消执行；已派发任务断开后可能已产生效果，不能当作失败后盲目重提。截图载入标记、正式版本回执和本地导出路径分别表示各自证据，不等同于游戏内施工。

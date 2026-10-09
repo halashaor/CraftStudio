@@ -279,6 +279,19 @@ The optional local engine now stores immutable source blocks in independently ve
 
 ## AI and game integration
 
+### Connect an external MCP client to the visible page
+
+Run the local workbench, open **AI design**, and enable **Connect current 3D workspace**. Configure a stdio MCP client to run `python /absolute/path/to/CraftStudio/mcp_server.py`. The default service is `http://127.0.0.1:18767`; set `CRAFTSTUDIO_URL` for a different local port. No extra Python package is required. The checkbox preference follows the browser tab across reloads; session IDs are refreshed, so rediscover pages after reconnecting.
+
+Use `designer_sessions`, then `designer_call` with `operation: "request"` and a normal shared Design API request. Start with `workspace.describe`; versioned MCP requests must include both `expectedRevision` and `workspaceId`. Request IDs may be strings or safe integers, including 0; reuse an ID only for the same request. Multiple connected pages require `sessionId`. Reads, free edits, transactions, proposals and undo use the actual page engine and update its viewport.
+
+Other operations are `capture` (native PNG tool content; `options.view` can position the camera), `export` (normal export options; returns a local file under the service's `exports/` directory), and `save` (an immutable version receipt). Captures report geometry loading/failed flags and can be partial while chunks load. Standalone Lite keeps the page API and does not run this backend connection.
+
+A pending job continues after the observation wait: poll `designer_job` with its existing `jobId`, without resubmitting an uncertain write. Disconnecting stops new tasks; already-started tasks can finish. `unconfirmed` means the effect is unknown, not that nothing happened. Job receipts are ephemeral (up to 64 completed records and roughly 10 minutes), not a permanent journal. Read the current scene before deciding what to do after a lost receipt or service restart.
+
+Old compatibility tools operate a separate Python project. They are marked Legacy; their writes, including legacy game apply, are rejected while a current-page connection is active. Current-page game construction still uses the workbench game connection or an exported delivery file. This integration has been tested with an actual stdio MCP client, not an external model provider or a live Minecraft build.
+
+
 See the [Design API](lite/DESIGN-API.md) for the shared page/worker protocol:
 
 ```js
@@ -290,7 +303,7 @@ const result = await window.CraftStudio.request({
 });
 ```
 
-This API belongs to the open designer page. It does not automatically expose an unauthenticated HTTP write endpoint. An external AI agent still needs an adapter and its own tool loop. The Python/MCP compatibility interfaces are not yet fully unified with this protocol.
+This API belongs to the open designer page. It does not automatically expose an unauthenticated HTTP write endpoint. The connected-page MCP adapter above forwards this protocol; external agents still own their tool loop. Legacy Python compatibility routes retain a separate project namespace.
 
 The optional [Java game bridge](bridge/README.md) now has separate **NeoForge 1.21.1, Forge 1.20.1, and Fabric 1.20.1 / 1.21.1** profiles. Each profile produces its own JAR; Fabric also needs Fabric API. Open **Files → Connect Java game** in the local designer to identify the running version, read regions, validate target block states, build changes, monitor progress, cancel, or undo. State-only builds can cross DataVersions after registry validation; native entities and cross-version block-entity NBT still need a native schematic/conversion workflow.
 

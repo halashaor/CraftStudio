@@ -224,8 +224,11 @@ export class DesignAPI {
         method = request.method,
         live = this.getSite(),
         id = request.id,
-        fingerprint = JSON.stringify({ method, params: p });
-      if (id && this.receipts.has(id)) {
+        fingerprint = JSON.stringify({ method, params: p }),
+        hasId = id !== undefined && id !== null;
+      if (hasId && typeof id !== 'string' && !Number.isSafeInteger(id))
+        fail('INVALID_REQUEST_ID', '请求 ID 需要字符串或安全整数');
+      if (hasId && this.receipts.has(id)) {
         const previous = this.receipts.get(id);
         if (previous.fingerprint !== fingerprint)
           fail('REQUEST_ID_REUSED', '同一请求 ID 不能用于不同操作');
@@ -262,6 +265,7 @@ export class DesignAPI {
       if (method === 'workspace.describe')
         value = {
           protocol: 'craftstudio-design/1',
+          name: live.title,
           workspaceId: this.workspaceId,
           revision: this.revision,
           history: { undo: live.undo.length, redo: live.redo.length },
@@ -601,7 +605,7 @@ export class DesignAPI {
         value,
       };
       if (
-        id &&
+        hasId &&
         (mutated ||
           [
             'transaction.begin',

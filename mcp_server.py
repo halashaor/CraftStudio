@@ -1,31 +1,49 @@
 """Zero-dependency MCP stdio adapter for the running local CraftStudio service."""
 
 import json
+import os
+from backend.designer_bridge import decode_reply
 import sys
 import urllib.request
 import urllib.error
 
-BASE = "http://127.0.0.1:18765"
+BASE = os.environ.get("CRAFTSTUDIO_URL", "http://127.0.0.1:18767").rstrip("/")
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+PROTOCOL = "2024-11-05"
 TOKEN = None
+CAPABILITIES = set()
+
+
+def authorize():
+    global TOKEN, CAPABILITIES
+    try:
+        response = OPENER.open(BASE + "/api/desktop/info", timeout=20)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        response = OPENER.open(BASE + "/api/bootstrap", timeout=20)
+    with response:
+        info = json.load(response)
+    TOKEN, CAPABILITIES = info["token"], set(info.get("capabilities", []))
 
 
 def http(route, data=None, retry=True):
     global TOKEN
     if TOKEN is None:
-        TOKEN = json.load(urllib.request.urlopen(BASE + "/api/bootstrap", timeout=20))["token"]
+        authorize()
     request = urllib.request.Request(
         BASE + route,
         data=json.dumps(data).encode() if data is not None else None,
         headers={"Content-Type": "application/json", "X-CraftStudio-Token": TOKEN},
     )
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:
+        with OPENER.open(request, timeout=180) as response:
             if "application/json" in response.headers.get("Content-Type", ""):
                 return json.load(response)
             return {"exported": True, "bytes": len(response.read()), "directory": "exports/"}
     except urllib.error.HTTPError as error:
         message = json.load(error).get("error", str(error))
-        if retry and data is not None and "令牌无效" in message:
+        if retry and "令牌无效" in message:
             TOKEN = None
             return http(route, data, retry=False)
         raise ValueError(message) from None
@@ -171,9 +189,93 @@ TOOLS = [
 ]
 
 
+for tool in TOOLS:
+    if tool["name"] not in ("get_environment", "search_blocks", "list_blueprints"):
+        tool[
+            "description"
+        ] = "Legacy compatibility state (not the open designer page). Use designer_call for the visible scene. " + tool[
+            "description"
+        ].replace(
+            "current authoritative", "legacy compatibility"
+        ).replace(
+            "live 3D scene", "compatibility scene"
+        )
+TOOLS[:0] = [
+    {
+        "name": "designer_sessions",
+        "description": "List explicitly connected open 3D designer pages. If none, enable the current-page connection in its AI panel. Multiple pages require a sessionId.",
+        "inputSchema": schema(),
+        "annotations": {"readOnlyHint": True},
+    },
+    {
+        "name": "designer_call",
+        "description": "Operate the connected visible designer using its shared API. request forwards any v1 method; capture returns the current 3D view (options.view can position the camera); export saves an artifact locally; save creates an immutable library version. Read workspace.describe before writes. A pending job continues running: poll designer_job with the same jobId, do not resubmit an uncertain write.",
+        "inputSchema": schema(
+            {
+                "sessionId": STRING,
+                "id": STRING,
+                "operation": {"enum": ["request", "capture", "export", "save"]},
+                "request": {"type": "object"},
+                "options": {"type": "object"},
+            },
+            ["operation"],
+        ),
+    },
+    {
+        "name": "designer_job",
+        "description": "Read or wait for the same designer job. Observation timeout does not cancel execution. Unconfirmed means effects are not known; read the current authoritative scene before deciding to retry.",
+        "inputSchema": schema(
+            {"jobId": STRING, "wait": {"type": "number", "minimum": 0, "maximum": 20}}, ["jobId"]
+        ),
+        "annotations": {"readOnlyHint": True},
+    },
+]
+
+
+def designer_result(job):
+    if job.get("status") == "completed" and "wire" in job:
+        job = dict(job)
+        job["result"] = decode_reply(job.pop("wire"))
+    return job
+
+
 def call(name, args):
     from urllib.parse import urlencode
 
+    if name.startswith("designer_"):
+        if TOKEN is None:
+            authorize()
+        if "designer-page/1" not in CAPABILITIES:
+            raise ValueError("请更新并重启本地工作台，以启用当前页面连接")
+    legacy_write = name in {
+        "edit_project",
+        "import_blueprint",
+        "read_world_region",
+        "save_project",
+        "open_saved_project",
+        "undo_edit",
+    } or (name == "bridge_request" and args.get("action") == "apply")
+    if legacy_write:
+        if TOKEN is None:
+            authorize()
+        if "designer-page/1" in CAPABILITIES and http("/api/desktop/designer/sessions")["pages"]:
+            raise ValueError(
+                "旧写入接口指向独立兼容工程；当前工作台已连接，请使用 designer_call。游戏施工请使用当前工作台的游戏连接或交付文件。"
+            )
+    if name == "designer_sessions":
+        return http("/api/desktop/designer/sessions")
+    if name == "designer_call":
+        job = http("/api/desktop/designer/request", args)
+        if job["status"] in ("queued", "running"):
+            job = http("/api/desktop/designer/job?" + urlencode({"jobId": job["jobId"], "wait": 2}))
+        return designer_result(job)
+    if name == "designer_job":
+        return designer_result(
+            http(
+                "/api/desktop/designer/job?"
+                + urlencode({"jobId": args["jobId"], "wait": args.get("wait", 0)})
+            )
+        )
     if name == "get_environment":
         data = http("/api/bootstrap")
         return {"instances": data["instances"], "version": data["version"]}
@@ -221,14 +323,21 @@ def call(name, args):
 
 
 def handle(message):
+    global PROTOCOL
     method, identifier = message.get("method"), message.get("id")
     if identifier is None:
         return None
     if method == "initialize":
+        requested = message.get("params", {}).get("protocolVersion")
+        PROTOCOL = (
+            requested
+            if requested in {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
+            else "2025-11-25"
+        )
         result = {
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": PROTOCOL,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "craftstudio", "version": "0.2.0"},
+            "serverInfo": {"name": "craftstudio", "version": "0.3.0"},
         }
     elif method == "ping":
         result = {}
@@ -237,16 +346,32 @@ def handle(message):
     elif method == "tools/call":
         try:
             params = message["params"]
-            result = {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(
-                            call(params["name"], params.get("arguments", {})), ensure_ascii=False
-                        ),
-                    }
-                ]
-            }
+            value = call(params["name"], params.get("arguments", {}))
+            content = []
+            if (
+                isinstance(value, dict)
+                and value.get("operation") == "capture"
+                and value.get("status") == "completed"
+            ):
+                value = dict(value)
+                image = dict(value["result"])
+                uri = image.pop("dataUrl")
+                if not uri.startswith("data:image/png;base64,"):
+                    raise ValueError("Unsupported capture type")
+                content.append(
+                    {"type": "image", "mimeType": "image/png", "data": uri.split(",", 1)[1]}
+                )
+                value["result"] = image
+            content.append({"type": "text", "text": json.dumps(value, ensure_ascii=False)})
+            result = {"content": content}
+            if isinstance(value, dict):
+                failed = value.get("status") in ("failed", "cancelled", "unconfirmed") or (
+                    isinstance(value.get("result"), dict) and value["result"].get("ok") is False
+                )
+                if failed:
+                    result["isError"] = True
+                if PROTOCOL != "2024-11-05":
+                    result["structuredContent"] = value
         except Exception as error:
             result = {"isError": True, "content": [{"type": "text", "text": str(error)}]}
     else:

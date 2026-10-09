@@ -1,3 +1,4 @@
+import { designerClientUI } from './integration/designer-client-ui.js';
 import { ProjectExporter } from './storage/project-export.js';
 import { projectExportUI } from './ui/project-export-ui.js';
 import { DraftController } from './storage/draft-controller.js';
@@ -128,8 +129,8 @@ window.CraftStudio = Object.freeze({
       (result.ok && request?.method === 'transaction.commit')
     ) {
       refresh(await call('summary'));
-      await render();
       markDirty();
+      await render();
     }
     if (result.ok && ['proposal.prepare', 'proposal.cancel'].includes(request?.method)) {
       refresh(await call('summary'));
@@ -278,6 +279,7 @@ importCancel.hidden = true;
 importCancel.textContent = '取消打开 · 保留原设计';
 importCancel.onclick = () => workerSession.cancel();
 $('busy').append(importCancel);
+let designerClient = null;
 let resourceManager = null,
   resourcePanel = null;
 let cad = null,
@@ -681,6 +683,7 @@ function refresh(s, reset = false) {
   const oldMax = +$('cut').max,
     oldCut = +$('cut').value;
   summary = s;
+  designerClient?.update(s);
   $('cut').max = String(s.size[1] - 1);
   $('cut').value = String(
     reset || oldCut >= oldMax ? s.size[1] - 1 : Math.min(oldCut, s.size[1] - 1),
@@ -2154,6 +2157,15 @@ async function save(copy = false) {
       pending +
       changed,
   );
+  return {
+    projectId: active.id,
+    version: active.head,
+    workspaceId: snapshot.workspaceId,
+    revision: snapshot.revision,
+    unconfirmedPreview: !!pending,
+    laterEdits: drafts.epoch !== epoch,
+    draftSaved: storageOK && !drafts.dirty,
+  };
 }
 for (const id of ['quick-save', 'save-version']) $(id).onclick = () => task(() => save());
 $('save-copy').onclick = () => task(() => save(true));
@@ -2606,6 +2618,13 @@ task(async () => {
       notice,
     });
     refresh(await resourceManager.apply());
+    designerClient = designerClientUI({
+      $,
+      info: library.desktop,
+      page: window.CraftStudio,
+      context: () => summary,
+      blocked: () => busy || !!stroke,
+    });
     if (library.desktop) {
       desktopUI({
         info: library.desktop,
