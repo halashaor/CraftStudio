@@ -9,6 +9,32 @@
     <small id="cad-object-attention-count"></small
   ></label>
 </div>
+<details id="cad-object-filter-details">
+  <summary>筛选对象类型与状态</summary>
+  <label
+    >对象类型<select id="cad-object-kind">
+      <option value="">所有类型</option>
+    </select></label
+  >
+  <label
+    >对象状态<select id="cad-object-state">
+      <option value="">所有状态</option>
+      <option value="visible">可见对象</option>
+      <option value="hidden">隐藏对象</option>
+      <option value="locked">锁定对象</option>
+    </select></label
+  >
+  <p class="small">
+    对象过滤会保留相关草图作为参照。隐藏对象可列出查看，但不加入结果选择；锁定对象仍可选中检查。
+  </p>
+</details>
+<button
+  id="cad-select-filtered"
+  class="full"
+  title="只选择筛选结果中的可见对象；Shift 增加，Ctrl 减去"
+>
+  选中筛选结果
+</button>
 <details id="cad-collections">
   <summary>管理集合</summary>
   <label>集合名称<input id="cad-collection-name" placeholder="例如：主馆、庭院、设备层" /></label>
@@ -17,7 +43,7 @@
   </div>
   <div class="row">
     <button id="cad-collection-assign">选中对象归入</button
-    ><button id="cad-collection-select">选择全部成员</button>
+    ><button id="cad-collection-select">选择可见成员</button>
   </div>
   <div class="row"><button id="cad-collection-unassign">选中对象移出</button></div>
   <div class="row">

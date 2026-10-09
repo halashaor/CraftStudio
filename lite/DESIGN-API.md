@@ -428,3 +428,10 @@ put/place/remove also accept transactionId, so a definition and its placements c
 The method supports transactionId and normal request-ID receipts/undo. The page refreshes labels and draft state without rebuilding voxel geometry. The UI's batch preview uses a frozen selected set and source revision; selection/source changes close it, and stale submissions are rejected. It does not provide regex execution or a general operator macro system. The preview displays at most 100 rows while showing the full target count.
 
 UI templates substitute `{name}` and `{n}` in one pass; token-like characters inside original names are retained literally. Optional Find/Replace is case-sensitive literal text applied to the original name before templating. Number padding does not truncate longer numbers. Inputs own their normal text undo shortcuts.
+
+
+### Scene-browser scopes / 场景浏览范围
+
+The browser's query, collection, attention, object-kind and visibility/lock filters are transient UI scopes, not project mutations. The shared pure SceneBrowser filter returns matching object IDs, related editable guide IDs, selectableObjectIds and counts. selectableObjectIds excludes objects hidden individually or by their collection; locked visible objects are included for inspection, naming, measurement and export. Existing mutation protection still controls geometry writes.
+
+Type/state object filters keep related source sketches as context and omit unrelated independent sketches. Clearing the scope restores all objects/sketches. A viewport pick outside the current scope reveals the picked item by clearing incompatible filters. Matching-result selection honors Shift add/Ctrl subtract with exact members. Internal kind tokens match exactly in text search; translated type labels and normal scene names remain searchable. This is not a persistent saved-selection system.

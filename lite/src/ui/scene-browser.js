@@ -1,7 +1,24 @@
 import { generationLinks } from '../modeling/generation-links.js';
+import { objectHidden } from '../components/collections.js';
+import { objectLocked } from '../components/object-protection.js';
+export const objectKindLabel = (kind) =>
+  ({
+    object: '对象',
+    house: '建筑',
+    prefab: '构件副本',
+    selection: '手工对象',
+    feature: '建模特征',
+    geometry: '图形生成',
+    extrude: '拉伸',
+    loft: '放样',
+    sweep: '扫掠',
+    array: '阵列',
+    pathArray: '路径阵列',
+  })[kind] || kind;
 
 export class SceneBrowser {
   constructor(design = {}, links = generationLinks(design)) {
+    this.design = design;
     this.objects = design.objects || [];
     this.guides = new Map((design.guides || []).map((guide) => [guide.id, guide]));
     this.collections = new Map(
@@ -46,6 +63,7 @@ export class SceneBrowser {
         object.id,
         [
           object.name,
+          objectKindLabel(object.kind || 'object'),
           this.collections.get(object.collectionId)?.name,
           families.get(object.instanceOf),
           ...[...this.sources.get(object.id)].map((id) => this.guides.get(id)?.name),
@@ -57,10 +75,12 @@ export class SceneBrowser {
     );
   }
 
-  filter({ query = '', collection = '', attention = false } = {}) {
+  filter({ query = '', collection = '', attention = false, kind = '', state = '' } = {}) {
     const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-    const matches = (text) => words.every((word) => text.includes(word));
+    const matches = (text, kind = '') =>
+      words.every((word) => text.includes(word) || word === kind.toLocaleLowerCase());
     const objectIds = new Set(),
+      selectableObjectIds = new Set(),
       guideIds = new Set();
     let attentionCount = 0;
     for (const object of this.objects) {
@@ -72,14 +92,27 @@ export class SceneBrowser {
           : collection.startsWith('group:')
             ? object.collectionId === collection.slice(6)
             : true;
-      if (!inScope || (attention && !needsAttention) || !matches(this.labels.get(object.id)))
+      const hidden = objectHidden(this.design, object),
+        locked = objectLocked(this.design, object);
+      if (
+        !inScope ||
+        (attention && !needsAttention) ||
+        !matches(this.labels.get(object.id), object.kind || 'object') ||
+        (kind && (object.kind || 'object') !== kind) ||
+        (state === 'visible' && hidden) ||
+        (state === 'hidden' && !hidden) ||
+        (state === 'locked' && !locked)
+      )
         continue;
       objectIds.add(object.id);
+      if (!hidden) selectableObjectIds.add(object.id);
       for (const id of this.sources.get(object.id)) guideIds.add(id);
     }
     for (const guide of this.guides.values()) {
       if (
         !attention &&
+        !kind &&
+        !state &&
         (!collection || (collection === 'none' && !this.ownedGuides.has(guide.id))) &&
         matches((guide.name || '').toLocaleLowerCase())
       )
@@ -90,13 +123,14 @@ export class SceneBrowser {
     );
     return {
       objectIds,
+      selectableObjectIds,
       guideIds: new Set(
         editableGuides.filter((guide) => guideIds.has(guide.id)).map((guide) => guide.id),
       ),
       objectCount: this.objects.length,
       guideCount: editableGuides.length,
       attentionCount,
-      filtered: !!words.length || !!collection || attention,
+      filtered: !!words.length || !!collection || attention || !!kind || !!state,
     };
   }
 }

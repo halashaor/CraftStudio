@@ -1,5 +1,6 @@
 import markup from './views/collections-panel.html';
-import { SceneBrowser } from '../ui/scene-browser.js';
+import { objectHidden } from './collections.js';
+import { SceneBrowser, objectKindLabel } from '../ui/scene-browser.js';
 export function collectionsUI({
   $,
   call,
@@ -26,6 +27,8 @@ export function collectionsUI({
     $('cad-object-search').value = '';
     $('cad-collection-filter').value = '';
     $('cad-object-attention').checked = false;
+    $('cad-object-kind').value = '';
+    $('cad-object-state').value = '';
     update();
   }
   $('cad-browser-clear').onclick = clear;
@@ -38,13 +41,16 @@ export function collectionsUI({
       ? summary()?.design.collections?.find((c) => c.id === value.slice(6))
       : null;
   };
+  const scope = () => ({
+    query: $('cad-object-search').value,
+    collection: $('cad-collection-filter').value,
+    attention: $('cad-object-attention').checked,
+    kind: $('cad-object-kind').value,
+    state: $('cad-object-state').value,
+  });
   function filter() {
     const design = summary()?.design,
-      result = browser.filter({
-        query: $('cad-object-search').value,
-        collection: $('cad-collection-filter').value,
-        attention: $('cad-object-attention').checked,
-      }),
+      result = browser.filter(scope()),
       relations = browser.relations;
     for (const row of objects.children) {
       const object = design?.objects.find((o) => o.id === row.dataset.objectId),
@@ -103,6 +109,9 @@ export function collectionsUI({
       '/' +
       result.guideCount;
     $('cad-browser-clear').hidden = !result.filtered;
+    $('cad-select-filtered').disabled = !result.selectableObjectIds.size;
+    $('cad-select-filtered').textContent =
+      '选中筛选结果 · ' + result.selectableObjectIds.size + ' 个可见对象';
   }
   async function mutate(method, params) {
     const s = getSummary(),
@@ -112,8 +121,8 @@ export function collectionsUI({
       });
     if (!result.ok) throw Error(result.error.message);
     refresh(await call('summary'));
-    await render();
     markDirty();
+    await render();
     return result.value;
   }
   $('cad-collection-create').onclick = () =>
@@ -154,7 +163,9 @@ export function collectionsUI({
     if (c)
       selectObjects(
         summary()
-          .design.objects.filter((o) => o.collectionId === c.id)
+          .design.objects.filter(
+            (o) => o.collectionId === c.id && !objectHidden(summary().design, o),
+          )
           .map((o) => o.id),
       );
   };
@@ -181,6 +192,17 @@ export function collectionsUI({
       filter();
     });
   $('cad-object-attention').onchange = filter;
+  $('cad-object-kind').onchange = filter;
+  $('cad-object-state').onchange = filter;
+  $('cad-select-filtered').onclick = (event) => {
+    const result = browser.filter(scope());
+    if (result.selectableObjectIds.size)
+      selectObjects(
+        [...result.selectableObjectIds],
+        event.ctrlKey || event.metaKey ? 'subtract' : event.shiftKey ? 'add' : 'replace',
+      );
+  };
+  $('cad-select-filtered').dataset.sceneShortcuts = 'true';
   $('cad-collection-filter').onchange = () => {
     const c = current();
     if (c) $('cad-collection-name').value = c.name;
@@ -191,6 +213,8 @@ export function collectionsUI({
       $('cad-object-search').value = '';
       $('cad-collection-filter').value = '';
       $('cad-object-attention').checked = false;
+      $('cad-object-kind').value = '';
+      $('cad-object-state').value = '';
     }
     currentSummary = s;
     browser = new SceneBrowser(s.design, links);
@@ -213,19 +237,33 @@ export function collectionsUI({
       }),
     );
     select.value = Array.from(select.options).some((o) => o.value === previous) ? previous : '';
+    const previousKind = $('cad-object-kind').value,
+      kinds = [
+        ...new Set((s.design.objects || []).map((object) => object.kind || 'object')),
+      ].sort();
+    $('cad-object-kind').replaceChildren(
+      ...['', ...kinds].map((kind) => {
+        const option = document.createElement('option');
+        option.value = kind;
+        option.textContent = kind ? objectKindLabel(kind) : '所有类型';
+        return option;
+      }),
+    );
+    $('cad-object-kind').value = kinds.includes(previousKind) ? previousKind : '';
     const c = current();
     for (const id of ['rename', 'assign', 'unassign', 'select', 'hide', 'lock', 'remove'])
       $('cad-collection-' + id).disabled = !c;
+    $('cad-collection-select').disabled =
+      !c ||
+      !s.design.objects.some(
+        (object) => object.collectionId === c.id && !objectHidden(s.design, object),
+      );
     $('cad-collection-hide').textContent = c?.hidden ? '显示集合' : '隐藏集合';
     $('cad-collection-lock').textContent = c?.locked ? '解锁集合' : '锁定集合';
     filter();
   }
   function reveal({ objectIds = [], guideIds = [] }) {
-    const result = browser.filter({
-      query: $('cad-object-search').value,
-      collection: $('cad-collection-filter').value,
-      attention: $('cad-object-attention').checked,
-    });
+    const result = browser.filter(scope());
     if (
       objectIds.some((id) => !result.objectIds.has(id)) ||
       guideIds.some((id) => !result.guideIds.has(id))

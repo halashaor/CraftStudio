@@ -102,3 +102,34 @@ test('source cycles terminate and attention scopes include only affected buildin
   assert.deepEqual(sorted(result.guideIds), ['a', 'b']);
   assert.equal(result.attentionCount, 1);
 });
+
+test('type and state scopes use collection visibility/locks and never select hidden matching objects', () => {
+  const design = {
+    collections: [
+      { id: 'hidden', name: 'Hidden group', hidden: true },
+      { id: 'locked', name: 'Locked group', locked: true },
+    ],
+    objects: [
+      { id: 'a', name: 'Window A', kind: 'prefab' },
+      { id: 'b', name: 'Window B', kind: 'prefab', collectionId: 'hidden' },
+      { id: 'c', name: 'Window C', kind: 'prefab', collectionId: 'locked' },
+      { id: 'd', name: 'Main house', kind: 'house' },
+    ],
+    guides: [guide('free', 'Free sketch')],
+  };
+  const browser = new SceneBrowser(design);
+  let result = browser.filter({ query: 'window', kind: 'prefab' });
+  assert.deepEqual([...result.objectIds], ['a', 'b', 'c']);
+  assert.deepEqual([...result.selectableObjectIds], ['a', 'c']);
+  assert.equal(result.guideIds.size, 0);
+  assert.deepEqual([...browser.filter({ query: 'window a' }).objectIds], ['a']);
+  assert.equal(browser.filter({ query: 'prefab' }).objectIds.size, 3);
+  result = browser.filter({ state: 'hidden' });
+  assert.deepEqual([...result.objectIds], ['b']);
+  assert.equal(result.selectableObjectIds.size, 0);
+  result = browser.filter({ state: 'locked' });
+  assert.deepEqual([...result.objectIds], ['c']);
+  assert.deepEqual([...result.selectableObjectIds], ['c']);
+  assert.deepEqual([...browser.filter({ query: '建筑' }).objectIds], ['d']);
+  assert.equal(browser.filter({ state: 'visible' }).objectIds.size, 3);
+});
