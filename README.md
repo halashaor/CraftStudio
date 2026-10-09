@@ -313,6 +313,8 @@ Reconnecting to the Java bridge recovers an active build/undo task and its progr
 
 ## Development
 
+The browser entry point composes focused feature modules. File opening lives in `storage/project-import.js`, page/API synchronization in `api/page-requests.js`, and UI task state in `ui/task-runner.js`. Shared engine modules own scene edits and validation; the page adapters own presentation and persistence notifications.
+
 Draft state and autosave scheduling belong to `lite/src/storage/draft-controller.js`; checkpoint metadata and cached asset resend belong to `lite/src/storage/checkpoint-draft.js`. The app composes these services through callbacks. Concurrent save requests share the pending draft, later edits retain their unsaved state, and successful manual persistence cancels redundant scheduled writes. Storage errors are handled at the persistence boundary.
 
 The source layout follows responsibilities: `backend/` handles local files and SQLite; `local-engine/` hosts the shared worker engine; `lite/src/` groups Minecraft formats, core state, modeling, sketches, terrain, materials, selection, rendering, storage and UI. `app.js` and `worker.js` remain browser entry points. Large static panels live beside their controllers in `views/`.

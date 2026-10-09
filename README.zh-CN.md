@@ -313,6 +313,8 @@ const result = await window.CraftStudio.request({
 
 ## 开发与构建
 
+浏览器入口负责组合功能模块：文件打开位于 `storage/project-import.js`，页面与 API 的同步位于 `api/page-requests.js`，界面任务状态位于 `ui/task-runner.js`。共享引擎负责场景编辑和校验，页面适配层负责显示及保存状态通知。
+
 草稿状态与自动保存调度集中在 `lite/src/storage/draft-controller.js`，检查点元数据及缓存资源补传集中在 `lite/src/storage/checkpoint-draft.js`。主界面通过回调组合这些服务。并发保存请求共用正在进行的草稿保存，保存期间的新编辑继续保留待保存状态；手动保存成功后取消多余的定时写入。存储错误在持久化边界处理。
 
 源码按职责组织：`backend/` 负责本地文件与 SQLite，`local-engine/` 托管共用 Worker 引擎，`lite/src/` 按 Minecraft 格式、核心状态、建模、草图、地形、素材、选择、渲染、存储和界面分组。`app.js` 与 `worker.js` 保留为浏览器入口，大型静态面板放在对应控制器旁的 `views/` 中。

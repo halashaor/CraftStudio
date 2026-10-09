@@ -1,3 +1,6 @@
+import { PageRequests } from './api/page-requests.js';
+import { ProjectImporter } from './storage/project-import.js';
+import { TaskRunner } from './ui/task-runner.js';
 import { designerClientUI } from './integration/designer-client-ui.js';
 import { ProjectExporter } from './storage/project-export.js';
 import { projectExportUI } from './ui/project-export-ui.js';
@@ -81,6 +84,15 @@ function call(action, data = {}, transfers = []) {
     },
   );
 }
+const pageRequests = new PageRequests({
+  call,
+  baselineRequest,
+  cancelOperations: () => cad?.cancelOperations(),
+  capabilities: () => library.desktop?.capabilities || [],
+  refresh,
+  markDirty,
+  render,
+});
 window.CraftStudio = Object.freeze({
   protocol: 'craftstudio-design/1',
   diagnostics: Object.freeze({
@@ -88,74 +100,7 @@ window.CraftStudio = Object.freeze({
     stop: () => performanceTrace.stop(),
     read: () => performanceTrace.read(),
   }),
-  request: async (request) => {
-    if (request?.method === 'proposal.prepare') cad?.cancelOperations();
-    if (
-      [
-        'scene.baselineManifest',
-        'scene.readBaselineChunks',
-        'scene.chunkSnapshot',
-        'scene.readStoredChunks',
-        'scene.exportStoredProject',
-      ].includes(request?.method)
-    )
-      return baselineRequest(request);
-    const result = await call('api', request);
-    if (
-      (result.ok &&
-        [
-          'view.isolate',
-          'construction.commit',
-          'proposal.commit',
-          'views.put',
-          'views.remove',
-          'measurements.put',
-          'measurements.remove',
-          'edit.apply',
-          'edit.brush',
-          'transaction.commit',
-          'selection.transform',
-          'objects.put',
-          'collections.put',
-          'collections.remove',
-          'palettes.put',
-          'palettes.remove',
-          'workplanes.put',
-          'workplanes.remove',
-          'history.undo',
-          'history.redo',
-        ].includes(request?.method) &&
-        !request?.params?.transactionId) ||
-      (result.ok && request?.method === 'transaction.commit')
-    ) {
-      refresh(await call('summary'));
-      markDirty();
-      await render();
-    }
-    if (result.ok && ['proposal.prepare', 'proposal.cancel'].includes(request?.method)) {
-      refresh(await call('summary'));
-      await render();
-    }
-    if (
-      result.ok &&
-      request?.method === 'workspace.describe' &&
-      library.desktop?.capabilities?.includes('baseline-chunks/1')
-    )
-      result.value.methods.push('scene.baselineManifest', 'scene.readBaselineChunks');
-    if (
-      result.ok &&
-      request?.method === 'workspace.describe' &&
-      library.desktop?.capabilities?.includes('workspace-chunks/1')
-    )
-      result.value.methods.push('scene.chunkSnapshot', 'scene.readStoredChunks');
-    if (
-      result.ok &&
-      request?.method === 'workspace.describe' &&
-      library.desktop?.capabilities?.includes('checkpoint-export/1')
-    )
-      result.value.methods.push('scene.exportStoredProject');
-    return result;
-  },
+  request: (request) => pageRequests.request(request),
   displayState: () => ({
     mode,
     cut: +$('cut').value >= +$('cut').max ? null : +$('cut').value,
@@ -402,28 +347,25 @@ function notice(message, error = false) {
   clearTimeout(notice.timer);
   notice.timer = setTimeout(() => ($('toast').hidden = true), error ? 11000 : 4500);
 }
-async function task(fn, label = '正在浏览器中处理…') {
-  if (busy || stroke) {
-    notice('正在处理当前修改，请先完成这一笔');
-    return;
-  }
-  busy = true;
-  const files = ['file', 'resource-file']
-    .map((id) => $(id))
-    .filter(Boolean)
-    .map((input) => [input, input.disabled]);
-  for (const [input] of files) input.disabled = true;
-  $('busy').hidden = false;
-  $('busy-text').textContent = label;
-  try {
-    return await fn();
-  } catch (error) {
-    notice(error.message, true);
-  } finally {
-    for (const [input, disabled] of files) input.disabled = disabled;
+const taskRunner = new TaskRunner({
+  blocked: () => busy || stroke,
+  begin: (label) => {
+    busy = true;
+    const inputs = ['file', 'resource-file'].map($).map((input) => [input, input.disabled]);
+    for (const [input] of inputs) input.disabled = true;
+    $('busy').hidden = false;
+    $('busy-text').textContent = label;
+    return inputs;
+  },
+  end: (inputs) => {
+    for (const [input, disabled] of inputs) input.disabled = disabled;
     busy = false;
     $('busy').hidden = true;
-  }
+  },
+  notice,
+});
+function task(fn, label = '正在浏览器中处理…') {
+  return taskRunner.run(fn, label);
 }
 function step(name, manual = false) {
   if (cad) return manual ? cad.openLegacy(name) : cad.enterWorkspace(name);
@@ -1361,23 +1303,21 @@ async function imported(data, reset = true) {
   markDirty();
   step('check');
 }
-async function openFile(file) {
-  if (!file) return;
-  await checkpoint();
-  const remote = workerSession.active.worker instanceof RemoteEngineWorker,
-    bytes = remote ? null : await file.arrayBuffer(),
-    data = { name: file.name, ...(remote ? { file } : { bytes }) };
-  if (file.name.endsWith('.mca')) {
-    data.min = numbers('mca-min');
-    data.max = numbers('mca-max');
-  }
-  const s = await call('import', data, bytes ? [bytes] : []);
-  if (file.name.endsWith('.html')) {
-    refresh(s);
+const importer = new ProjectImporter({
+  checkpoint,
+  call,
+  remote: () => workerSession.active.worker instanceof RemoteEngineWorker,
+  region: () => ({ min: numbers('mca-min'), max: numbers('mca-max') }),
+  imported,
+  reference: async (data) => {
+    refresh(data);
     await render();
     step('save');
-  } else await imported(s);
-  notice('已读取 ' + file.name + '，原始场地作为固定基准。');
+  },
+  notice,
+});
+function openFile(file) {
+  return importer.open(file);
 }
 $('file').onchange = () => {
   const file = $('file').files[0];
