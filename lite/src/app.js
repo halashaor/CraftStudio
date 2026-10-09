@@ -2607,6 +2607,7 @@ task(async () => {
         checkpoint,
         notice,
         getSummary: () => summary,
+        getSelection: () => cad?.exportSelection(),
       });
       if (library.migrationError)
         notice('SQLite 可用；浏览器工程库迁入未完成：' + library.migrationError, true);

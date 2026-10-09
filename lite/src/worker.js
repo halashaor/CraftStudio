@@ -1441,7 +1441,7 @@ async function execute(action, data) {
     };
   }
   if (action === 'bridgeProject') {
-    const exported = await execute('export', { kind: data.kind || 'additions' });
+    const exported = await execute('export', { ...data, kind: data.kind || 'additions' });
     return {
       project: importNBT(exported.bytes || exported, 'CraftStudio build'),
       offsetWorld: exported.offsetWorld || null,

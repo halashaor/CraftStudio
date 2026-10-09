@@ -281,6 +281,8 @@ The optional local engine now stores immutable source blocks in independently ve
 
 ## AI and game integration
 
+Game delivery now follows Prepare/check → Review → Confirm build. The review shows source revision, block count, dimension, actual world bounds and overwrite policy. Choose the current selected building/region as well as additions, all changes or the full scene. Selection preserves exact object members and the site-relative offset. Changing the design, selection or target requires preparing again; confirmation sends the checked payload once. This flow has been tested with a mock bridge, not live Minecraft construction.
+
 ### Connect an external MCP client to the visible page
 
 The connected page can also open an explicit file through `designer_call` with `operation: "import"`. Supply `options: {name, dataBase64, workspaceId, expectedRevision}`; `.mca` files additionally require `region: {min, max}`. Read `workspace.describe` first. The current design is checkpointed, parsing happens in a candidate scene, and document/version conflicts or parsing failures retain the active scene. The result identifies the newly opened workspace. This opens a file as a new scene; it does not merge it into existing geometry.

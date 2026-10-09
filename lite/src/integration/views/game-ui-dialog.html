@@ -41,13 +41,15 @@
     >施工范围<select id="game-scope">
       <option value="additions">本次新增与替换</option>
       <option value="patch">全部改动（含拆除）</option>
+      <option value="selection">当前选中的建筑 / 区域</option>
       <option value="full">完整场景（包含原地形）</option>
     </select></label
   ><label class="check"><input id="game-overwrite" type="checkbox" />允许替换目标已有方块</label>
   <div class="row">
-    <button id="game-validate">检查方块兼容性</button
+    <button id="game-validate">准备并检查施工</button
     ><button id="game-build" class="primary">确认建造</button>
   </div>
+  <p id="game-prepared" class="small">先准备施工内容，检查实际世界范围后确认建造。</p>
   <div class="row">
     <button id="game-job">刷新施工进度</button><button id="game-cancel">停止当前施工</button
     ><button id="game-undo">撤销上次施工</button>
