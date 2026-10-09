@@ -1,3 +1,4 @@
+import { newProjectUI } from './ui/new-project-ui.js';
 import { viewNavigationUI } from './view/view-navigation-ui.js';
 import { captureSaveForm, restoreSaveForm } from './storage/save-form.js';
 import { pruneGraphics, loadTextureInfo } from './rendering/graphics-resources.js';
@@ -1379,8 +1380,8 @@ async function persistDraft() {
 }
 
 async function checkpoint() {
-  if (!dirty || !storageOK || !(summary?.sourceBlocks || summary?.changes) || summary.preview)
-    return;
+  if (!dirty || summary?.preview) return;
+  if (!storageOK) throw Error('当前设计尚未保存，请先下载完整工程，再切换场景');
   if (!active) {
     const bytes = await projectBytes($('save-title').value || summary.name);
     active = await library.save(bytes, {
@@ -1392,6 +1393,7 @@ async function checkpoint() {
     });
   }
   await persistDraft();
+  if (!storageOK || dirty) throw Error('当前设计草稿尚未保存，请重试或下载完整工程后再切换场景');
 }
 const sampleButton = document.createElement('button');
 sampleButton.id = 'provided-demo';
@@ -2782,6 +2784,7 @@ renderer.domElement.addEventListener(
   },
   true,
 );
+newProjectUI({ $, task, openFile, notice });
 viewNavigation = viewNavigationUI({
   $,
   controls,

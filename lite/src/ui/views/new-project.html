@@ -1,0 +1,49 @@
+<form id="new-project-form">
+  <div class="dialog-header">
+    <h2>新建工程</h2>
+    <button type="button" id="new-project-close">取消</button>
+  </div>
+  <div class="cad-dialog-body">
+    <label
+      >工程名称<input id="new-project-name" value="未命名设计" maxlength="200" autofocus
+    /></label>
+    <p>从空白 3D 场景开始绘制草图或放置方块。需要贴合实际山坡时，请直接导入真实场地。</p>
+    <h3>初始工作范围 · 方块</h3>
+    <div class="row">
+      <label
+        >宽 X<input
+          id="new-project-x"
+          type="number"
+          min="1"
+          max="4096"
+          step="1"
+          value="64"
+          required
+      /></label>
+      <label
+        >高 Y<input
+          id="new-project-y"
+          type="number"
+          min="1"
+          max="4096"
+          step="1"
+          value="48"
+          required
+      /></label>
+      <label
+        >深 Z<input
+          id="new-project-z"
+          type="number"
+          min="1"
+          max="4096"
+          step="1"
+          value="64"
+          required
+      /></label>
+    </div>
+    <p class="small">
+      只设置工作范围，不生成地形或方块。设计后仍可扩展范围；世界坐标可在场地设置中指定。
+    </p>
+    <button id="new-project-create" type="submit" class="primary full">创建空白工程</button>
+  </div>
+</form>

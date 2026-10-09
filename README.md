@@ -16,8 +16,9 @@ CraftStudio focuses on architectural appearance and creative freedom. Sketches, 
 
 1. Download or clone this repository.
 2. Open [`lite/dist/CraftStudio-Lite.html`](lite/dist/CraftStudio-Lite.html) in a recent Chrome or Edge browser.
-3. **Draw auxiliary geometry.** Click a line, curve or closed contour in the viewport; save it as a reusable sketch. Choose a workplane when needed, and edit control points in 3D.
-4. **Generate a form.** Select a closed planar sketch for extrusion, multiple parallel sections for lofting, or a path and section for a sweep. Inspect the block preview before confirming.
+3. **Start a project.** Import a terrain/blueprint file, or use **File → New blank project** to design from scratch. The initial working extent creates no blocks or artificial terrain.
+4. **Draw auxiliary geometry.** Click a line, curve or closed contour in the viewport; save it as a reusable sketch. Choose a workplane when needed, and edit control points in 3D.
+5. **Generate a form.** Select a closed planar sketch for extrusion, multiple parallel sections for lofting, or a path and section for a sweep. Inspect the block preview before confirming.
 
 The standalone HTML contains the designer. It needs no backend and does not require Minecraft to be running. Lite reads files you explicitly select; it does not scan your Minecraft installation. Projects, versions, drafts, and asset preferences are stored in the current browser's IndexedDB. Export a portable project or library backup to transfer them to another browser or computer.
 
@@ -236,6 +237,8 @@ Scene tool letters, deletion and scene clipboard shortcuts do not act through fo
 When an operation panel closes after confirmation or cancellation, focus returns to the viewport if it was inside that panel. You can immediately continue with scene shortcuts. If you are typing or browsing in another visible control, closing the old panel preserves that focus. Switching directly between panels routes a displaced focus to the new panel.
 
 ## Saving and resuming work
+
+Sketch-only projects are complete projects even before blocks are generated. Switching scenes automatically retains confirmed work in the local library, including sketches; if that save fails, the scene stays open so you can retry or export a portable project.
 
 Construction tools can now pause unconfirmed work in the current project session. Use **Pause** and the fixed inspector’s **Continue** actions to restore points, scope, materials, settings and preview history; current scene data is recalibrated before confirmation. Each tool kind retains its latest intent. Explicit Close/Esc discards the active intent; switching tools can retain it. Changing projects clears paused intents. Explicit Pause now saves the confirmed scene draft and tool intent locally; after reloading matching scene content, Continue restores the preview. Switching tools still retains session state; use Pause and wait for the saved status for reload recovery. Different confirmed content will not automatically match old intent. Identical scene copies can share a content-bound intent slot.
 

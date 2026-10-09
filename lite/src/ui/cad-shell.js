@@ -1471,6 +1471,14 @@ export function cadShell({
     () => '',
     'Ctrl+F',
   );
+  add(
+    'new-project',
+    '新建空白工程',
+    '文件',
+    invoke('new-project-open'),
+    'new blank project 从零设计',
+    busyReason,
+  );
   add('library', '本地工程库', '文件', invoke('open-library'), 'projects library', busyReason);
   add(
     'saved-views',

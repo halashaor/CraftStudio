@@ -933,7 +933,7 @@ dialog::backdrop {
   font-size: 18px;
 }
 .cad-workspace .dialog-header button {
-  flex: 0;
+  flex: 0 0 auto;
 }
 .cad-workspace dialog {
   color: #e7edf6;
