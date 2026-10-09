@@ -337,3 +337,30 @@ await CraftStudio.export({format: 'delivery', kind: 'selection', includeEntities
 ```
 
 交付面板勾选“包含选区外接范围内的场景实体”后，ZIP 与单独选区 NBT 都沿用此选项。实体按位置取外接范围，方块仍按精确成员取；两种规则分别说明，不默认为实体分配建筑归属。纯实体范围可通过明确的 API selection 坐标导出；没有实体位置的未知数据仍留在完整工程中。
+
+
+### Current-page Java game handoff / 当前页面的 Java 游戏交付
+
+Local pages expose `CraftStudio.game(options)`. MCP forwards it with `designer_call` operation `game`. Connect Java manually in the game panel first, then read `{action:"status"}`. Status returns workspaceId/revision, connectionId, sanitized session capabilities, known jobId, target and the current prepared review; it does not return bridge credentials or the full prepared project payload. Standalone Lite has no authenticated local game session.
+
+Prepare/build/read/undo require connectionId, workspaceId and expectedRevision. prepare optionally accepts target `{kind,origin,dimension,overwrite,size,selection}`; selection uses the existing exact-members/combined-regions contract and updates the visible choice. The target dimension must be in the connected game's advertised list. All targets are world coordinates. prepare returns a review `{id,source,origin,max,blocks,kind,dimension,overwrite}`; origin/max are the actual cropped world bounds. No game blocks are written during preparation.
+
+```json
+{"operation":"game","options":{"action":"status"}}
+```
+
+```json
+{"operation":"game","id":"prepare-once","options":{"action":"prepare","connectionId":2,"workspaceId":"WORKSPACE_ID","expectedRevision":1,"target":{"kind":"additions","origin":[100,64,-50],"dimension":"minecraft:overworld","overwrite":false}}}
+```
+
+Then build with `preparedId` equal to the returned review id and the same fresh source/connection guard. Build consumes the review once, checks the source/target again and follows the game's write permission and busy state. A human preparation replaces the previous id. UI confirmation uses this same controller.
+
+```json
+{"operation":"game","id":"build-once","options":{"action":"build","connectionId":2,"workspaceId":"WORKSPACE_ID","expectedRevision":1,"preparedId":"PREPARED_ID"}}
+```
+
+job/cancel require connectionId and the currently known jobId. They query/control the game task; they do not create another scene. undo uses the bridge's last-construction undo, not editor undo, and needs the source guard plus game write permission. read accepts target origin/dimension/size and opens the returned region using the guarded page file-import path, returning the new workspace identity. Re-read status/describe after importing. The source project is checkpointed before replacement.
+
+Keep the same MCP jobId/request ID for pending or uncertain requests. `GAME_WRITE_UNCONFIRMED` means a network failure or connection change left game effects unknown; reconnect and query the game task instead of blindly repeating construction. Preparation does not freeze external changes to the game world; bridge overwrite, backup and write-permission rules still apply. The complete MCP→page→HTTP bridge→readback flow is verified with a mock game, not actual Minecraft placement, restoration or ticking.
+
+游戏令牌只留在页面连接控件与本地通信中，不进入状态回执。AI 与人共用当前游戏连接、准备内容和任务编号；不会走旧兼容 CURRENT 工程。此接口接通工作流，不代表已完成真实游戏施工验收，也不绕过现有实体/原生蓝图限制。

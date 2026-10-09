@@ -76,7 +76,8 @@ export class DesignerClient {
     if (
       this.blocked() &&
       !describing &&
-      !(job.operation === 'resources' && job.options.action === 'list')
+      !(job.operation === 'resources' && job.options.action === 'list') &&
+      !(job.operation === 'game' && job.options.action === 'status')
     )
       throw Error('DESIGNER_BUSY: 工作台正在提交操作，请稍后读取状态');
     const head = await this.page.request(
@@ -89,6 +90,7 @@ export class DesignerClient {
       if (workspaceId !== job.workspaceId) throw Error('WORKSPACE_CHANGED: 任务派发后工程已切换');
     }
     if (job.operation === 'request') return this.page.request(job.request);
+    if (job.operation === 'game') return this.page.game(job.options);
     if (job.operation === 'resources') return this.page.resources(job.options);
     if (job.operation === 'import') return this.page.importFile(job.options);
     if (job.operation === 'save') return this.page.save();

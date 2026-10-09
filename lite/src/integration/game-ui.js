@@ -1,3 +1,4 @@
+import { GameAutomation, gameTarget } from './game-automation.js';
 import { GameDelivery } from './game-delivery.js';
 import viewMarkup0 from './views/game-ui-dialog.html';
 import {
@@ -11,21 +12,21 @@ export function gameUI({
   $,
   call,
   task,
-  imported,
-  checkpoint,
   notice,
   getSummary,
   getSelection,
+  setSelection,
+  importFile,
 }) {
   const dialog = document.createElement('dialog');
   dialog.id = 'game-bridge-dialog';
   dialog.className = 'cad-dialog';
   dialog.innerHTML = viewMarkup0;
   document.body.append(dialog);
-  let connected = false,
-    session = null,
+  let session = null,
     connectionEpoch = 0,
-    jobId = null;
+    jobId = null,
+    targetWorkspace = null;
   function controls() {
     const state = bridgeControls(session, jobId);
     for (const action of ['read', 'validate', 'build', 'job', 'cancel', 'undo'])
@@ -35,7 +36,6 @@ export function gameUI({
       $(id).disabled = ownBusy;
   }
   function disconnect(message = '请先连接游戏') {
-    connected = false;
     session = null;
     jobId = null;
     connectionEpoch++;
@@ -84,8 +84,18 @@ export function gameUI({
       data = await r.json();
     } catch (error) {
       if (epoch === connectionEpoch) disconnect('连接中断，请重新连接');
+      if (['apply', 'undo', 'cancel'].includes(action))
+        throw Error(
+          'GAME_WRITE_UNCONFIRMED: 游戏写入结果未知，请重新连接并查询任务；' + error.message,
+        );
       throw error;
     }
+    if (epoch !== connectionEpoch)
+      throw Error(
+        ['apply', 'undo', 'cancel'].includes(action)
+          ? 'GAME_WRITE_UNCONFIRMED: 请求期间游戏连接已变化，请重新连接查询任务'
+          : 'GAME_CONNECTION_CHANGED: 请求期间游戏连接已变化',
+      );
     if (!r.ok || data.error) {
       if (epoch === connectionEpoch && ['health', 'apply', 'undo'].includes(action))
         disconnect('连接或写入状态已失效，请重新连接检查');
@@ -123,9 +133,18 @@ export function gameUI({
   button.textContent = '连接游戏 · Java';
   button.className = 'full';
   button.onclick = () => {
-    delivery.clear();
     const s = getSummary();
-    if (s?.originConfirmed) ['x', 'y', 'z'].forEach((a, i) => ($('game-' + a).value = s.origin[i]));
+    if (
+      delivery.prepared &&
+      (delivery.prepared.source.workspaceId !== s?.workspaceId ||
+        delivery.prepared.source.revision !== s?.revision)
+    )
+      delivery.clear();
+    if (targetWorkspace !== s?.workspaceId && !delivery.prepared) {
+      if (s?.originConfirmed)
+        ['x', 'y', 'z'].forEach((a, i) => ($('game-' + a).value = s.origin[i]));
+      targetWorkspace = s?.workspaceId;
+    }
     dialog.showModal();
   };
   $('desktop-files-open').after(button);
@@ -146,7 +165,6 @@ export function gameUI({
         const h = await request('health');
         if (epoch !== connectionEpoch) return;
         session = bridgeSession(h);
-        connected = true;
         $('game-health').textContent = session.label + (session.busy ? ' · 有施工任务进行中' : '');
         if (h.dimensions?.length)
           $('game-dimension').replaceChildren(
@@ -182,48 +200,68 @@ export function gameUI({
         throw error;
       }
     });
-  $('game-read').onclick = () =>
-    run(async () => {
-      if (!connected) throw Error('请先连接游戏');
-      await checkpoint();
-      const r = await request('read', {
-        origin: origin(),
-        dimension: dimension(),
-        size: ['width', 'height', 'length'].map((a) => Number($('game-' + a).value)),
-      });
-      const bytes = new TextEncoder().encode(JSON.stringify(r.project));
-      await imported(
-        await call('import', { name: 'game-region.json', bytes: bytes.buffer }, [bytes.buffer]),
+  const automation = new GameAutomation({
+    delivery,
+    describe: () => call('api', { method: 'workspace.describe' }),
+    connection: () => ({
+      connectionId: connectionEpoch,
+      session,
+      jobId,
+      controls: bridgeControls(session, jobId),
+    }),
+    target: () => ({
+      origin: origin(),
+      dimension: dimension(),
+      kind: $('game-scope').value,
+      overwrite: $('game-overwrite').checked,
+      size: ['width', 'height', 'length'].map((axis) => Number($('game-' + axis).value)),
+    }),
+    configure: (input) => {
+      const target = gameTarget(
+        input,
+        automation.target(),
+        [...$('game-dimension').options].map((option) => option.value),
       );
+      delivery.clear();
+      for (const [axis, name] of ['x', 'y', 'z'].entries())
+        $('game-' + name).value = target.origin[axis];
+      for (const [axis, name] of ['width', 'height', 'length'].entries())
+        $('game-' + name).value = target.size[axis];
+      $('game-scope').value = target.kind;
+      $('game-dimension').value = target.dimension;
+      $('game-overwrite').checked = target.overwrite;
+      targetWorkspace = getSummary()?.workspaceId;
+      if (input?.selection !== undefined) setSelection(structuredClone(input.selection));
+    },
+    request,
+    report,
+    importFile,
+  });
+  async function perform(action) {
+    const state = await automation.status();
+    const result = await automation.request({
+      action,
+      connectionId: state.connectionId,
+      workspaceId: state.workspaceId,
+      expectedRevision: state.revision,
+      jobId: state.jobId,
+      preparedId: state.prepared?.id,
+    });
+    if (action === 'prepare') $('game-report').textContent = '方块兼容性检查通过，请核对施工范围';
+    if (action === 'read') {
       dialog.close();
       notice('游戏区域已读入设计器');
-    });
-  $('game-validate').onclick = () =>
-    run(async () => {
-      if (!bridgeControls(session, jobId).validate) throw Error('请先连接游戏并检查权限');
-      const prepared = await delivery.prepare();
-      $('game-report').textContent = '方块兼容性检查通过 · ' + prepared.validation.mode;
-    });
-  $('game-build').onclick = () =>
-    run(async () => {
-      if (!bridgeControls(session, jobId).build)
-        throw Error('当前连接未开放建造，请重新连接检查权限');
-      report(await delivery.build());
-    });
-  $('game-job').onclick = () =>
-    run(async () => {
-      if (!jobId) throw Error('当前没有施工任务');
-      report(await request('job', { id: jobId }));
-    });
-  $('game-cancel').onclick = () =>
-    run(async () => {
-      if (!jobId) throw Error('当前没有施工任务');
-      report(await request('cancel', { id: jobId }));
-    });
-  $('game-undo').onclick = () =>
-    run(async () => {
-      if (!bridgeControls(session, jobId).undo) throw Error('当前连接未开放撤销写入');
-      report(await request('undo'));
-    });
-  return { dialog };
+    }
+    return result;
+  }
+  for (const [id, action] of [
+    ['read', 'read'],
+    ['validate', 'prepare'],
+    ['build', 'build'],
+    ['job', 'job'],
+    ['cancel', 'cancel'],
+    ['undo', 'undo'],
+  ])
+    $('game-' + id).onclick = () => run(() => perform(action));
+  return { dialog, request: (input) => automation.request(input) };
 }

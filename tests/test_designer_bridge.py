@@ -25,6 +25,37 @@ def wire(value):
 
 
 class DesignerPageTests(unittest.TestCase):
+    def test_game_calls_require_connection_and_writes_require_source_scope(self):
+        status = self.pages.submit(
+            {"sessionId": self.sid, "operation": "game", "options": {"action": "status"}}
+        )
+        self.assertEqual(status["operation"], "game")
+        with self.assertRaisesRegex(ValueError, "connectionId"):
+            self.pages.submit(
+                {"sessionId": self.sid, "operation": "game", "options": {"action": "prepare"}}
+            )
+        with self.assertRaisesRegex(ValueError, "workspaceId"):
+            self.pages.submit(
+                {
+                    "sessionId": self.sid,
+                    "operation": "game",
+                    "options": {"action": "build", "connectionId": 1},
+                }
+            )
+        body = {
+            "sessionId": self.sid,
+            "operation": "game",
+            "id": "build-once",
+            "options": {
+                "action": "build",
+                "connectionId": 1,
+                "workspaceId": "w",
+                "expectedRevision": 1,
+                "preparedId": "prepared",
+            },
+        }
+        self.assertEqual(self.pages.submit(body)["jobId"], self.pages.submit(body)["jobId"])
+
     def test_resource_discovery_is_read_only_and_changes_need_scope(self):
         job = self.pages.submit(
             {"sessionId": self.sid, "operation": "resources", "options": {"action": "list"}}

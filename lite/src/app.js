@@ -97,6 +97,12 @@ const pageRequests = new PageRequests({
 });
 window.CraftStudio = Object.freeze({
   protocol: 'craftstudio-design/1',
+  game: (options = { action: 'status' }) => {
+    if (!gamePanel) throw Error('游戏连接仅在本地版提供，请先打开本地工作台');
+    return options.action === 'status'
+      ? gamePanel.request(options)
+      : taskRunner.execute(() => gamePanel.request(options), '与当前游戏连接通信…');
+  },
   resources: (options = { action: 'list' }) => {
     if (!resourceController) throw Error('资源库尚未就绪，请等待工作台完成初始化');
     return options.action === 'list'
@@ -233,7 +239,8 @@ importCancel.hidden = true;
 importCancel.textContent = '取消打开 · 保留原设计';
 importCancel.onclick = () => workerSession.cancel();
 $('busy').append(importCancel);
-let designerClient = null;
+let designerClient = null,
+  gamePanel = null;
 let resourceManager = null,
   resourcePanel = null,
   resourceController = null;
@@ -2598,16 +2605,16 @@ task(async () => {
         checkpoint,
         addResources: (files) => resourcePanel.add(files),
       });
-      gameUI({
+      gamePanel = gameUI({
         info: library.desktop,
         $,
         call,
         task,
-        imported,
-        checkpoint,
         notice,
         getSummary: () => summary,
         getSelection: () => cad?.exportSelection(),
+        setSelection: (selection) => studio.selectRange(selection, 'replace'),
+        importFile: (input) => importer.openInput(input),
       });
       if (library.migrationError)
         notice('SQLite 可用；浏览器工程库迁入未完成：' + library.migrationError, true);

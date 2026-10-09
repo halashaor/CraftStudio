@@ -42,6 +42,7 @@ export class GameDelivery {
       throw Error('设计或施工位置已变化，请重新准备');
     const origin = options.origin.map((value, axis) => value + packed.offsetLocal[axis]);
     this.prepared = {
+      id: crypto.randomUUID(),
       source: {
         workspaceId: source.workspaceId,
         revision: source.revision,
@@ -57,9 +58,24 @@ export class GameDelivery {
     this.changed(this.prepared);
     return this.prepared;
   }
-  async build() {
+  review() {
+    if (!this.prepared) return null;
+    const { id, source, origin, max, blocks, options } = this.prepared;
+    return structuredClone({
+      id,
+      source,
+      origin,
+      max,
+      blocks,
+      kind: options.kind,
+      dimension: options.dimension,
+      overwrite: options.overwrite,
+    });
+  }
+  async build(id) {
     const prepared = this.prepared;
     if (!prepared) throw Error('请先准备并检查施工内容');
+    if (id !== undefined && id !== prepared.id) throw Error('施工准备已被替换，请重新核对');
     const head = await this.head();
     if (
       head.workspaceId !== prepared.source.workspaceId ||
