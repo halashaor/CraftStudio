@@ -409,6 +409,7 @@ export function cadShell({
     vectors.push({ original, inputs });
   }
   function syncVectors() {
+    $('download-selection').disabled = !selectionActive;
     for (const v of vectors) {
       const parts = v.original.value.trim().split(/[\s,]+/);
       v.inputs.forEach((n, i) => (n.value = parts[i] ?? '0'));
@@ -1821,6 +1822,7 @@ export function cadShell({
     },
     materialName: assets.labelName,
     selection: () => syncVectors(),
+    exportSelection: () => (selectionActive ? structuredClone(studio.getSelection()) : null),
     zoomSelection,
     isTransformActive: () =>
       direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),

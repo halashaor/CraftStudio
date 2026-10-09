@@ -266,7 +266,7 @@ window.CraftStudio = Object.freeze({
     };
   },
   save: () => save(),
-  export: async ({ format = 'nbt', kind = 'full', title } = {}) => {
+  export: async ({ format = 'nbt', kind = 'full', title, selection } = {}) => {
     if (
       (format === 'craftlite' || (format === 'nbt' && kind === 'full')) &&
       library.desktop?.capabilities?.includes('checkpoint-export/1')
@@ -285,8 +285,8 @@ window.CraftStudio = Object.freeze({
       return bytes;
     }
     if (format === 'schem') return call('sponge');
-    if (format === 'nbt' && ['full', 'additions', 'patch'].includes(kind))
-      return call('export', { kind });
+    if (format === 'nbt' && ['full', 'additions', 'patch', 'selection'].includes(kind))
+      return exportBlueprint(kind, selection);
     throw Error('不支持的导出格式或范围');
   },
 });
@@ -2292,17 +2292,24 @@ $('download-json').onclick = () =>
     const p = Site.unpack(pkg.site).project();
     download(JSON.stringify(p), p.name + '.craft.json', 'application/json');
   }, '正在生成兼容工程文件…');
+async function exportBlueprint(kind, selection) {
+  if (kind === 'selection') {
+    selection ||= cad.exportSelection();
+    if (!selection) throw Error('请先选择要导出的建筑、方块或区域');
+  }
+  return kind === 'full' && library.desktop?.capabilities?.includes('checkpoint-export/1')
+    ? checkpointExport('nbt')
+    : call('export', { kind, selection });
+}
 for (const [id, kind] of [
+  ['download-selection', 'selection'],
   ['download-additions', 'additions'],
   ['download-patch', 'patch'],
   ['download-full', 'full'],
 ])
   $(id).onclick = () =>
     task(async () => {
-      const value =
-        kind === 'full' && library.desktop?.capabilities?.includes('checkpoint-export/1')
-          ? await checkpointExport('nbt')
-          : await call('export', { kind });
+      const value = await exportBlueprint(kind);
       download(value.bytes || value, ($('save-title').value || '场地设计') + '.' + kind + '.nbt');
       if (value.offsetLocal) {
         download(

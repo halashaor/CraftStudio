@@ -1,3 +1,4 @@
+import { changeBlueprint, cropBlueprint } from './minecraft/blueprint.js';
 import { WorkerRuntime } from './runtime/worker-runtime.js';
 import { readSaveForm } from './storage/save-form.js';
 import { selectionPreviewSite, packMemberCoordinates } from './selection/selection-preview.js';
@@ -20,6 +21,7 @@ import { exportSponge } from './minecraft/sponge.js';
 import {
   design,
   selection,
+  selectionCellValues,
   insertPrefab,
   insertOperations,
   buildOnSite,
@@ -1275,33 +1277,7 @@ async function execute(action, data) {
   if (action === 'buildProject') {
     if (preview) throw Error('请先采用方案');
     if (!site.originConfirmed) throw Error('请先确认世界原点');
-    const p = site.project(),
-      changes = [...site.overlay.values()];
-    p.palette = [...p.palette];
-    let air = p.palette.findIndex((s) => s.Name === 'minecraft:air');
-    if (air < 0) {
-      air = p.palette.length;
-      p.palette.push({ Name: 'minecraft:air' });
-    }
-    if (!changes.length) throw Error('没有待施工的改动');
-    const lo = [0, 1, 2].map((a) => Math.min(...changes.map((b) => b.pos[a]))),
-      hi = [0, 1, 2].map((a) => Math.max(...changes.map((b) => b.pos[a]))),
-      used = new Map(),
-      palette = [];
-    p.blocks = changes.map((b) => {
-      const old = b.state < 0 ? air : b.state;
-      if (!used.has(old)) {
-        used.set(old, palette.length);
-        palette.push(p.palette[old]);
-      }
-      return { ...b, pos: b.pos.map((n, a) => n - lo[a]), state: used.get(old) };
-    });
-    p.palette = palette;
-    p.size = hi.map((n, a) => n - lo[a] + 1);
-    p.origin = site.origin.map((n, a) => n + lo[a]);
-    p.entities = [];
-    p.metadata = {};
-    return p;
+    return changeBlueprint(site, 'patch').project;
   }
   if (action === 'prefabPackage') {
     const p = selection(site, data.min, data.max, { keys: data.members, regions: data.regions }),
@@ -1464,30 +1440,14 @@ async function execute(action, data) {
   if (action === 'export') {
     if (preview) throw Error('请先采用预览');
     if (data.kind === 'full') return exportNBT(site.project());
-    const p = site.project(),
-      changes = [...site.overlay.values()].filter((b) => data.kind === 'patch' || b.state >= 0);
-    if (!changes.length) throw Error('没有可导出的变更');
-    const lo = [0, 1, 2].map((a) => Math.min(...changes.map((b) => b.pos[a]))),
-      hi = [0, 1, 2].map((a) => Math.max(...changes.map((b) => b.pos[a])));
-    let air = p.palette.findIndex((s) => s.Name === 'minecraft:air');
-    if (air < 0) {
-      air = p.palette.length;
-      p.palette.push({ Name: 'minecraft:air' });
-    }
-    p.blocks = changes.map((b) => ({
-      pos: b.pos.map((v, a) => v - lo[a]),
-      state: b.state < 0 ? air : b.state,
-      ...(b.nbt ? { nbt: b.nbt } : {}),
-    }));
-    p.entities = [];
-    p.metadata = {};
-    p.size = hi.map((v, a) => v - lo[a] + 1);
-    return {
-      bytes: exportNBT(p),
-      offsetLocal: lo,
-      offsetWorld: site.originConfirmed ? lo.map((v, a) => v + site.origin[a]) : null,
-      containsAir: data.kind === 'patch',
-    };
+    let blueprint;
+    if (data.kind === 'selection') {
+      const { min, max, members, regions } = data.selection || {};
+      const cells = selectionCellValues(site, min, max, { keys: members, regions });
+      blueprint = cropBlueprint(site, cells, { min, max });
+    } else blueprint = changeBlueprint(site, data.kind);
+    const { project, ...placement } = blueprint;
+    return { bytes: exportNBT(project), ...placement };
   }
   throw Error('未知前端任务 ' + action);
 }
