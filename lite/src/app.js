@@ -1458,6 +1458,7 @@ function setNavigation() {
       : 'crosshair';
 }
 function chooseTool(value) {
+  if (cad?.beforeToolChange() === false) return;
   if (studio?.isWalking()) studio.exitWalk(false);
   if (stroke) releaseStroke();
   tool = value;

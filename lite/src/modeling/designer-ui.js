@@ -23,6 +23,7 @@ export function designerUI({
   notice,
   requestRender,
   materialName = (s) => s.Name,
+  beforeOpen = () => true,
 }) {
   const previewContext = new PreviewContext();
   let committing = false,
@@ -634,6 +635,7 @@ export function designerUI({
   }
   function open(op, context = {}) {
     if (committing) return;
+    if (!beforeOpen()) return;
     close();
     previewContext.observe(getSummary());
     active = true;

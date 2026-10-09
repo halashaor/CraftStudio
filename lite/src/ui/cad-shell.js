@@ -1,4 +1,5 @@
 import { MaterialPicker } from '../materials/material-picker.js';
+import { OperationSession } from './operation-session.js';
 import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
 import { viewportContextMenu } from './viewport-context-menu.js';
 import { objectNameUI } from '../selection/object-name-ui.js';
@@ -73,6 +74,20 @@ export function cadShell({
     objectCandidates = new Set(),
     objectOnly = false,
     selectionWorkspace = null;
+  const operations = new OperationSession({
+    operations: () => [
+      { id: 'direct', controller: direct, close: direct.cancel },
+      { id: 'construction', controller: construction, close: construction.close },
+      { id: 'designer', controller: designer, close: designer.close },
+      { id: 'measurement', controller: measurement, close: measurement.close },
+    ],
+    notice,
+  });
+  function prepareOperation(owner) {
+    if (!operations.prepare(owner)) return false;
+    chooseTool('inspect');
+    return true;
+  }
   const assets = AssetUI({
     THREE,
     $,
@@ -111,10 +126,8 @@ export function cadShell({
   }
   document.querySelectorAll('[data-dock]').forEach((b) => (b.onclick = () => dock(b.dataset.dock)));
   const open = (d) => {
+    if (!operations.prepare(null)) return;
     materialPicker.clear();
-    direct.cancel();
-    construction.close();
-    designer.close();
     for (const other of [file, site, output, modify, build, motion, component, advanced, history])
       if (other !== d && other.dialog.open) other.dialog.close();
     if (!workspace?.openDialog(d.dialog)) d.dialog.showModal();
@@ -212,6 +225,7 @@ export function cadShell({
       : '点击或拖框选择；Shift 增加，Ctrl 减去。';
   }
   const direct = directEdit({
+    beforeOpen: () => prepareOperation('direct'),
     THREE,
     $,
     scene,
@@ -237,14 +251,10 @@ export function cadShell({
     ['cad-rotate-direct', 'rotate'],
   ])
     $(id).onclick = async () => {
-      construction.close();
-      designer.close();
       direct.begin(mode);
       if (mode === 'copy') direct.copy();
     };
   window.addEventListener('craftstudio-prefab-drop', (e) => {
-    construction.close();
-    designer.close();
     direct.begin('paste', e.detail);
   });
   const pasteButton = document.createElement('button');
@@ -252,8 +262,6 @@ export function cadShell({
   pasteButton.textContent = '粘贴';
   pasteButton.title = 'Ctrl+V · 先复制选择';
   pasteButton.onclick = () => {
-    construction.close();
-    designer.close();
     direct.paste();
   };
   $('cad-copy-direct').after(pasteButton);
@@ -283,6 +291,7 @@ export function cadShell({
   modify.body.prepend(repeatButton);
 
   const construction = constructionUI({
+    beforeOpen: () => prepareOperation('construction'),
     getSummary,
     library,
     prepareIntentPersistence,
@@ -317,9 +326,6 @@ export function cadShell({
   });
   materialPicker.observe($('construction-panel'), 'hidden');
   window.addEventListener('craftstudio-edit-sketch', (e) => {
-    direct.cancel();
-    designer.close();
-    chooseTool('inspect');
     construction.editSaved(e.detail.id);
   });
   for (const [id, label, type] of [
@@ -331,15 +337,13 @@ export function cadShell({
     button.id = id;
     button.textContent = label;
     button.onclick = () => {
-      direct.cancel();
-      designer.close();
-      chooseTool('inspect');
       construction.open(type);
     };
     $('cad-create-open').after(button);
   }
 
   const designer = designerUI({
+    beforeOpen: () => prepareOperation('designer'),
     THREE,
     $,
     scene,
@@ -367,17 +371,10 @@ export function cadShell({
     requestRender,
   });
   materialPicker.observe($('designer-panel'), 'hidden');
-  window.addEventListener('craftstudio-transform-start', () => {
-    construction.close();
-    designer.close();
-  });
   const designerButton = document.createElement('button');
   designerButton.id = 'cad-designer';
   designerButton.textContent = '排列 / 编辑';
   designerButton.onclick = () => {
-    direct.cancel();
-    construction.close();
-    chooseTool('inspect');
     designer.open();
   };
   $('cad-modify-open').after(designerButton);
@@ -388,13 +385,7 @@ export function cadShell({
     selectObjects,
     notice,
     openOperation: (operation, id) => {
-      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()) {
-        notice('正在提交当前操作，请稍候');
-        return;
-      }
-      direct.cancel();
-      construction.close();
-      measurement.close();
+      if (!operations.prepare('designer')) return;
       selectObjects([id]);
       chooseTool('inspect');
       designer.open(operation, { objectIds: [id] });
@@ -429,14 +420,7 @@ export function cadShell({
     markDirty,
     notice,
     requestRender,
-    beforeOpen: () => {
-      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy())
-        throw Error('正在提交当前操作，请稍候');
-      direct.cancel();
-      construction.close();
-      designer.close();
-      chooseTool('inspect');
-    },
+    beforeOpen: () => prepareOperation('measurement'),
   });
   window.addEventListener('craftstudio-selection', () => {
     objectCandidates.clear();
@@ -782,8 +766,6 @@ export function cadShell({
     }
     if (e.ctrlKey && e.key.toLowerCase() === 'v') {
       e.preventDefault();
-      construction.close();
-      designer.close();
       direct.paste();
     }
     if (e.ctrlKey && e.key.toLowerCase() === 's') {
@@ -874,7 +856,7 @@ export function cadShell({
     )
       return true;
     if (!hasOperation()) return false;
-    if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()) {
+    if (operations.busyReason()) {
       notice('正在提交当前操作，请稍候');
       return true;
     }
@@ -998,17 +980,11 @@ export function cadShell({
     $,
     frameGuide,
     editSaved: (id) => {
-      direct.cancel();
-      designer.close();
-      chooseTool('inspect');
       construction.editSaved(id);
     },
     openFromGuide: (id, operation) =>
       task(async () => {
         if (busyReason()) throw Error(busyReason());
-        direct.cancel();
-        designer.close();
-        chooseTool('inspect');
         workspace.selectCategory('model');
         await construction.openFromGuide(id, operation);
       }),
@@ -1043,11 +1019,7 @@ export function cadShell({
   });
   const commands = [],
     busyReason = () =>
-      direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()
-        ? '正在提交当前操作，请稍候'
-        : getSummary()?.preview
-          ? '请先采用或取消 AI 提案预览'
-          : '',
+      operations.busyReason() || (getSummary()?.preview ? '请先采用或取消 AI 提案预览' : ''),
     selectionReason = () => busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : ''),
     invoke = (id, category) => () => {
       if (category) workspace.selectCategory(category);
@@ -1350,10 +1322,7 @@ export function cadShell({
     '视图',
     () => measurement.open(),
     'ruler measure distance height slope angle polyline length 夹角 折线 总长',
-    () =>
-      direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy()
-        ? '正在提交当前操作，请稍候'
-        : '',
+    () => operations.busyReason(),
   );
   add(
     'materials',
@@ -1430,8 +1399,7 @@ export function cadShell({
     pickObject,
     handleHistory,
     cancelOperations: () => {
-      if (direct.isBusy() || construction.isBusy() || designer.isBusy() || measurement.isBusy())
-        throw Error('正在提交当前操作，请稍候');
+      if (operations.busyReason()) throw Error('正在提交当前操作，请稍候');
       direct.cancel();
       construction.close();
       designer.close();
@@ -1439,6 +1407,7 @@ export function cadShell({
     },
     hasWorkplaneGrid: () => construction.hasWorkplaneGrid(),
     toggleWorkplaneGrid: () => construction.toggleWorkplaneGrid(),
+    beforeToolChange: () => operations.allow(),
     brushConfig: brushOptions.config,
     hasSelection: () => selectionActive,
     openLegacy: (name) =>

@@ -28,6 +28,7 @@ export function directEdit({
   cast,
   hitCell,
   getSummary,
+  beforeOpen = () => true,
 }) {
   const parent = new THREE.Group(),
     proxy = new THREE.Group(),
@@ -330,6 +331,7 @@ export function directEdit({
       notice('先点击一个方块、对象，或框选需要编辑的部分');
       return;
     }
+    if (!beforeOpen()) return;
     cancel();
     const own = session;
     loadingContext = getSummary?.();

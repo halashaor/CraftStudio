@@ -65,6 +65,7 @@ export function constructionUI({
   materialName = (s) => s.Name,
   hasSelection = () => true,
   getSummary = () => null,
+  beforeOpen = () => true,
 }) {
   const previewContext = new PreviewContext();
   let committing = false,
@@ -1500,7 +1501,7 @@ export function constructionUI({
       return;
     }
     try {
-      await open(kind);
+      if ((await open(kind)) === false) return;
       for (const field of saved.fields) {
         const input = $(field.id);
         if (!input || !panel.contains(input)) continue;
@@ -1840,11 +1841,12 @@ export function constructionUI({
   }
 
   async function open(which, context = {}) {
-    if (committing) return;
+    if (committing || !beforeOpen()) return false;
     close();
     previewContext.observe(getSummary());
     active = true;
     type = which;
+    if (context.sweepMode) $('feature-sweep-mode').value = context.sweepMode;
     $('figure-guides-only').disabled = false;
     if (context.operation) $('feature-operation').value = context.operation;
     resumeUI();
@@ -3119,7 +3121,7 @@ export function constructionUI({
       notice('请选择有参数记录的草图');
       return;
     }
-    await open('geometry');
+    if ((await open('geometry')) === false) return;
     precise.cancel();
     cancelAnimationFrame(liveFrame);
     liveFrame = 0;
@@ -3190,9 +3192,9 @@ export function constructionUI({
     if (!['extrude', 'sweep'].includes(operation)) throw Error('不支持的草图操作');
     const action = guideActions(savedGuides, id)[operation];
     if (action.reason) throw Error(action.reason);
-    if (operation === 'sweep' && (defaultRectangle || !profiles().length))
-      $('feature-sweep-mode').value = 'rectangle';
-    await open('feature', { ...action, operation });
+    const sweepMode =
+      operation === 'sweep' && (defaultRectangle || !profiles().length) ? 'rectangle' : null;
+    if ((await open('feature', { ...action, operation, sweepMode })) === false) return;
     notice(
       operation === 'extrude'
         ? '已选中源轮廓，调整深度后确认放置'

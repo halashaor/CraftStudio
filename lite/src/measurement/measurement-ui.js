@@ -361,12 +361,7 @@ export function measurementUI({
   }
   function start(item = null) {
     if (saving) return;
-    try {
-      beforeOpen();
-    } catch (e) {
-      notice(e.message, true);
-      return;
-    }
+    if (beforeOpen() === false) return;
     active = true;
     previewSteps.clear();
     syncHistory();
