@@ -464,3 +464,10 @@ UI templates substitute `{name}` and `{n}` in one pass; token-like characters in
 The browser's query, collection, attention, object-kind and visibility/lock filters are transient UI scopes, not project mutations. The shared pure SceneBrowser filter returns matching object IDs, related editable guide IDs, selectableObjectIds and counts. selectableObjectIds excludes objects hidden individually or by their collection; locked visible objects are included for inspection, naming, measurement and export. Existing mutation protection still controls geometry writes.
 
 Type/state object filters keep related source sketches as context and omit unrelated independent sketches. Clearing the scope restores all objects/sketches. A viewport pick outside the current scope reveals the picked item by clearing incompatible filters. Matching-result selection honors Shift add/Ctrl subtract with exact members. Internal kind tokens match exactly in text search; translated type labels and normal scene names remain searchable. This is not a persistent saved-selection system.
+
+
+## Java datapack export
+
+`await CraftStudio.export({format:"datapack",kind:"selection",target:"1.21.1",placement:"relative"})` returns a Java datapack ZIP with the same exact blueprint selection/air mask. Targets: `1.20.1` (pack 15, plural functions directory) and `1.21.1` (pack 48, singular function directory). Placement is `relative` (default) or `world` (requires confirmed world origin). The ZIP manifest carries the local/world offsets and independent numbered stages of at most 8192 commands. Block entities are initialized and retain typed SNBT; scene entities are omitted, and includeEntities:true rejects explicitly. Export is read-only and does not execute game commands, change gamerules, or upgrade data.
+
+The connected-page MCP bridge also accepts operation: "export" with these options and writes a .datapack.zip artifact using the existing revision guard and receipt mechanism.

@@ -234,3 +234,64 @@ test('read-only packed titles preserve durable scene names and draft renaming st
     store.close();
   }
 });
+
+test('datapack export shares exact selection and patch scopes, remains read-only, and requires known origin for world placement', async () => {
+  const { engine, exporter, rpc } = await setup();
+  try {
+    const before = await rpc('workspace.describe');
+    const bytes = await exporter.export({
+      format: 'datapack',
+      kind: 'selection',
+      target: '1.20.1',
+      placement: 'world',
+    });
+    const files = unzipSync(bytes),
+      manifest = JSON.parse(strFromU8(files['craftstudio-manifest.json']));
+    assert.equal(manifest.records, 2);
+    assert.deepEqual(manifest.worldOffset, [104, 66, -46]);
+    const lines = Object.entries(files)
+      .filter(([name]) => name.endsWith('.mcfunction'))
+      .flatMap(([, data]) => strFromU8(data).trim().split('\n'));
+    assert.equal(lines.length, 2);
+    assert.ok(lines.some((line) => line.includes('example:stairs[facing=east,half=top]')));
+    assert.ok(
+      lines.some((line) => line.includes('minecraft:oak_slab[type=top,waterlogged=false]')),
+    );
+    assert.equal(
+      lines.some((line) => line.includes('minecraft:glass')),
+      false,
+    );
+    const patch = await exporter.export({ format: 'datapack', kind: 'patch' }),
+      pf = unzipSync(patch),
+      pm = JSON.parse(strFromU8(pf['craftstudio-manifest.json']));
+    assert.equal(pm.removals, 1);
+    assert.equal(pm.records, 5);
+    const after = await rpc('workspace.describe');
+    assert.equal(after.workspaceId, before.workspaceId);
+    assert.equal(after.revision, before.revision);
+    await assert.rejects(
+      () => exporter.export({ format: 'datapack', includeEntities: true }),
+      /场景实体/,
+    );
+  } finally {
+    await engine.close();
+  }
+  const unknown = await setup(false);
+  try {
+    await assert.rejects(
+      () => unknown.exporter.export({ format: 'datapack', kind: 'selection', placement: 'world' }),
+      /原点未确认/,
+    );
+    assert.ok(
+      (
+        await unknown.exporter.export({
+          format: 'datapack',
+          kind: 'selection',
+          placement: 'relative',
+        })
+      ).length,
+    );
+  } finally {
+    await unknown.engine.close();
+  }
+});

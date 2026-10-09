@@ -1,3 +1,4 @@
+import { datapackArchive } from './datapack-export.js';
 import { Site } from '../core/site.js';
 import { strToU8 } from 'fflate';
 import { changeCSV, csvRows, safeStem } from './delivery-package.js';
@@ -90,6 +91,18 @@ export class ProjectExporter {
       entityWarnings: blueprint.entityWarnings,
     };
   }
+  async datapack({
+    kind = 'additions',
+    title,
+    selection,
+    target = '1.21.1',
+    placement = 'relative',
+  } = {}) {
+    const snapshot = this.capture(title);
+    const blueprint = await this.blueprint(kind, selection, snapshot.guard);
+    const result = datapackArchive({ blueprint, title: snapshot.title, kind, target, placement });
+    return { ...result, filename: safeStem(snapshot.title) + '.' + kind + '.datapack.zip' };
+  }
   async changeTable() {
     const { summary } = this.context();
     return changeCSV(await this.call('diff'), summary);
@@ -106,7 +119,13 @@ export class ProjectExporter {
     includeProject = false,
     includeEntities = false,
     preserveTitle = false,
+    target,
+    placement,
   } = {}) {
+    if (format === 'datapack') {
+      if (includeEntities) throw Error('数据包仅导出方块和方块实体；场景实体请使用 NBT 交付');
+      return (await this.datapack({ kind, title, selection, target, placement })).bytes;
+    }
     const snapshot = this.capture(title);
     if (format === 'delivery')
       return (await this.delivery({ kind, title, selection, includeProject, includeEntities }))

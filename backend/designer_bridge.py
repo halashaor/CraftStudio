@@ -263,6 +263,7 @@ class DesignerPages:
             "schem": "schem",
             "json": "craft.json",
             "delivery": "zip",
+            "datapack": "datapack.zip",
         }[options.get("format", "nbt")]
         self.exports.mkdir(parents=True, exist_ok=True)
         file = self.exports / ("designer-" + job["jobId"] + "." + extension)

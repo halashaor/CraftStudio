@@ -12,6 +12,7 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
     const missing = kind === 'selection' && $('download-selection').disabled;
     $('delivery-entities').disabled = kind !== 'selection';
     $('download-delivery').disabled = missing;
+    $('download-datapack').disabled = missing;
     $('delivery-hint').textContent = missing ? '先在场景或对象列表选择要交付的建筑。' : hints[kind];
   }
   $('delivery-kind').onchange = syncScope;
@@ -36,6 +37,22 @@ export function projectExportUI({ $, task, exporter, download, notice }) {
             : '，蓝图、坐标说明与清单在同一个文件中'),
       );
     }, '正在打包已确认的设计…');
+  $('download-datapack').onclick = () =>
+    task(async () => {
+      const result = await exporter.datapack({
+        kind: $('delivery-kind').value,
+        target: $('datapack-target').value,
+        placement: $('datapack-placement').value,
+      });
+      download(result.bytes, result.filename, 'application/zip');
+      notice(
+        '已导出 ' +
+          result.manifest.records +
+          ' 条方块记录，分 ' +
+          result.manifest.stages.length +
+          ' 段；执行命令和坐标见 ZIP 内说明。',
+      );
+    }, '正在生成 Java 数据包…');
   $('download-project').onclick = () =>
     task(async () => {
       const snapshot = exporter.capture();

@@ -269,6 +269,26 @@
             >
             <button id="download-delivery" class="full primary">下载施工交付包 .zip</button>
             <p id="delivery-hint" class="small"></p>
+            <details id="datapack-options">
+              <summary>Java 原版数据包交付</summary>
+              <label
+                >目标游戏<select id="datapack-target">
+                  <option value="1.21.1">Java 1.21–1.21.1</option>
+                  <option value="1.20.1">Java 1.20–1.20.1</option>
+                </select></label
+              >
+              <label
+                >放置位置<select id="datapack-placement">
+                  <option value="relative">游戏中自行指定放置点</option>
+                  <option value="world">使用已确认的原存档坐标</option>
+                </select></label
+              >
+              <p class="small">
+                使用上方交付范围。输出方块及方块实体，不生成场景实体。ZIP
+                中附有逐段执行命令及坐标说明；不会自动在游戏中施工。
+              </p>
+              <button id="download-datapack" class="full">下载 Java 数据包 .zip</button>
+            </details>
             <details id="delivery-individual">
               <summary>单独导出文件</summary>
               <button id="download-project" class="full">完整轻量工程 .craftlite</button

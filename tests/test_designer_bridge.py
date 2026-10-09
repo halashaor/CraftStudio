@@ -172,23 +172,25 @@ class DesignerPageTests(unittest.TestCase):
             self.pages.job(job["jobId"])
 
     def test_export_writes_only_the_requested_artifact_and_returns_metadata(self):
-        job = self.pages.submit(
-            {"sessionId": self.sid, "operation": "export", "options": {"format": "delivery"}}
-        )
-        self.pages.poll({"sessionId": self.sid})
-        result = self.pages.reply(
-            {
-                "sessionId": self.sid,
-                "jobId": job["jobId"],
-                "wire": wire({"exported": b"zip data", "source": {"revision": 1}}),
-            }
-        )
-        self.assertEqual(result["status"], "completed")
-        file = Path(self.pages.job(job["jobId"])["result"]["path"])
-        self.assertEqual(file.parent, Path(self.temp.name).resolve())
-        self.assertEqual(file.suffix, ".zip")
-        self.assertEqual(file.read_bytes(), b"zip data")
-        self.assertNotIn("wire", result)
+        for format, extension in [("delivery", ".zip"), ("datapack", ".datapack.zip")]:
+            with self.subTest(format=format):
+                job = self.pages.submit(
+                    {"sessionId": self.sid, "operation": "export", "options": {"format": format}}
+                )
+                self.pages.poll({"sessionId": self.sid})
+                result = self.pages.reply(
+                    {
+                        "sessionId": self.sid,
+                        "jobId": job["jobId"],
+                        "wire": wire({"exported": b"zip data", "source": {"revision": 1}}),
+                    }
+                )
+                self.assertEqual(result["status"], "completed")
+                file = Path(self.pages.job(job["jobId"])["result"]["path"])
+                self.assertEqual(file.parent, Path(self.temp.name).resolve())
+                self.assertTrue(file.name.endswith(extension))
+                self.assertEqual(file.read_bytes(), b"zip data")
+                self.assertNotIn("wire", result)
 
     def test_foreign_page_cannot_complete_a_job(self):
         job = self.submit()
