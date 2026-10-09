@@ -1,3 +1,5 @@
+import { ProjectExporter } from './storage/project-export.js';
+import { projectExportUI } from './ui/project-export-ui.js';
 import { DraftController } from './storage/draft-controller.js';
 import { newProjectUI } from './ui/new-project-ui.js';
 import { viewNavigationUI } from './view/view-navigation-ui.js';
@@ -267,29 +269,7 @@ window.CraftStudio = Object.freeze({
     };
   },
   save: () => save(),
-  export: async ({ format = 'nbt', kind = 'full', title, selection } = {}) => {
-    if (
-      (format === 'craftlite' || (format === 'nbt' && kind === 'full')) &&
-      library.desktop?.capabilities?.includes('checkpoint-export/1')
-    )
-      return (
-        await checkpointExport(
-          format,
-          format === 'craftlite' ? title || $('save-title').value || summary.name : title,
-        )
-      ).bytes;
-    if (format === 'craftlite') {
-      const bytes = await call('compressed', {
-        title: title || $('save-title').value || summary.name,
-      });
-      refresh(await call('summary'));
-      return bytes;
-    }
-    if (format === 'schem') return call('sponge');
-    if (format === 'nbt' && ['full', 'additions', 'patch', 'selection'].includes(kind))
-      return exportBlueprint(kind, selection);
-    throw Error('不支持的导出格式或范围');
-  },
+  export: (options) => exporter.export(options),
 });
 
 const importCancel = document.createElement('button');
@@ -1293,7 +1273,7 @@ async function checkpoint() {
   if (!hasDocument || (!drafts.dirty && active) || summary?.preview) return;
   if (!storageOK) throw Error('当前设计尚未保存，请先下载完整工程，再切换场景');
   if (!active) {
-    const bytes = await projectBytes($('save-title').value || summary.name);
+    const bytes = await exporter.projectBytes($('save-title').value || summary.name);
     active = await library.save(bytes, {
       title: $('save-title').value || summary.name,
       kind: 'project',
@@ -2120,20 +2100,14 @@ async function search() {
   }
 }
 
-async function checkpointExport(format, title, context = {}) {
-  const result = await baselineRequest({
-    method: 'scene.exportStoredProject',
-    params: { format, title, ...context },
-  });
-  if (!result.ok) throw Error(result.error.message);
-  return result.value;
-}
-async function projectBytes(title, context = {}) {
-  await library.open();
-  return library.desktop?.capabilities?.includes('checkpoint-export/1')
-    ? (await checkpointExport('craftlite', title, context)).bytes
-    : call('compressed', { title, ...context });
-}
+const exporter = new ProjectExporter({
+  library,
+  call,
+  baselineRequest,
+  refresh,
+  context: () => ({ summary, title: $('save-title').value }),
+  selection: () => cad?.exportSelection(),
+});
 async function save(copy = false) {
   if (summary?.preview) throw Error('请先采用或取消预览');
   if (!storageOK) throw Error('本地数据库不可用，可下载完整工程文件');
@@ -2153,7 +2127,7 @@ async function save(copy = false) {
       blocks: snapshot.sourceBlocks + snapshot.add - snapshot.remove,
       size: [...snapshot.size],
     },
-    bytes = await projectBytes(info.title, {
+    bytes = await exporter.projectBytes(info.title, {
       workspaceId: snapshot.workspaceId,
       expectedRevision: snapshot.revision,
     });
@@ -2183,98 +2157,7 @@ async function save(copy = false) {
 }
 for (const id of ['quick-save', 'save-version']) $(id).onclick = () => task(() => save());
 $('save-copy').onclick = () => task(() => save(true));
-$('download-project').onclick = () =>
-  task(async () =>
-    download(
-      await projectBytes($('save-title').value),
-      ($('save-title').value || '场地设计') + '.craftlite',
-    ),
-  );
-$('download-json').onclick = () =>
-  task(async () => {
-    const pkg = await call('package', { title: $('save-title').value });
-    const { Site } = await import('./core/site.js');
-    const p = Site.unpack(pkg.site).project();
-    download(JSON.stringify(p), p.name + '.craft.json', 'application/json');
-  }, '正在生成兼容工程文件…');
-async function exportBlueprint(kind, selection) {
-  if (kind === 'selection') {
-    selection ||= cad.exportSelection();
-    if (!selection) throw Error('请先选择要导出的建筑、方块或区域');
-  }
-  return kind === 'full' && library.desktop?.capabilities?.includes('checkpoint-export/1')
-    ? checkpointExport('nbt')
-    : call('export', { kind, selection });
-}
-for (const [id, kind] of [
-  ['download-selection', 'selection'],
-  ['download-additions', 'additions'],
-  ['download-patch', 'patch'],
-  ['download-full', 'full'],
-])
-  $(id).onclick = () =>
-    task(async () => {
-      const value = await exportBlueprint(kind);
-      download(value.bytes || value, ($('save-title').value || '场地设计') + '.' + kind + '.nbt');
-      if (value.offsetLocal) {
-        download(
-          JSON.stringify(
-            {
-              localOffset: value.offsetLocal,
-              worldOffset: value.offsetWorld,
-              containsAir: value.containsAir,
-            },
-            null,
-            2,
-          ),
-          '蓝图放置偏移说明.json',
-          'application/json',
-        );
-        notice('已导出；放置偏移坐标随说明文件提供。');
-      }
-    }, '正在生成 NBT，不改变原文件…');
-$('download-csv').onclick = () =>
-  task(async () => {
-    const diff = await call('diff'),
-      rows = [
-        [
-          summary.originConfirmed ? 'world_x' : 'local_x',
-          summary.originConfirmed ? 'world_y' : 'local_y',
-          summary.originConfirmed ? 'world_z' : 'local_z',
-          'action',
-          'category',
-          'before',
-          'after',
-          'reason',
-        ],
-      ];
-    for (const d of diff)
-      rows.push([
-        ...(summary.originConfirmed ? d.pos.map((v, a) => v + summary.origin[a]) : d.pos),
-        d.action,
-        d.category,
-        JSON.stringify(d.before),
-        JSON.stringify(d.after),
-        d.reason,
-      ]);
-    const text =
-      '\ufeff' +
-      rows
-        .map((r) => r.map((v) => '"' + String(v ?? '').replaceAll('"', '""') + '"').join(','))
-        .join('\r\n');
-    download(text, '逐格施工变更.csv', 'text/csv;charset=utf-8');
-  });
-$('terrain-csv').onclick = () =>
-  task(async () => {
-    const map = await call('heightmap'),
-      rows = [map.columns, ...map.rows];
-    download(
-      '\ufeff' + rows.map((r) => r.map((v) => v ?? '').join(',')).join('\r\n'),
-      '真实场地逐列高度.csv',
-      'text/csv;charset=utf-8',
-    );
-    notice('已导出逐列原地面、水面与占用高度。');
-  });
+projectExportUI({ $, task, exporter, download, notice });
 async function listLibrary() {
   const f = $('library-filter').value,
     items = await library.list({
@@ -2431,12 +2314,6 @@ $('library-restore').onchange = () =>
     await listLibrary();
     notice('工程库备份已导入；原有当前设计保留。');
   });
-const spongeButton = document.createElement('button');
-spongeButton.className = 'full';
-spongeButton.textContent = '新增建筑 Sponge .schem';
-spongeButton.onclick = () =>
-  task(async () => download(await call('sponge'), ($('save-title').value || '建筑') + '.schem'));
-$('download-additions').after(spongeButton);
 let aiViews = [];
 const viewButton = document.createElement('button');
 viewButton.textContent = '将当前 3D 视角附给 AI';

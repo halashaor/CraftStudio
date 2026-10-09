@@ -273,7 +273,9 @@ export class EngineController {
       before.workspaceId !== after.workspaceId ||
       directChanges.has(action) ||
       (action === 'api' && canonical.has(data.method)) ||
-      (['package', 'compressed', 'draft'].includes(action) && !!data.title);
+      (['package', 'compressed', 'draft'].includes(action) &&
+        !!data.title &&
+        (action === 'draft' || !data.preserveTitle));
     if (dirty)
       try {
         await this.#save(this.#engine, onTiming);

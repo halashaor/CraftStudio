@@ -89,6 +89,7 @@ The interface uses a fixed tool column, central 3D viewport, right-side scene co
 | Litematica `.litematic` | Import; not a lossless Litematica round trip |
 | Anvil `.mca` | Import a selected region from one region file |
 | Resource-pack ZIPs and mod/game JARs | Read supported model and texture assets from selected files |
+| Delivery `.zip` | Blueprint, placement and scoped reports; optional editable project; direct reopening |
 | `.craftlite` | Portable editable designer project |
 
 
@@ -244,7 +245,9 @@ When an operation panel closes after confirmation or cancellation, focus returns
 
 ## Saving and resuming work
 
-**Export one building:** select an object or a block region, then choose **Save / Export → Current selection NBT**. Exact object members and combined selection masks are respected, so unrelated blocks inside the bounding box stay out. The file preserves block states (including slabs/stairs) and typed block-entity NBT; a companion JSON records local and confirmed world placement offsets. Selection NBT contains selected blocks, not scene entities. Use the complete project/full-site export to retain the full scene. Change exports and game-build preparation share bounds and palette handling, including large edits and explicit demolition air, without changing the working project.
+**Deliver a build:** open **Save / Export**, choose additions/replacements, changes including demolition, current selection, or the full site, and download the delivery ZIP. It contains `blueprint.nbt`, placement coordinates, scoped changes, material counts and a manifest. Full-site material counts cover changed placements, not the original terrain inventory. **Include editable project** adds the complete design and original site. Open the ZIP directly in CraftStudio: it restores the attached project when present, otherwise the blueprint at its confirmed world anchor. Unknown anchors remain unconfirmed. Packing checks one scene revision and refuses mixed-version results; optional project naming does not rename the working scene. Individual NBT, project, CSV and Sponge files remain under **Single-file exports**. This file workflow has not replaced live-game validation.
+
+**Export one building:** select an object or a block region, then choose **Save / Export → Single-file exports → Current selection NBT**. Exact object members and combined selection masks are respected, so unrelated blocks inside the bounding box stay out. The file preserves block states (including slabs/stairs) and typed block-entity NBT; a companion JSON records local and confirmed world placement offsets. Selection NBT contains selected blocks, not scene entities. Use the complete project/full-site export to retain the full scene. Change exports and game-build preparation share bounds and palette handling, including large edits and explicit demolition air, without changing the working project.
 
 Sketch-only projects are complete projects even before blocks are generated. Switching scenes automatically retains confirmed work in the local library, including sketches; if that save fails, the scene stays open so you can retry or export a portable project.
 

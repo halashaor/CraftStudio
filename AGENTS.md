@@ -29,3 +29,5 @@ Keep front-end modules under their functional directories in lite/src. app.js an
 Object membership arrays are immutable snapshots: replace cells arrays when membership changes. ObjectProtection reuses weakly keyed indexes for unchanged arrays and resolves object/collection lock flags afresh for every operation.
 
 Keep draft epochs, dirty state, timers and in-flight save coalescing in storage/draft-controller.js. Keep checkpoint metadata and cached asset retry in storage/checkpoint-draft.js; app.js supplies scene/UI callbacks. Preserve immutable formal version snapshots and verify both concurrent-save behavior and project switching when changing this boundary.
+
+Keep page/UI exports in storage/project-export.js and ui/project-export-ui.js. Delivery archives and reports use storage/delivery-package.js in the shared engine. Preserve revision consistency across all bundled files, exact selection scopes, unknown world origins, and read-only optional project titles. Keep both ZIP reopening paths and legacy single-file exports working.

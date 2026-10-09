@@ -1,3 +1,9 @@
+import {
+  deliveryReport,
+  deliveryArchive,
+  materialCounts,
+  readDeliveryArchive,
+} from './storage/delivery-package.js';
 import { ObjectProtection, objectLocked } from './components/object-protection.js';
 import { changeBlueprint, cropBlueprint } from './minecraft/blueprint.js';
 import { WorkerRuntime } from './runtime/worker-runtime.js';
@@ -478,6 +484,21 @@ async function execute(action, data) {
     }
     if (/\.craftlite$/i.test(data.name))
       return unpackPackage(JSON.parse(strFromU8(gunzipSync(bytes))));
+    if (/\.zip$/i.test(data.name)) {
+      const archive = readDeliveryArchive(bytes);
+      if (archive.projectBytes)
+        return unpackPackage(JSON.parse(strFromU8(gunzipSync(archive.projectBytes))));
+      const project = importNBT(archive.blueprintBytes, archive.manifest.title || data.name);
+      project.origin = archive.placement.worldOffset || [0, 0, 0];
+      project.metadata.originConfirmed = archive.placement.worldOffset !== null;
+      project.metadata.sourceHash = await fingerprint(archive.blueprintBytes);
+      project.metadata.delivery = {
+        kind: archive.manifest.kind,
+        source: archive.manifest.source,
+        placement: archive.placement,
+      };
+      return hydrate(project);
+    }
     if (/\.html?$/i.test(data.name))
       return run('reference', { html: new TextDecoder().decode(bytes) });
     const p = /\.mca$/i.test(data.name)
@@ -1290,23 +1311,19 @@ async function execute(action, data) {
     );
   }
   if (action === 'sponge') {
-    const p = site.project(),
-      added = [...site.overlay.values()].filter((b) => b.state >= 0);
-    if (!added.length) throw Error('没有新增建筑');
-    const min = [0, 1, 2].map((a) => Math.min(...added.map((b) => b.pos[a]))),
-      max = [0, 1, 2].map((a) => Math.max(...added.map((b) => b.pos[a])));
-    p.blocks = added.map((b) => ({ ...b, pos: b.pos.map((n, a) => n - min[a]) }));
-    p.size = max.map((n, a) => n - min[a] + 1);
-    p.origin = site.origin.map((n, a) => n + min[a]);
-    p.entities = [];
-    return exportSponge(p);
+    if (data.expectedRevision !== undefined) api.guard(data);
+    if (preview) throw Error('请先采用预览');
+    return exportSponge(changeBlueprint(site, 'additions').project);
   }
   if (action === 'package') {
+    if (data.expectedRevision !== undefined) api.guard(data);
     if (preview) throw Error('请先采用预览再保存或导出');
-    site.title = data.title || site.title;
+    if (!data.preserveTitle) site.title = data.title || site.title;
+    const packed = site.pack();
+    if (data.preserveTitle && data.title) packed.title = data.title;
     return {
       liteSchema: 1,
-      site: site.pack(),
+      site: packed,
       assets: assets(),
       savedAt: new Date().toISOString(),
     };
@@ -1380,7 +1397,6 @@ async function execute(action, data) {
     return unpackPackage(pkg);
   }
   if (action === 'compressed') {
-    if (data.expectedRevision !== undefined) api.guard(data);
     const pkg = await run('package', data);
     return gzipSync(strToU8(JSON.stringify(pkg)), { mtime: 0 });
   }
@@ -1431,7 +1447,13 @@ async function execute(action, data) {
       offsetLocal: exported.offsetLocal || [0, 0, 0],
     };
   }
+  if (action === 'deliveryReport' || action === 'deliveryArchive') {
+    api.guard(data);
+    if (preview) throw Error('请先采用或取消提案预览');
+    return action === 'deliveryReport' ? deliveryReport(site, data) : deliveryArchive(data);
+  }
   if (action === 'export') {
+    if (data.expectedRevision !== undefined) api.guard(data);
     if (preview) throw Error('请先采用预览');
     if (data.kind === 'full') return exportNBT(site.project());
     let blueprint;
@@ -1441,7 +1463,13 @@ async function execute(action, data) {
       blueprint = cropBlueprint(site, cells, { min, max });
     } else blueprint = changeBlueprint(site, data.kind);
     const { project, ...placement } = blueprint;
-    return { bytes: exportNBT(project), ...placement };
+    return {
+      bytes: exportNBT(project),
+      ...placement,
+      size: project.size,
+      blocks: project.blocks.length,
+      materials: materialCounts(project),
+    };
   }
   throw Error('未知前端任务 ' + action);
 }

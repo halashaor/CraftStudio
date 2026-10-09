@@ -88,7 +88,7 @@ Create 的运动预览由方块状态、原生模型及装置 NBT 自动决定�
 
 ## 视觉反馈与保存
 
-`CraftStudio.setView({position:[x,y,z],target:[x,y,z],fov:45,projection:"orthographic"})` 可自由调整相机；projection 也可为 perspective，使用局部场景坐标。`CraftStudio.captureView()` 返回 PNG 数据 URL 和相机位置，供多模态 AI 观察；用户继续直接看交互 3D。`await CraftStudio.save()` 使用当前页面的工程名保存正式版本，本地草稿仍自动保存。版本包含基准场地、任意方块改动、对象和资源附件。`await CraftStudio.export({format:"nbt",kind:"full"})` 可取得完整 NBT；kind 也支持 additions / patch。format 为 craftlite 时输出完整可恢复工程，schem 则输出新增建筑 Sponge V3。导出返回字节数据，外部客户端可选择保存位置。
+`CraftStudio.setView({position:[x,y,z],target:[x,y,z],fov:45,projection:"orthographic"})` 可自由调整相机；projection 也可为 perspective，使用局部场景坐标。`CraftStudio.captureView()` 返回 PNG 数据 URL 和相机位置，供多模态 AI 观察；用户继续直接看交互 3D。`await CraftStudio.save()` 使用当前页面的工程名保存正式版本，本地草稿仍自动保存。版本包含基准场地、任意方块改动、对象和资源附件。`await CraftStudio.export({format:"nbt",kind:"full"})` 可取得完整 NBT；kind 也支持 additions / patch / selection。format 为 craftlite 时输出完整可恢复工程，schem 则输出新增建筑 Sponge V3。完整范围及工程导出返回字节数据；局部 NBT 返回含 bytes 和放置偏移的对象，外部客户端可选择保存位置。
 
 当前读写入口是页面 / Worker API，已有 AI 按钮支持一次提案和预览；自动循环调用这些工具的外部 AI / MCP 客户端尚需单独连接。底座不要求 AI 使用预设建筑分类。
 
@@ -251,3 +251,22 @@ Autosaved drafts optionally carry `site.history` with schema `craftstudio-draft-
 `construction.prepare` 的 `type:"designer"` 支持 `config.operation:"paint"`，提供 `objectIds` 或 `selection`、目标 `state` 及可选 `retainShape`（默认 true）。复用画笔的材质家族及形态／属性保留规则，保护含实体数据的跨类型替换。返回 `materialChange:{selected,changed,skipped,unchanged}`；准备阶段只读，确认仍遵循 `policy` 与修订号检查。
 
 选区换材质 `operation:"paint"` 增加可选 `sourceName`，只匹配该原方块 Name；空值处理所有选择，仍遵循形态保留规则。`materialChange` 增加 `matched/excluded/sources:[{Name,count}]`，来源统计覆盖实际选择，不只统计已替换部分。匹配是方块类型，不自动合并材质家族；原 API 不提供 `sourceName` 时语义保持不变。
+
+## Delivery export / 施工交付包
+
+```js
+const zipBytes = await CraftStudio.export({
+  format: 'delivery',
+  kind: 'selection', // additions | patch | selection | full
+  selection: { min: [4, 2, 4], max: [6, 2, 4], members: [[4, 2, 4], [6, 2, 4]] },
+  includeProject: false
+});
+```
+
+This page API returns ZIP bytes. Omit `selection` to use the current UI selection. `includeProject` embeds the full original site and editable design; ZIP import prefers this project, otherwise it loads the blueprint with `placement.json`. Unknown world anchors stay unconfirmed. Packaging guards one revision across the NBT, scoped reports and optional project. `manifest.json` uses `craftstudio-delivery/1`; full-site material tables count changed placements. Archive creation runs in the shared engine. It does not execute game construction.
+
+页面接口返回 ZIP 字节；省略 selection 时采用当前界面选择。includeProject 会附带完整原始场地和可编辑设计；打开 ZIP 时优先读取该工程，否则读取蓝图和放置坐标。未确认的世界坐标不自动确认。蓝图、清单和可选工程遵守同一场景版本；归档在共用引擎中执行，不等于游戏内施工。
+
+For `format: 'nbt'`, `kind: 'full'` returns raw NBT bytes. Partial kinds (`additions`, `patch`, `selection`) return `{bytes, offsetLocal, offsetWorld, containsAir, size, blocks, materials}`. `format: 'craftlite'` returns portable project bytes, `format: 'json'` UTF-8 project JSON bytes, and `format: 'schem'` additions as Sponge bytes.
+
+NBT 完整范围返回字节；局部范围返回含 bytes 和放置偏移的对象。原有 craftlite / schem 路径保留，json 返回 UTF-8 工程数据。

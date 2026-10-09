@@ -43,7 +43,7 @@
             ><input
               id="file"
               type="file"
-              accept=".nbt,.schem,.litematic,.mca,.json,.craftlite,.html" /></label
+              accept=".nbt,.schem,.litematic,.mca,.json,.craftlite,.html,.zip" /></label
           ><button id="provided-source" class="full">打开你提供的 1.nbt 真实场地</button>
           <details class="card">
             <summary>可选：补充模型与材质</summary>
@@ -240,21 +240,40 @@
             <p id="storage-status" class="small">准备本地存储…</p>
           </div>
           <div class="card">
-            <h3>带走这份设计</h3>
-            <button id="download-project" class="full">完整轻量工程 .craftlite</button
-            ><button id="download-json" class="full">兼容完整版 .craft.json</button
-            ><button id="download-selection" class="full">仅当前选择 NBT</button
-            ><button id="download-additions" class="full">新增 / 替换建筑 NBT</button
-            ><button id="download-patch" class="full">变更 NBT（含拆除空气）</button
-            ><button id="download-full" class="full">完整场地与结果 NBT</button
-            ><button id="download-csv" class="full">逐格变更 CSV</button>
+            <h3>导出与施工</h3>
+            <label
+              >交付范围<select id="delivery-kind">
+                <option value="additions">新增 / 替换建筑</option>
+                <option value="patch">全部变更 · 包含拆除</option>
+                <option value="selection">仅当前选择</option>
+                <option value="full">完整场地与结果</option>
+              </select></label
+            >
+            <label class="check"
+              ><input
+                id="delivery-project"
+                type="checkbox"
+              />附带可继续编辑的完整工程（含原始场地）</label
+            >
+            <button id="download-delivery" class="full primary">下载施工交付包 .zip</button>
+            <p id="delivery-hint" class="small"></p>
+            <details id="delivery-individual">
+              <summary>单独导出文件</summary>
+              <button id="download-project" class="full">完整轻量工程 .craftlite</button
+              ><button id="download-json" class="full">兼容完整版 .craft.json</button
+              ><button id="download-selection" class="full">仅当前选择 NBT</button
+              ><button id="download-additions" class="full">新增 / 替换建筑 NBT</button
+              ><button id="download-patch" class="full">变更 NBT（含拆除空气）</button
+              ><button id="download-full" class="full">完整场地与结果 NBT</button
+              ><button id="download-csv" class="full">逐格变更 CSV</button>
+            </details>
             <p class="small">
               仅当前选择只导出所选成员，孔洞不会混入其他对象；不包含场景实体。变更 NBT
               含空气，但是否执行拆除取决于游戏工具的粘贴策略。施工请结合变更表；完整工程保留原始地形与原始实体数据。
             </p>
           </div>
           <details class="card" open>
-            <summary>新增 / 替换材料</summary>
+            <summary>全场景新增 / 替换材料</summary>
             <div id="materials"></div>
           </details>
         </section>
