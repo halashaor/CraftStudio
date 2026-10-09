@@ -364,3 +364,16 @@ job/cancel require connectionId and the currently known jobId. They query/contro
 Keep the same MCP jobId/request ID for pending or uncertain requests. `GAME_WRITE_UNCONFIRMED` means a network failure or connection change left game effects unknown; reconnect and query the game task instead of blindly repeating construction. Preparation does not freeze external changes to the game world; bridge overwrite, backup and write-permission rules still apply. The complete MCP→page→HTTP bridge→readback flow is verified with a mock game, not actual Minecraft placement, restoration or ticking.
 
 游戏令牌只留在页面连接控件与本地通信中，不进入状态回执。AI 与人共用当前游戏连接、准备内容和任务编号；不会走旧兼容 CURRENT 工程。此接口接通工作流，不代表已完成真实游戏施工验收，也不绕过现有实体/原生蓝图限制。
+
+
+### Reusable prefab JSON / 可复用构件 JSON
+
+`craftstudio-prefab/1` uses integer XYZ size and a nonempty blocks array. Each block has a local pos and either an explicit state `{Name,Properties?}` or a palette index with a corresponding root palette. Import/placement normalizes indexed states to explicit objects. Arbitrary valid Java namespaced IDs are supported; the material catalogue is not a whitelist. Properties values use Minecraft's string representation. Typed block-entity NBT and unknown metadata are retained; this change does not execute Mod code or add missing renderer support.
+
+```json
+{"schema":"craftstudio-prefab/1","name":"Custom beam","size":[2,1,1],"palette":[{"Name":"my_mod:roof_beam","Properties":{"facing":"east"}}],"blocks":[{"pos":[0,0,0],"state":0},{"pos":[1,0,0],"state":0}]}
+```
+
+Missing/out-of-range palette references, duplicate local cells, invalid Java IDs and positions outside size are rejected before generating scene writes. Numeric states without a valid palette are never treated as air. Existing size/operation limits remain. The shared normalizer lives in components/prefab-format.js and is used for project prefab imports and insertion/paste operation generation. A failed import preserves the current project/library state and history; a failed overwrite paste preserves the target. Reopening a saved project retains normalized prefab definitions.
+
+合法数字索引构件可直接导入；错误索引会报错，不会变成删除方块。文件选择控件在读取前清空，修正后可再次选择同名文件。构件操作提交后先标记草稿，再刷新视图。

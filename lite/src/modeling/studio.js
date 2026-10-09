@@ -1,4 +1,5 @@
 import { selectionPredicate } from '../selection/selection-mask.js';
+import { normalizePrefab } from '../components/prefab-format.js';
 import { componentCell, sameComponentCell } from '../components/component-state.js';
 import { composeInstancePose } from '../components/instance-transform.js';
 import { coordKey, Site } from '../core/site.js';
@@ -131,8 +132,7 @@ export function insertOperations(
   at,
   { turn = 0, mirror = false, count = 1, step = [0, 0, 0] } = {},
 ) {
-  if (prefab.schema !== 'craftstudio-prefab/1' || !prefab.blocks?.length)
-    throw Error('构件没有方块');
+  prefab = normalizePrefab(prefab);
   if (
     !Number.isInteger(count) ||
     count < 1 ||
@@ -691,14 +691,14 @@ export function insertPrefab(site, p, at, options = {}, policy = {}) {
 }
 
 export function pastePrefab(site, prefab, at, options = {}, policy = {}) {
-  if (prefab.blocks.some((b) => b.nbt) && (options.turn || options.mirror))
-    throw Error('带方块实体的构件旋转需使用原生蓝图，平移可保留数据');
   const mode = options.overlap || 'empty';
   if (!['empty', 'overwrite', 'replace'].includes(mode)) throw Error('未知重叠处理方式');
   const ops = insertOperations(prefab, at, options).filter((op) => {
     const exists = !!site.at(op.pos);
     return mode === 'empty' ? !exists : mode === 'replace' ? exists : true;
   });
+  if (prefab.blocks.some((b) => b.nbt) && (options.turn || options.mirror))
+    throw Error('带方块实体的构件旋转需使用原生蓝图，平移可保留数据');
   if (!ops.length) throw Error('没有可放置的位置，请移动预览或更改重叠方式');
   const previous = structuredClone(design(site));
   site.operations(ops, {

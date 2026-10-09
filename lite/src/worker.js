@@ -5,6 +5,7 @@ import {
   readDeliveryArchive,
 } from './storage/delivery-package.js';
 import { ObjectProtection, objectLocked } from './components/object-protection.js';
+import { normalizePrefab } from './components/prefab-format.js';
 import { changeBlueprint, cropBlueprint } from './minecraft/blueprint.js';
 import { WorkerRuntime } from './runtime/worker-runtime.js';
 import { readSaveForm } from './storage/save-form.js';
@@ -793,7 +794,7 @@ async function execute(action, data) {
     if (data.expectedRevision !== undefined) api.guard(data);
     let view;
     if (data.prefab) {
-      const p = data.prefab,
+      const p = normalizePrefab(data.prefab),
         fake = new Site({ ...emptyProject(), size: p.size, palette: [], blocks: [] });
       for (const b of p.blocks) {
         const state = fake.state(b.state);
@@ -860,11 +861,8 @@ async function execute(action, data) {
     }
     if (data.command === 'transform') transformSelection(site, data, policy);
     if (data.command === 'prefabImport') {
-      const p = data.prefab;
-      if (p.schema !== 'craftstudio-prefab/1' || !Array.isArray(p.blocks))
-        throw Error('不是构件文件');
+      const p = normalizePrefab(data.prefab);
       p.id = crypto.randomUUID();
-      insertOperations(p, [0, 0, 0]);
       d.prefabs.push(p);
     }
     if (data.command === 'component') {

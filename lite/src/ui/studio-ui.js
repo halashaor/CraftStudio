@@ -125,9 +125,9 @@ export function studioUI({
       if (selectionRegions) data.regions = selectionRegions;
     }
     refresh(await call('studio', { ...data, policy: policy() }));
-    await render();
     markDirty();
     showRange();
+    await render();
   }
   $('studio-drag').onchange = () => {
     if ($('studio-drag').checked) document.querySelector('[data-tool="inspect"]').click();
@@ -179,6 +179,7 @@ export function studioUI({
   $('studio-prefab-file').onchange = () =>
     task(async () => {
       const f = $('studio-prefab-file').files[0];
+      $('studio-prefab-file').value = '';
       if (f) await command({ command: 'prefabImport', prefab: JSON.parse(await f.text()) });
     });
   $('studio-build').onclick = () =>

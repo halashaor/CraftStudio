@@ -185,6 +185,8 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 
 ## Selection, transforms and components
 
+Reusable prefab JSON accepts explicit block states and palette-indexed states. Import and placement share one normalizer; invalid references/coordinates fail before scene writes, while valid unknown Mod IDs and typed data remain supported. Corrected files can be selected again under the same name. Imported definitions and placed blocks survive project save/reopen.
+
 After confirming a move, copy or quarter-turn rotation, press **Shift+R** to preview the same transform on the current selection. It is also available as **Repeat last transform · Preview** in command search, the context menu and More transforms. Confirm to apply, or cancel without changing the scene; each confirmation has its own undo step. Repetition uses the current geometry and retains the prior world-axis bounding offset/quarter-turn, rather than replaying a captured old prefab. Switching projects clears the remembered operation; it is not saved in the project. Paste, material changes and modeling operations are not included in this shortcut.
 
 After pasting, the active selection contains the cells actually changed by that paste, excluding occupied cells skipped by the overlap policy, protection skips and identical no-op targets. Moving this selection therefore leaves skipped original blocks behind. Paste and modeled-feature confirmation remain one-step undoable when the 30-entry history is full. Confirmed transforms mark the draft and update selection before rebuilding the view, so a view failure does not turn a committed edit back into a retryable preview.
