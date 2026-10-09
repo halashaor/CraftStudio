@@ -415,3 +415,16 @@ place defaults to avoiding occupied targets; overwrite/replace are explicit over
 put/place/remove also accept transactionId, so a definition and its placements can be staged and committed as one undo step. Staged changes do not refresh the visible library or geometry before transaction.commit. Identical request-ID replay reuses the existing receipt; changing the content, including its source guard, requires a new ID. Read/list operations do not place blocks. Writes refresh the same visible shelf and draft state; metadata-only updates skip the voxel-view rebuild. Low-level UI prefab import/metadata/capture actions reuse this library implementation.
 
 本接口为可选的复用能力，AI 仍可直接自由编辑方块或自行生成定义。放置调用直接提交，需预览时可用已有事务暂存／提案流程；不会强制所有设计使用构件。
+
+
+### Atomic object naming / 对象名称原子修改
+
+`objects.rename` takes `names: [{id,name}, ...]` plus the normal workspaceId/expectedRevision guard. All IDs and nonempty names are validated before applying any change. Duplicate IDs in one request are rejected. IDs, geometry membership, transforms, collections, locks and block/entity data remain unchanged. Naming is allowed for locked objects because it is metadata editing; it does not unlock them. Result adds `{renamed,names:[{id,before,name}]}` to the normal commit summary. Identical resulting names are allowed; stable IDs distinguish objects.
+
+```json
+{"operation":"request","request":{"method":"objects.rename","params":{"workspaceId":"WORKSPACE_ID","expectedRevision":1,"names":[{"id":"window-a","name":"窗_01"},{"id":"window-b","name":"窗_02"}]}}}
+```
+
+The method supports transactionId and normal request-ID receipts/undo. The page refreshes labels and draft state without rebuilding voxel geometry. The UI's batch preview uses a frozen selected set and source revision; selection/source changes close it, and stale submissions are rejected. It does not provide regex execution or a general operator macro system. The preview displays at most 100 rows while showing the full target count.
+
+UI templates substitute `{name}` and `{n}` in one pass; token-like characters inside original names are retained literally. Optional Find/Replace is case-sensitive literal text applied to the original name before templating. Number padding does not truncate longer numbers. Inputs own their normal text undo shortcuts.

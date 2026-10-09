@@ -1,3 +1,4 @@
+import { renameObjects } from './selection/object-naming.js';
 import { mutatePrefab } from './components/prefab-library.js';
 import {
   deliveryReport,
@@ -394,6 +395,7 @@ async function run(action, data) {
         'history.undo',
         'history.redo',
         'objects.put',
+        'objects.rename',
         'collections.put',
         'collections.remove',
         'palettes.put',
@@ -893,9 +895,10 @@ async function execute(action, data) {
       insertPrefab(site, p, data.at, data, policy);
     }
     if (data.command === 'object') {
+      if ('name' in data) renameObjects(site, [{ id: data.id, name: data.name }]);
       const o = d.objects.find((o) => o.id === data.id);
       if (!o) throw Error('找不到对象');
-      for (const k of ['name', 'hidden', 'locked']) if (k in data) o[k] = data[k];
+      for (const k of ['hidden', 'locked']) if (k in data) o[k] = data[k];
     }
     if (data.command === 'deleteSelection') {
       const chosen = selection(site, data.min, data.max, {

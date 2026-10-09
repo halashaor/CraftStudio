@@ -696,13 +696,14 @@ export function cadShell({
   const objectNames = objectNameUI({
     $,
     getSummary,
+    task,
+    getObjectIds: () => (selectionActive && objectOnly ? [...selectedObjects] : []),
     getObjectId: () =>
       selectionActive && objectOnly && selectedObjects.size === 1 ? [...selectedObjects][0] : null,
     isOperating: () =>
       direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),
     call,
     refresh,
-    render,
     markDirty,
     notice,
   });
@@ -802,8 +803,7 @@ export function cadShell({
       {
         label: '重命名 F2',
         run: () => objectNames.begin(),
-        reason: () =>
-          selectionReason() || (selectedObjects.size !== 1 ? '请先选择一个命名对象' : ''),
+        reason: () => selectionReason() || (!selectedObjects.size ? '请先选择命名对象' : ''),
       },
       { label: '建立对象', run: () => open(component), reason: () => selectionReason() },
       { label: '保存为构件', run: () => open(component), reason: () => selectionReason() },
@@ -1359,10 +1359,19 @@ export function cadShell({
       busyReason() ||
       (hasOperation()
         ? '请先确认或取消当前预览'
-        : !selectionActive || !objectOnly || selectedObjects.size !== 1
-          ? '请先选择一个对象'
+        : !selectionActive || !objectOnly || !selectedObjects.size
+          ? '请先选择对象'
           : ''),
     'F2',
+  );
+  add(
+    'object-batch-rename',
+    '批量命名对象',
+    '编辑',
+    () => objectNames.beginBatch(),
+    'batch rename name 编号 批量重命名 前缀 后缀 文字替换',
+    () => selectionReason() || (!objectOnly || !selectedObjects.size ? '请先选择对象' : ''),
+    'Ctrl+F2',
   );
   add(
     'material-palettes',

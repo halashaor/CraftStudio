@@ -18,6 +18,7 @@ const sceneChanges = new Set([
   'transaction.commit',
   'selection.transform',
   'objects.put',
+  'objects.rename',
   'prefabs.put',
   'prefabs.remove',
   'prefabs.place',
@@ -70,7 +71,8 @@ export class PageRequests {
     if (changesScene || previewChanges.has(method)) {
       this.refresh(await this.call('summary'));
       if (changesScene) this.markDirty();
-      if (!['prefabs.put', 'prefabs.remove'].includes(method)) await this.render();
+      if (!['prefabs.put', 'prefabs.remove', 'objects.rename'].includes(method))
+        await this.render();
     }
     if (method === 'workspace.describe') {
       const capabilities = this.capabilities();

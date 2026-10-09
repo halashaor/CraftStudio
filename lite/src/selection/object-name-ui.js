@@ -1,21 +1,34 @@
+import { BatchNameUI } from './batch-name-ui.js';
 import { dialogOwnsKeyboard, textEditing, sceneShortcutBlocked } from '../ui/keyboard-context.js';
 export function objectNameUI({
   $,
   getSummary,
   getObjectId,
+  getObjectIds,
+  task,
   isOperating,
   call,
   refresh,
-  render,
   markDirty,
   notice,
 }) {
+  const batch = new BatchNameUI({
+    $,
+    getSummary,
+    getObjectIds,
+    isOperating,
+    call,
+    refresh,
+    markDirty,
+    notice,
+    task,
+  });
   let editor = null,
     committing = false;
   const rename = document.createElement('button');
   rename.id = 'cad-object-rename';
   rename.textContent = '重命名';
-  rename.title = 'F2 · 修改单个对象名称';
+  rename.title = 'F2 · 单个对象重命名，多选批量命名；Ctrl+F2 批量命名';
   $('cad-selection-clear').before(rename);
   const rowFor = (id) =>
     [...$('cad-object-list').querySelectorAll('[data-object-id]')].find(
@@ -64,7 +77,6 @@ export function objectNameUI({
       cancel();
       if (getSummary()?.workspaceId !== own.workspaceId) return;
       refresh(result);
-      await render();
       markDirty();
       if (focus) rowFor(own.id)?.querySelector('button')?.focus({ preventScroll: true });
       notice('对象名称已更新，可一次撤销');
@@ -80,6 +92,12 @@ export function objectNameUI({
       notice('请先确认或取消当前操作，再修改对象名称');
       return;
     }
+    if (getObjectIds().length > 1) {
+      cancel();
+      batch.open();
+      return;
+    }
+    batch.cancel();
     const id = getObjectId(),
       summary = getSummary(),
       object = summary?.design.objects.find((o) => o.id === id),
@@ -128,27 +146,34 @@ export function objectNameUI({
     input.select();
   }
   rename.onclick = begin;
+  function beginBatch() {
+    if (committing || isOperating()) return notice('请先确认或取消当前操作');
+    cancel();
+    batch.open();
+  }
   window.addEventListener('keydown', (event) => {
     if (
       event.defaultPrevented ||
       event.isComposing ||
       event.key !== 'F2' ||
-      event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
       dialogOwnsKeyboard() ||
       textEditing(document.activeElement) ||
-      sceneShortcutBlocked(document.activeElement) ||
+      (sceneShortcutBlocked(document.activeElement) && document.activeElement !== rename) ||
       event.target.closest?.('[data-shortcut-scope="commands"]')
     )
       return;
     event.preventDefault();
-    begin();
+    if (event.ctrlKey) beginBatch();
+    else begin();
   });
   return {
     begin,
+    beginBatch,
     update: (summary) => {
-      rename.disabled = !getObjectId();
+      rename.disabled = !getObjectIds().length;
+      batch.update(summary);
       if (
         editor &&
         (summary.workspaceId !== editor.workspaceId ||

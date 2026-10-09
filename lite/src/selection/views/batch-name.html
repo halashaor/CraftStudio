@@ -1,0 +1,40 @@
+<h3>批量命名</h3>
+<p id="batch-name-count" class="small"></p>
+<label
+  >名称模板<input id="batch-name-template" value="{name}_{n}" placeholder="例如：窗_{n}"
+/></label>
+<p class="small">{name} 保留原名称，{n} 为连续编号；也可直接输入统一名称或前后缀。</p>
+<div class="row">
+  <label>起始编号<input id="batch-name-start" type="number" value="1" min="0" /></label
+  ><label>编号位数<input id="batch-name-digits" type="number" value="2" min="1" max="12" /></label>
+</div>
+<label
+  >编号顺序<select id="batch-name-order">
+    <option value="created">创建顺序</option>
+    <option value="name">原名称</option>
+    <option value="x">X 从小到大</option>
+    <option value="y">Y 从低到高</option>
+    <option value="z">Z 从小到大</option>
+  </select></label
+>
+<details>
+  <summary>替换原名称中的文字</summary>
+  <label>查找<input id="batch-name-find" /></label
+  ><label>替换为<input id="batch-name-replace" /></label>
+</details>
+<div class="batch-name-preview">
+  <table>
+    <thead>
+      <tr>
+        <th>原名称</th>
+        <th>新名称</th>
+      </tr>
+    </thead>
+    <tbody id="batch-name-rows"></tbody>
+  </table>
+</div>
+<p id="batch-name-report" class="small"></p>
+<div class="row">
+  <button id="batch-name-apply" class="primary">确认命名</button
+  ><button id="batch-name-cancel">取消</button>
+</div>

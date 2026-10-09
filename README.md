@@ -185,6 +185,8 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 
 ## Selection, transforms and components
 
+Select named objects and press **Ctrl+F2** for batch naming in the fixed inspector; **F2** also opens it when several objects are selected, while single-object F2 stays inline. Preview old/new names before confirmation. Templates support `{name}` and `{n}`, a start number, padding, creation/name/XYZ order, and optional literal text replacement. Enter confirms from an input; Escape cancels. Each confirmed batch is one undo step and changes names only. The shared `objects.rename` API accepts ID/name pairs without resending geometry.
+
 **Component library** opens the fixed shelf for browsing, rather than the creation panel. Search current-project prefabs by name, user categories or dimensions; filter categories and sort by newest/name. Selecting a row only displays details. Use **3D preview and place** to start placement, or drag into the scene. Import and Create from selection are separate actions. Names/categories can be edited in the details and are stored in the project and exported prefab JSON; metadata edits are independently undoable. **Open local component library** now filters the local saved library to components.
 
 Reusable prefab JSON accepts explicit block states and palette-indexed states. Import and placement share one normalizer; invalid references/coordinates fail before scene writes, while valid unknown Mod IDs and typed data remain supported. Corrected files can be selected again under the same name. Imported definitions and placed blocks survive project save/reopen.

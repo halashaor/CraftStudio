@@ -1,3 +1,4 @@
+import { renameObjects } from '../selection/object-naming.js';
 import { readPrefabs, mutatePrefab } from '../components/prefab-library.js';
 import { paletteMutation } from '../materials/material-palettes.js';
 import { collectionMutation, listedCollections } from '../components/collections.js';
@@ -303,6 +304,7 @@ export class DesignAPI {
             'prefabs.remove',
             'prefabs.place',
             'objects.put',
+            'objects.rename',
             'palettes.list',
             'collections.list',
             'collections.put',
@@ -485,6 +487,7 @@ export class DesignAPI {
           'edit.apply',
           'edit.brush',
           'objects.put',
+          'objects.rename',
           'collections.put',
           'collections.remove',
           'palettes.put',
@@ -556,6 +559,7 @@ export class DesignAPI {
           }
           value = mutatePrefab(target, method, q, policy);
         }
+        if (method === 'objects.rename') value = renameObjects(target, p.names);
         if (method === 'objects.put') {
           const object = structuredClone(p.object);
           if (!object?.name || !Array.isArray(object.cells) || !object.cells.length)
@@ -589,6 +593,7 @@ export class DesignAPI {
           tx.site = target;
           value = {
             ...(method === 'edit.brush' ||
+            method === 'objects.rename' ||
             method.startsWith('workplanes.') ||
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
@@ -604,6 +609,7 @@ export class DesignAPI {
           value = {
             ...this.commit(target),
             ...(method === 'edit.brush' ||
+            method === 'objects.rename' ||
             method.startsWith('workplanes.') ||
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
