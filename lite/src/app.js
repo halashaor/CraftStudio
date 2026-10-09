@@ -1,3 +1,4 @@
+import { ResourceController } from './materials/resource-controller.js';
 import { PageRequests } from './api/page-requests.js';
 import { ProjectImporter } from './storage/project-import.js';
 import { TaskRunner } from './ui/task-runner.js';
@@ -96,6 +97,12 @@ const pageRequests = new PageRequests({
 });
 window.CraftStudio = Object.freeze({
   protocol: 'craftstudio-design/1',
+  resources: (options = { action: 'list' }) => {
+    if (!resourceController) throw Error('资源库尚未就绪，请等待工作台完成初始化');
+    return options.action === 'list'
+      ? resourceController.request(options)
+      : taskRunner.execute(() => resourceController.request(options), '正在更新资源库…');
+  },
   diagnostics: Object.freeze({
     start: () => performanceTrace.start(),
     stop: () => performanceTrace.stop(),
@@ -228,7 +235,8 @@ importCancel.onclick = () => workerSession.cancel();
 $('busy').append(importCancel);
 let designerClient = null;
 let resourceManager = null,
-  resourcePanel = null;
+  resourcePanel = null,
+  resourceController = null;
 let cad = null,
   viewNavigation = null;
 let studio = null;
@@ -2549,15 +2557,21 @@ task(async () => {
     const restoredEngine = await activateLocalEngine();
     resourceManager = new ResourceLibrary(library, call);
     await resourceManager.load();
+    resourceController = new ResourceController({
+      library: resourceManager,
+      describe: () => call('api', { method: 'workspace.describe' }),
+      refresh,
+      clearTextures,
+      markDirty,
+      render,
+      changed: () => resourcePanel?.rows(),
+    });
     resourcePanel = resourceUI({
       $,
       library,
       resources: resourceManager,
+      controller: resourceController,
       task,
-      refresh,
-      render,
-      clearTextures,
-      markDirty,
       notice,
     });
     refresh(await resourceManager.apply());

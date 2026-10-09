@@ -59,9 +59,9 @@ import {
   inferOrigin,
 } from './minecraft/reference.js';
 let libraryResources = [];
-function defaultResources() {
+function defaultResources(files = libraryResources) {
   const r = new Resources();
-  for (const f of libraryResources) r.addZip(new Uint8Array(f.bytes), f.name);
+  for (const f of files) r.addZip(new Uint8Array(f.bytes), f.name);
   return r;
 }
 let brushDescriptors = null;
@@ -509,10 +509,11 @@ async function execute(action, data) {
   }
   if (action === 'resourceArchive') return resourceArchive(data.bytes, data.name);
   if (action === 'resourceLibrary') {
-    const saved = resources.saved;
+    if ('expectedRevision' in data) api.guard(data);
+    const next = defaultResources(data.files);
+    next.addSaved(resources.saved);
     libraryResources = data.files;
-    resources = defaultResources();
-    resources.addSaved(saved);
+    resources = next;
     api.changed();
     return summary();
   }

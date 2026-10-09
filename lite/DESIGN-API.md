@@ -309,3 +309,18 @@ MCP uses the same method through `designer_call`:
 For `.mca`, supply explicit integer XYZ `region.min` and `region.max`. Successful opening replaces the scene; it does not merge geometry. Read the new workspace before subsequent edits. Retrying the identical MCP ID returns its previous job; do not resubmit pending or uncertain imports. The HTTP request body limit remains 64 MiB including JSON/base64 overhead; larger local files use the file chooser and streamed local-engine upload. Both Lite and local pages expose importFile; standalone Lite does not expose local MCP transport.
 
 导入使用页面现有的检查点、候选解析和取消流程。需明确传入原工程身份与版本；成功返回新工程，后续操作必须重新读取状态。MCP 传文件名及 Base64，不读取任意磁盘路径，不扫描 Minecraft 安装目录。大文件从界面选择并交给本地引擎上传。
+
+
+### Shared resource library / 共用资源库
+
+`CraftStudio.resources({action: "list"})` returns `{workspaceId,revision,entries,precedence}`. Entries include stable IDs, names, kind, enabled state, namespaces and asset counts; archive bytes are omitted. The last enabled entry overrides earlier entries. Metadata describes the local reusable library, not every resource embedded in the current project.
+
+Mutations require workspaceId and expectedRevision from a fresh list/describe. `action: "add"` takes `files: [{name,bytes}]` (ArrayBuffer/Uint8Array), or dataBase64 instead of bytes. JAR/ZIP archives are read as assets only. `action: "configure"` accepts `enabled: {RESOURCE_ID: true|false}`, `remove: [RESOURCE_ID]`, and optional `order: [RESOURCE_ID...]` listing every surviving resource exactly once. Unmentioned enabled states are retained.
+
+```json
+{"operation":"resources","id":"resources-once","options":{"action":"add","workspaceId":"WORKSPACE_ID","expectedRevision":1,"files":[{"name":"my-pack.zip","dataBase64":"BASE64_ARCHIVE"}]}}
+```
+
+Use `designer_call` with operation resources and the same options through MCP. list needs no write guard; add/configure do. The normal 64 MiB JSON-body limit applies. UI edits and connected automation share the same library, ordering, refresh and draft notification. Invalid candidates are parsed before replacing live resources; rejected applies restore the previous durable preference. A disconnected/uncertain operation must be observed using its existing job receipt before retrying. A transport failure cannot prove that the engine did not commit. Changes affect the reusable local library and current appearance, not just one project.
+
+页面与外部 AI 共用资源库；不会导出完整资源文件给列表调用。启用顺序从上到下，后者覆盖前者。变更会影响本机后续工程，工程便携文件仍携带使用到的模型和贴图。未执行 Mod 代码，也不宣称支持所有自定义渲染器。

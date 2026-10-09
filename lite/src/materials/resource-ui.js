@@ -1,19 +1,9 @@
-export function resourceUI({
-  $,
-  library,
-  resources,
-  task,
-  refresh,
-  render,
-  clearTextures,
-  markDirty,
-  notice,
-}) {
+import template from './views/resource-library.html';
+export function resourceUI({ $, library, resources, controller, task, notice }) {
   const dialog = document.createElement('dialog');
   dialog.id = 'resource-library-dialog';
   dialog.className = 'cad-dialog';
-  dialog.innerHTML =
-    '<div class="dialog-header"><h2>资源库 · 基础素材设置</h2><button id="resource-library-close">关闭</button></div><div class="cad-dialog-body"><p class="muted">原版和 Create 设置一次，之后工程自动复用。资源按列表从上到下加载，后面的材质包覆盖前面的外观。</p><div class="row"><button id="resource-library-local">从本地实例设置基础素材</button><button id="resource-library-files">添加 JAR / ZIP 文件</button></div><p id="resource-library-status" class="small"></p><div id="resource-library-rows"></div><p class="small">资源仅保存在本机。工程仍会保存使用到的模型与贴图；完整资源库随工程库备份转移。</p></div>';
+  dialog.innerHTML = template;
   document.body.append(dialog);
   const add = document.createElement('button');
   add.id = 'resource-library-open';
@@ -82,16 +72,9 @@ export function resourceUI({
       }),
     );
   }
-  async function updated(summary) {
-    refresh(summary);
-    clearTextures();
-    await render();
-    markDirty();
-    rows();
-  }
   function change(entries) {
     return task(async () => {
-      await updated(await resources.save(entries));
+      await controller.save(entries);
       notice('资源顺序与启用状态已保存');
     }, '应用资源外观…');
   }
@@ -112,7 +95,7 @@ export function resourceUI({
     open,
     rows,
     add: async (files) => {
-      await updated(await resources.add(files));
+      await controller.add(files);
       notice('资源已保存，新工程会自动复用');
     },
   };

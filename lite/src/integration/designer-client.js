@@ -73,7 +73,11 @@ export class DesignerClient {
   }
   async perform(job) {
     const describing = job.operation === 'request' && job.request.method === 'workspace.describe';
-    if (this.blocked() && !describing)
+    if (
+      this.blocked() &&
+      !describing &&
+      !(job.operation === 'resources' && job.options.action === 'list')
+    )
       throw Error('DESIGNER_BUSY: 工作台正在提交操作，请稍后读取状态');
     const head = await this.page.request(
       describing ? job.request : { method: 'workspace.describe' },
@@ -85,6 +89,7 @@ export class DesignerClient {
       if (workspaceId !== job.workspaceId) throw Error('WORKSPACE_CHANGED: 任务派发后工程已切换');
     }
     if (job.operation === 'request') return this.page.request(job.request);
+    if (job.operation === 'resources') return this.page.resources(job.options);
     if (job.operation === 'import') return this.page.importFile(job.options);
     if (job.operation === 'save') return this.page.save();
     if (job.operation === 'capture') {

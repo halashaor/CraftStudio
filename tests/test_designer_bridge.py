@@ -25,6 +25,33 @@ def wire(value):
 
 
 class DesignerPageTests(unittest.TestCase):
+    def test_resource_discovery_is_read_only_and_changes_need_scope(self):
+        job = self.pages.submit(
+            {"sessionId": self.sid, "operation": "resources", "options": {"action": "list"}}
+        )
+        self.assertEqual(job["operation"], "resources")
+        with self.assertRaisesRegex(ValueError, "workspaceId"):
+            self.pages.submit(
+                {
+                    "sessionId": self.sid,
+                    "operation": "resources",
+                    "options": {"action": "configure", "remove": ["r"]},
+                }
+            )
+        changed = self.pages.submit(
+            {
+                "sessionId": self.sid,
+                "operation": "resources",
+                "options": {
+                    "action": "configure",
+                    "workspaceId": "w",
+                    "expectedRevision": 1,
+                    "enabled": {"r": False},
+                },
+            }
+        )
+        self.assertEqual(changed["workspaceId"], "w")
+
     def test_import_requires_explicit_scope_and_replays_one_job(self):
         with self.assertRaisesRegex(ValueError, "workspaceId"):
             self.pages.submit(

@@ -27,19 +27,27 @@ export class ResourceLibrary {
     this.entries = stored?.schema === 1 ? stored.entries || [] : [];
     return this.entries;
   }
-  async apply() {
+  async apply(entries = this.entries, guard = {}) {
     return this.call('resourceLibrary', {
-      files: this.entries
+      ...guard,
+      files: entries
         .filter((e) => e.enabled !== false)
         .map((e) => ({ name: e.name, bytes: e.bytes.slice().buffer })),
     });
   }
-  async save(entries) {
+  async save(entries, guard = {}) {
     await this.storage.preference('resource-library', { schema: 1, entries });
+    let result;
+    try {
+      result = await this.apply(entries, guard);
+    } catch (error) {
+      await this.storage.preference('resource-library', { schema: 1, entries: this.entries });
+      throw error;
+    }
     this.entries = entries;
-    return this.apply();
+    return result;
   }
-  async add(files) {
+  async add(files, guard = {}) {
     const parsed = [];
     for (const f of files) parsed.push(await this.call('resourceArchive', f));
     const baseKinds = new Set(
@@ -55,6 +63,6 @@ export class ResourceLibrary {
         entries.splice(at < 0 ? entries.length : at, 0, row);
       } else entries[i] = row;
     }
-    return this.save(entries);
+    return this.save(entries, guard);
   }
 }

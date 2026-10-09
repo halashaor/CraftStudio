@@ -46,6 +46,8 @@ Set `CRAFTSTUDIO_MINECRAFT_HOME` to the `.minecraft` directory you want the loca
 
 ## Set up the base resource library
 
+The resource panel and connected AI now use the same reusable library. `CraftStudio.resources` (MCP `designer_call` operation `resources`) lists metadata without archive bytes, adds explicit JAR/ZIP assets, and changes enabled states, order or removal by resource IDs. Writes require a fresh workspace/revision. Invalid candidates preserve live resources and restore the previous saved list; normal project exports retain their embedded used assets.
+
 Open **Asset library → Resource library**. In the local edition, choose **Set up base materials from a local instance**, select the intended instance, and import the preselected vanilla and Create files. Lite users choose their own game/Mod JARs or resource-pack ZIPs once.
 
 The library caches resource assets in SQLite locally or IndexedDB in Lite and restores enabled files for new projects and later launches. Add other Mods and packs as needed; enable or disable each entry and move it up or down. Files load from top to bottom, with later files overriding earlier ones. Loading a new vanilla/Create base disables the previously cached base of that kind. Library backups include cached resources; portable projects retain the assets used by the project. No game or Mod assets are added to the public distribution.
