@@ -6,7 +6,7 @@ import { coords } from '../core/site.js';
 import { combineObjectIds, objectsAtCell } from '../selection/object-selection.js';
 import { collectionsUI } from '../components/collections-ui.js';
 import { objectHidden } from '../components/collections.js';
-import { frameBounds } from '../view/frame-bounds.js';
+import { frameBounds, pointBounds } from '../view/frame-bounds.js';
 import { SketchBrowser } from '../sketch/sketch-browser.js';
 import { savedViewsUI } from '../view/saved-views-ui.js';
 import { generationLinks } from '../modeling/generation-links.js';
@@ -47,7 +47,9 @@ export function cadShell({
   requestRender,
 }) {
   const sourceDetailsOpen = new Set();
-  let workspace = null;
+  let workspace = null,
+    sketchBrowser = null,
+    collectionBrowser = null;
   document.body.classList.add('cad-workspace');
   const main = document.querySelector('main'),
     oldAside = document.querySelector('main>aside');
@@ -494,6 +496,13 @@ export function cadShell({
     cast,
     hitCell,
     onGuideHandoff: () => workspace.selectCategory('model'),
+    onGuideEditingChange: (id) => {
+      sketchBrowser?.setEditing(id);
+      if (id) {
+        collectionBrowser?.reveal({ guideIds: [id] });
+        sketchBrowser?.reveal(id);
+      }
+    },
     pickMaterial: (callback, label) =>
       requestMaterial(callback, construction, $('construction-panel'), label || '建模材料'),
   });
@@ -696,7 +705,7 @@ export function cadShell({
     )
       assets.detail.hidden = false;
   });
-  const collectionBrowser = collectionsUI({
+  collectionBrowser = collectionsUI({
     $,
     call,
     refresh,
@@ -1165,8 +1174,9 @@ export function cadShell({
     }
   };
   titleInput.onblur = () => finishName();
-  const sketchBrowser = new SketchBrowser({
+  sketchBrowser = new SketchBrowser({
     $,
+    frameGuide,
     editSaved: (id) => {
       direct.cancel();
       designer.close();
@@ -1619,7 +1629,7 @@ export function cadShell({
               else designer.close();
             }
           };
-          buttons[0].ondblclick = () => zoomSelection();
+          buttons[0].ondblclick = () => frameBlockSelection();
         }
         if (buttons[1]) {
           if (['显示', '隐藏'].includes(buttons[1].textContent))
@@ -1799,25 +1809,39 @@ export function cadShell({
           ? named[0].name + ' · ' + (named[0].cells?.length || 0) + ' 格'
           : '已选择 ' + named.length + ' 个对象';
     } else syncVectors();
+    const revealed = ids.filter((id) => selectedObjects.has(id));
+    if (revealed.length) collectionBrowser.reveal({ objectIds: revealed });
     componentContext.update();
     objectNames.update(getSummary());
   }
   function materialChanged(state, name) {
     $('cad-material-chip').textContent = (name || assets.labelName(state)) + ' ▾';
   }
-  function zoomSelection() {
-    if (!selectionActive) return false;
-    const min = $('studio-min').value.split(' ').map(Number),
-      max = $('studio-max').value.split(' ').map(Number),
-      rect = renderer.domElement.getBoundingClientRect();
+  function frameSceneBounds(bounds) {
+    if (!bounds) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
     window.CraftStudio.setView(
       frameBounds(
         window.CraftStudio.viewState(),
-        { min, max },
+        bounds,
         Math.max(1, rect.width) / Math.max(1, rect.height),
       ),
     );
     return true;
+  }
+  function frameGuide(id) {
+    const guide = getSummary()?.design.guides?.find((guide) => guide.id === id);
+    return frameSceneBounds(pointBounds(guide?.points || []));
+  }
+  function zoomSelection() {
+    return frameSceneBounds(construction.framingBounds()) || frameBlockSelection();
+  }
+  function frameBlockSelection() {
+    if (!selectionActive) return false;
+    return frameSceneBounds({
+      min: $('studio-min').value.split(' ').map(Number),
+      max: $('studio-max').value.split(' ').map(Number),
+    });
   }
   function enterWorkspace() {
     for (const d of [file, site, output]) if (d.dialog.open) d.dialog.close();

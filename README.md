@@ -97,13 +97,15 @@ Sponge and Litematica conversions do not preserve every entity, biome, scheduled
 
 ## Workspace and navigation
 
+The sketch browser provides **Frame** without entering edit mode. While a construction preview is active, **F** frames the current contour and preview before any older block selection; otherwise it frames the selected blocks or scene. The tool’s Frame button uses the same preview bounds, including full circles and extrusion depth. Projection, orientation and zoom settings are retained; Home returns to the previous view. Double-clicking an object row still frames that object. Viewport object picks reveal their row, and entering sketch editing reveals and marks its source row; conflicting list filters are cleared only when needed. Closing or pausing the editor clears the editing marker, and continuing restores it. These navigation actions do not edit project geometry.
+
 Right-click without dragging opens the viewport context menu for focus, isolation and common transforms. Unavailable actions show their prerequisite. Use Up/Down, Home/End and Enter to navigate and activate enabled items. Escape closes the menu before canceling a background preview, then returns focus to the viewport; clicking an outside input leaves focus there. This menu operates on the existing selection and does not select the object under the right-click automatically.
 
 | Action | Viewport control |
 |---|---|
 | Select / box-select | Left click / drag |
 | Orbit / pan | Right drag / middle drag |
-| Frame selection or scene | F |
+| Frame active construction preview, selection or scene | F |
 | Find a tool | F3 |
 | Previous / next camera view | Home / End |
 | Rename one selected object | F2 |

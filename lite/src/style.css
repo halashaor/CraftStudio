@@ -2936,3 +2936,8 @@ input.dimension-scrubbing {
 #cad-collections {
   margin: 6px 0;
 }
+
+.tree-sketch.editing {
+  background: #32465f;
+  border-left: 2px solid #83b9ed;
+}

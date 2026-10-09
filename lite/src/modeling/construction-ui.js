@@ -61,6 +61,7 @@ export function constructionUI({
   cast,
   hitCell,
   onGuideHandoff = () => {},
+  onGuideEditingChange = () => {},
   materialName = (s) => s.Name,
   hasSelection = () => true,
   getSummary = () => null,
@@ -1527,7 +1528,7 @@ export function constructionUI({
       previewRedo = structuredClone(saved.previewRedo);
       polylineClosed = saved.polylineClosed;
       bezierSamples = saved.bezierSamples;
-      editingGuideId = saved.editingGuideId;
+      setEditingGuide(saved.editingGuideId);
       workingFrame = saved.workingFrame ? validateFrame(saved.workingFrame) : null;
       planeSource = structuredClone(saved.planeSource);
       scopeSelection = structuredClone(saved.scopeSelection);
@@ -1630,7 +1631,7 @@ export function constructionUI({
     terrainPicking = false;
     if (draft?.id) call('cancelConstruction', { id: draft.id }).catch(() => {});
     draft = null;
-    editingGuideId = null;
+    setEditingGuide(null);
     initialSketchKey = null;
     initialSourceKey = null;
     drawing = false;
@@ -1919,59 +1920,47 @@ export function constructionUI({
       preview();
     }
   }
-  $('construction-frame').title = '保留当前视角，完整显示轮廓与生成范围';
+  function framingBounds() {
+    if (!active) return null;
+    const bounds = new THREE.Box3();
+    for (const root of [guideNode, ghost, red]) {
+      if (root?.visible) bounds.union(new THREE.Box3().setFromObject(root));
+    }
+    const scope = scopeSelection || studio.getSelection();
+    const sourcePoints =
+      type === 'geometry'
+        ? points
+        : type === 'feature'
+          ? ($('feature-operation').value === 'sweep'
+              ? savedGuides.filter((guide) => guide.id === $('feature-path').value)
+              : profiles().filter((guide) =>
+                  [...$('feature-profiles').selectedOptions].some(
+                    (option) => option.value === guide.id,
+                  ),
+                )
+            ).flatMap((guide) => guide.points)
+          : scope
+            ? [scope.min, scope.max.map((value) => value + 1)]
+            : [];
+    for (const point of sourcePoints) bounds.expandByPoint(new THREE.Vector3(...point));
+    return bounds.isEmpty()
+      ? null
+      : { min: bounds.min.toArray(), max: bounds.max.toArray(), continuous: true };
+  }
+  $('construction-frame').title = '保留当前视角，完整显示当前轮廓与预览 · F';
   $('construction-frame').onclick = () => {
     try {
       if (pendingExpression()) throw Error('请先采用或取消当前计算式');
-      const scope = scopeSelection || studio.getSelection(),
-        list =
-          type === 'geometry'
-            ? points
-            : type === 'feature'
-              ? ($('feature-operation').value === 'sweep'
-                  ? savedGuides.filter((g) => g.id === $('feature-path').value)
-                  : profiles().filter((g) =>
-                      [...$('feature-profiles').selectedOptions].some((o) => o.value === g.id),
-                    )
-                ).flatMap((g) => g.points)
-              : scope
-                ? [scope.min, scope.max]
-                : [];
-      if (!list.length) {
+      const bounds = framingBounds();
+      if (!bounds) {
         notice('先绘制轮廓或选择范围');
         return;
       }
-      const min = [0, 1, 2].map((a) => Math.min(...list.map((p) => p[a]))),
-        max = [0, 1, 2].map((a) => Math.max(...list.map((p) => p[a])));
-      if (type === 'terrain') for (let a = 0; a < 3; a++) max[a]++;
-      if (type === 'feature' && $('feature-operation').value === 'extrude') {
-        const profile = profiles().find((g) => g.id === $('feature-profiles').value);
-        if (!profile) throw Error('请先选择有效截面');
-        const normal = profileFrame(
-            profile.points,
-            $('feature-plane').value,
-            profile.recipe.workplane,
-          ).normal,
-          d = +$('feature-depth').value,
-          symmetric = $('feature-symmetric').checked;
-        for (let a = 0; a < 3; a++) {
-          const start = symmetric ? (-d * normal[a]) / 2 : 0,
-            end = symmetric ? (d * normal[a]) / 2 : d * normal[a];
-          min[a] += Math.min(start, end);
-          max[a] += Math.max(start, end);
-        }
-      }
-      for (const bucket of [...(draft?.buckets || []), ...(draft?.removedBuckets || [])])
-        for (let i = 0; i < bucket.positions.length; i += 3)
-          for (let a = 0; a < 3; a++) {
-            min[a] = Math.min(min[a], bucket.positions[i + a]);
-            max[a] = Math.max(max[a], bucket.positions[i + a]);
-          }
       const rect = renderer.domElement.getBoundingClientRect();
       window.CraftStudio.setView(
         frameBounds(
           window.CraftStudio.viewState(),
-          { min, max, continuous: true },
+          bounds,
           Math.max(1, rect.width) / Math.max(1, rect.height),
         ),
       );
@@ -3119,6 +3108,11 @@ export function constructionUI({
     },
     true,
   );
+  function setEditingGuide(id) {
+    editingGuideId = id;
+    panel.dataset.editingGuide = id || '';
+    onGuideEditingChange(id);
+  }
   async function editSaved(id) {
     const source = savedGuides.find((g) => g.id === id);
     if (!source?.recipe?.kind) {
@@ -3130,7 +3124,7 @@ export function constructionUI({
     cancelAnimationFrame(liveFrame);
     liveFrame = 0;
     drawing = false;
-    editingGuideId = id;
+    setEditingGuide(id);
     describeRelated();
     const c = structuredClone(source.recipe);
     bezierSamples = c.sampleCount ?? null;
@@ -3233,6 +3227,7 @@ export function constructionUI({
       planeStatus();
       return visible;
     },
+    framingBounds,
     isActive: () => active,
     isBusy: () => committing,
     update: (s) => {

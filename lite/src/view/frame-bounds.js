@@ -64,3 +64,17 @@ export function frameBounds(view, { min, max, continuous = false }, aspect = 1, 
     ...(viewHeight !== undefined ? { viewHeight } : {}),
   };
 }
+
+export function pointBounds(points) {
+  const min = [Infinity, Infinity, Infinity],
+    max = [-Infinity, -Infinity, -Infinity];
+  let count = 0;
+  for (const point of points) {
+    for (let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis], point[axis]);
+      max[axis] = Math.max(max[axis], point[axis]);
+    }
+    count++;
+  }
+  return count ? { min, max, continuous: true } : null;
+}

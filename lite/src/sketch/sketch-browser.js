@@ -2,17 +2,19 @@ import { guideActions } from '../modeling/guide-actions.js';
 import { closedProfiles } from './sketch-profiles.js';
 
 export class SketchBrowser {
-  constructor({ $, editSaved, openFromGuide }) {
-    Object.assign(this, { $, editSaved, openFromGuide });
+  constructor({ $, editSaved, openFromGuide, frameGuide }) {
+    Object.assign(this, { $, editSaved, openFromGuide, frameGuide });
+    this.editingId = null;
     this.signature = '';
     const tree = document.createElement('details');
+    this.tree = tree;
     tree.open = true;
     tree.innerHTML = '<summary>草图与辅助轮廓</summary><div id="cad-sketch-list"></div>';
     $('dock-objects').append(tree);
   }
 
   update(s, links) {
-    const { $, editSaved, openFromGuide } = this;
+    const { $, editSaved, openFromGuide, frameGuide } = this;
     const sketchKey = JSON.stringify([s.workspaceId, s.design?.guides, links.guides]);
     if (sketchKey !== this.signature) {
       this.signature = sketchKey;
@@ -22,7 +24,7 @@ export class SketchBrowser {
           .filter((g) => g.recipe?.kind && g.recipe.points)
           .map((g) => {
             const row = document.createElement('div');
-            row.className = 'row';
+            row.className = 'row tree-sketch';
             row.dataset.guideId = g.id;
             const button = document.createElement('button');
             const linked = links.guides.find((r) => r.id === g.id)?.dependents || [];
@@ -33,6 +35,14 @@ export class SketchBrowser {
             button.dataset.guideId = g.id;
             button.onclick = () => editSaved(g.id);
             row.append(button);
+            const locate = document.createElement('button');
+            locate.textContent = '定位';
+            locate.dataset.guideId = g.id;
+            locate.dataset.guideAction = 'frame';
+            locate.title = '定位此草图，保留视角方向和投影；Home 返回上一视角';
+            locate.onclick = () => frameGuide(g.id);
+            row.append(locate);
+
             const actions = guideActions(s.design.guides, g.id, guideProfiles);
             for (const [operation, label] of [
               ['extrude', '拉伸'],
@@ -99,5 +109,23 @@ export class SketchBrowser {
           }),
       );
     }
+    this.setEditing(this.editingId);
+  }
+
+  setEditing(id) {
+    this.editingId = id;
+    for (const row of this.$('cad-sketch-list').children) {
+      row.classList.toggle('editing', row.dataset.guideId === id);
+      row
+        .querySelector('button:not([data-guide-action])')
+        .setAttribute('aria-current', String(row.dataset.guideId === id));
+    }
+  }
+
+  reveal(id) {
+    const row = [...this.$('cad-sketch-list').children].find((row) => row.dataset.guideId === id);
+    if (!row) return;
+    this.tree.open = true;
+    row.scrollIntoView({ block: 'nearest' });
   }
 }

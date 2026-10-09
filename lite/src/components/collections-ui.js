@@ -22,12 +22,13 @@ export function collectionsUI({
     '<small id="cad-browser-count" aria-live="polite"></small><button id="cad-browser-clear" hidden>显示全部</button>';
   $('cad-object-search').after(status);
   let browser = new SceneBrowser();
-  $('cad-browser-clear').onclick = () => {
+  function clear() {
     $('cad-object-search').value = '';
     $('cad-collection-filter').value = '';
     $('cad-object-attention').checked = false;
     update();
-  };
+  }
+  $('cad-browser-clear').onclick = clear;
 
   let currentSummary = null;
   const summary = () => currentSummary || getSummary();
@@ -219,5 +220,19 @@ export function collectionsUI({
     $('cad-collection-lock').textContent = c?.locked ? '解锁集合' : '锁定集合';
     filter();
   }
-  return { update, filter };
+  function reveal({ objectIds = [], guideIds = [] }) {
+    const result = browser.filter({
+      query: $('cad-object-search').value,
+      collection: $('cad-collection-filter').value,
+      attention: $('cad-object-attention').checked,
+    });
+    if (
+      objectIds.some((id) => !result.objectIds.has(id)) ||
+      guideIds.some((id) => !result.guideIds.has(id))
+    )
+      clear();
+    const target = [...objects.children].find((row) => row.dataset.objectId === objectIds.at(-1));
+    target?.scrollIntoView({ block: 'nearest' });
+  }
+  return { update, filter, reveal };
 }
