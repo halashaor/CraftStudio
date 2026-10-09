@@ -865,6 +865,26 @@ async function execute(action, data) {
       p.id = crypto.randomUUID();
       d.prefabs.push(p);
     }
+    if (data.command === 'prefabMeta') {
+      const prefab = d.prefabs.find((prefab) => prefab.id === data.id);
+      if (!prefab) throw Error('找不到构件');
+      if (
+        typeof data.name !== 'string' ||
+        !data.name.trim() ||
+        !Array.isArray(data.tags) ||
+        data.tags.some((tag) => typeof tag !== 'string')
+      )
+        throw Error('请输入构件名称和文字分类');
+      d.prefabs = d.prefabs.map((prefab) =>
+        prefab.id === data.id
+          ? {
+              ...prefab,
+              name: data.name.trim(),
+              tags: [...new Set(data.tags.map((tag) => tag.trim()).filter(Boolean))],
+            }
+          : prefab,
+      );
+    }
     if (data.command === 'component') {
       const pkg = JSON.parse(strFromU8(gunzipSync(new Uint8Array(data.bytes)))),
         other = Site.unpack(pkg.site),

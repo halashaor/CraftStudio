@@ -1,3 +1,4 @@
+import { PrefabBrowser } from '../components/prefab-browser.js';
 import viewMarkup0 from './views/studio-ui-panel.html';
 import { reviewLook } from '../view/review-look.js';
 import { dialogOwnsKeyboard, nativeControlTarget } from './keyboard-context.js';
@@ -119,6 +120,26 @@ export function studioUI({
     controls.update();
     requestRender();
   }
+  const prefabBrowser = new PrefabBrowser({
+    root: $('studio-prefabs'),
+    place: (prefab) =>
+      window.dispatchEvent(
+        new CustomEvent('craftstudio-prefab-drop', { detail: { prefab, at: at() } }),
+      ),
+    exportFile: (prefab) =>
+      download(
+        JSON.stringify(prefab),
+        (prefab.name || '构件') + '.craftprefab',
+        'application/json',
+      ),
+    importFile: () => $('studio-prefab-file').click(),
+    create: () => window.dispatchEvent(new Event('craftstudio-prefab-create')),
+    save: (metadata) =>
+      task(async () => {
+        await command({ command: 'prefabMeta', ...metadata });
+        notice('构件名称与分类已保存到当前工程');
+      }, '保存构件信息…'),
+  });
   async function command(data) {
     if (['transform', 'prefab', 'register', 'deleteSelection'].includes(data.command)) {
       if (selectionMembers) data.members = selectionMembers;
@@ -127,7 +148,7 @@ export function studioUI({
     refresh(await call('studio', { ...data, policy: policy() }));
     markDirty();
     showRange();
-    await render();
+    if (!['prefabImport', 'prefabMeta', 'prefab'].includes(data.command)) await render();
   }
   $('studio-drag').onchange = () => {
     if ($('studio-drag').checked) document.querySelector('[data-tool="inspect"]').click();
@@ -176,12 +197,15 @@ export function studioUI({
       });
       notice('已保存到本地构件库，其他工程可从工程库插入');
     });
-  $('studio-prefab-file').onchange = () =>
-    task(async () => {
-      const f = $('studio-prefab-file').files[0];
-      $('studio-prefab-file').value = '';
-      if (f) await command({ command: 'prefabImport', prefab: JSON.parse(await f.text()) });
-    });
+  $('studio-prefab-file').onchange = () => {
+    const file = $('studio-prefab-file').files[0];
+    $('studio-prefab-file').value = '';
+    if (file)
+      task(
+        async () => command({ command: 'prefabImport', prefab: JSON.parse(await file.text()) }),
+        '读取构件文件…',
+      );
+  };
   $('studio-build').onclick = () =>
     task(() => {
       const [width, depth, height] = numbers('studio-size');
@@ -535,6 +559,7 @@ export function studioUI({
     if (walk && reviewBar.dataset.workspace !== summary.workspaceId) leaveReview(false);
     reviewBar.dataset.workspace = summary.workspaceId;
     motion = instances;
+    prefabBrowser.update(summary.design?.prefabs || [], summary.workspaceId);
     const signature = JSON.stringify([
       summary.workspaceId,
       summary.design?.objects,
@@ -613,27 +638,6 @@ export function studioUI({
         }),
       );
     }
-    $('studio-prefabs').replaceChildren(
-      ...d.prefabs.map((p) => {
-        const e = document.createElement('button');
-        e.className = 'full';
-        e.textContent = '插入 ' + p.name + ' · ' + p.blocks.length + ' 格';
-        e.draggable = true;
-        e.ondragstart = (v) => v.dataTransfer.setData('application/craftstudio-prefab', p.id);
-        e.onclick = () =>
-          window.dispatchEvent(
-            new CustomEvent('craftstudio-prefab-drop', { detail: { prefab: p, at: at() } }),
-          );
-        const row = document.createElement('div');
-        row.append(e);
-        const out = document.createElement('button');
-        out.textContent = '导出构件';
-        out.onclick = () =>
-          download(JSON.stringify(p), p.name + '.craftprefab', 'application/json');
-        row.append(out);
-        return row;
-      }),
-    );
     $('studio-cameras').replaceChildren(
       ...d.cameras.map((v) => {
         const e = document.createElement('button');

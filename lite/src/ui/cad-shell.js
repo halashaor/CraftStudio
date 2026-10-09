@@ -100,7 +100,7 @@ export function cadShell({
     tools = edit.querySelector('.tool-row');
   const ribbon = document.createElement('div');
   ribbon.id = 'cad-ribbon';
-  ribbon.innerHTML = `<div class="ribbon-group" id="cad-tools"></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-move-direct" title="移动 M">移动</button><button id="cad-copy-direct" title="复制 C">复制</button><button id="cad-rotate-direct" title="旋转 R">旋转</button><button id="cad-modify-open">更多 ▾</button><button id="cad-create-open">创建 ▾</button><button id="cad-components-open">构件 ▾</button></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-assets-open">素材库</button><button id="cad-ai-open">AI 设计</button></div><span id="cad-active-tool">选择</span>`;
+  ribbon.innerHTML = `<div class="ribbon-group" id="cad-tools"></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-move-direct" title="移动 M">移动</button><button id="cad-copy-direct" title="复制 C">复制</button><button id="cad-rotate-direct" title="旋转 R">旋转</button><button id="cad-modify-open">更多 ▾</button><button id="cad-create-open">创建 ▾</button><button id="cad-components-open">构件库</button></div><div class="ribbon-divider"></div><div class="ribbon-group"><button id="cad-assets-open">素材库</button><button id="cad-ai-open">AI 设计</button></div><span id="cad-active-tool">选择</span>`;
   document.querySelector('header').after(ribbon);
   $('cad-tools').append(...tools.children);
   const labels = { inspect: '选择', place: '放置', erase: '擦除', paint: '画笔', sample: '取材' };
@@ -347,11 +347,15 @@ export function cadShell({
   for (const [id, d] of [
     ['cad-modify-open', modify],
     ['cad-create-open', build],
-    ['cad-components-open', component],
     ['cad-selection-modify', modify],
     ['cad-group-selection', component],
   ])
     $(id).onclick = () => open(d);
+  $('cad-components-open').onclick = () => dock('components');
+  window.addEventListener('craftstudio-prefab-create', () => {
+    if (!selectionActive) return notice('先在场景选择建筑或方块，再创建构件');
+    open(component);
+  });
   $('cad-empty-file').onclick = () => open(file);
   $('cad-empty-assets').onclick = () => {
     dock('assets');
@@ -366,7 +370,11 @@ export function cadShell({
     dock('assets');
   };
   $('cad-ai-open').onclick = () => $('ai-dialog').showModal();
-  $('cad-component-library').onclick = () => $('open-library').click();
+  $('cad-component-library').onclick = () => {
+    $('library-filter').value = 'component';
+    $('library-query').value = '';
+    $('open-library').click();
+  };
   $('asset-edit-advanced').onclick = () => open(advanced);
   const vectors = [];
   for (const [id, names] of [
@@ -1288,6 +1296,25 @@ export function cadShell({
     'repeat last transform 再复制一次 再移动一次 重复位移 重复旋转',
     repeatReason,
     'Shift+R',
+  );
+  add(
+    'prefab-library',
+    '浏览工程构件库',
+    '素材',
+    () => dock('components'),
+    'prefab components library 构件库 窗 门 柱 收藏建筑',
+    () => '',
+  );
+  add(
+    'prefab-import',
+    '导入构件文件',
+    '素材',
+    () => {
+      dock('components');
+      $('studio-prefab-file').click();
+    },
+    'import prefab craftprefab 构件文件',
+    busyReason,
   );
   add(
     'paste',

@@ -185,6 +185,8 @@ Terrain numeric preview history now includes target elevation, smoothing radius,
 
 ## Selection, transforms and components
 
+**Component library** opens the fixed shelf for browsing, rather than the creation panel. Search current-project prefabs by name, user categories or dimensions; filter categories and sort by newest/name. Selecting a row only displays details. Use **3D preview and place** to start placement, or drag into the scene. Import and Create from selection are separate actions. Names/categories can be edited in the details and are stored in the project and exported prefab JSON; metadata edits are independently undoable. **Open local component library** now filters the local saved library to components.
+
 Reusable prefab JSON accepts explicit block states and palette-indexed states. Import and placement share one normalizer; invalid references/coordinates fail before scene writes, while valid unknown Mod IDs and typed data remain supported. Corrected files can be selected again under the same name. Imported definitions and placed blocks survive project save/reopen.
 
 After confirming a move, copy or quarter-turn rotation, press **Shift+R** to preview the same transform on the current selection. It is also available as **Repeat last transform · Preview** in command search, the context menu and More transforms. Confirm to apply, or cancel without changing the scene; each confirmation has its own undo step. Repetition uses the current geometry and retains the prior world-axis bounding offset/quarter-turn, rather than replaying a captured old prefab. Switching projects clears the remembered operation; it is not saved in the project. Paste, material changes and modeling operations are not included in this shortcut.

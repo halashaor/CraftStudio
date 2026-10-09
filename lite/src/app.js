@@ -1494,8 +1494,8 @@ for (const id of ['undo', 'redo'])
     }
     task(async () => {
       refresh(await call(id));
-      await render();
       markDirty();
+      await render();
     });
   };
 $('fill').onclick = () =>
@@ -2133,6 +2133,7 @@ async function listLibrary() {
     items = await library.list({
       query: $('library-query').value,
       favorite: f === 'favorite',
+      kind: f === 'component' ? 'component' : '',
       deleted: f === 'trash',
     });
   $('library-list').replaceChildren(

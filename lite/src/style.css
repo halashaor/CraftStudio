@@ -1414,10 +1414,6 @@ dialog::backdrop {
 .cad-workspace #studio-roof {
   font-family: Consolas, monospace;
 }
-.cad-workspace #studio-prefabs > div {
-  padding: 7px 0;
-  border-bottom: 1px solid #445469;
-}
 .cad-workspace #studio-prefabs button {
   font-size: 11px;
 }
@@ -2120,9 +2116,11 @@ dialog::backdrop {
   display: none;
 }
 .studio-workspace #workspace-shelf #studio-prefabs {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .studio-workspace #viewport {
   min-width: 0;
@@ -2940,4 +2938,73 @@ input.dimension-scrubbing {
 .tree-sketch.editing {
   background: #32465f;
   border-left: 2px solid #83b9ed;
+}
+
+.prefab-browser-columns {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#prefab-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#prefab-list button {
+  text-align: left;
+}
+#prefab-list button[aria-pressed='true'] {
+  background: #34516d;
+  border-color: #89b7e0;
+}
+#prefab-detail {
+  padding: 10px;
+  border-left: 1px solid #536273;
+  min-height: 0;
+  overflow: auto;
+}
+#prefab-search {
+  flex: 1;
+  min-width: 160px;
+}
+#dock-components:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+#dock-components > h3,
+#dock-components > p {
+  display: none;
+}
+#cad-components-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#studio-prefabs > .row {
+  flex-shrink: 0;
+}
+#prefab-count {
+  margin: 3px 0;
+}
+#cad-component-library {
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .prefab-browser-columns {
+    grid-template-columns: 1fr;
+  }
+  #prefab-detail {
+    border-left: 0;
+    border-top: 1px solid #536273;
+  }
 }

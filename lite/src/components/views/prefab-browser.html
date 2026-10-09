@@ -1,0 +1,35 @@
+<div class="row">
+  <button id="prefab-import">导入构件文件</button><button id="prefab-create">从当前选择创建</button>
+</div>
+<div class="row">
+  <input
+    id="prefab-search"
+    type="search"
+    placeholder="搜索名称、分类或尺寸"
+    aria-label="搜索工程构件"
+  /><select id="prefab-category" aria-label="构件分类">
+    <option value="">所有分类</option></select
+  ><select id="prefab-sort" aria-label="构件排序">
+    <option value="recent">最近加入</option>
+    <option value="name">名称</option>
+  </select>
+</div>
+<p id="prefab-count" class="small"></p>
+<div class="prefab-browser-columns">
+  <div id="prefab-list" role="list" aria-label="当前工程构件"></div>
+  <section id="prefab-detail" hidden>
+    <strong id="prefab-title"></strong>
+    <button id="prefab-place" class="primary full">三维预览并放置</button>
+    <p id="prefab-size" class="small"></p>
+    <p id="prefab-tags" class="small"></p>
+    <button id="prefab-export" class="full">导出此构件文件</button>
+    <details>
+      <summary>名称与分类</summary>
+      <label>构件名称<input id="prefab-name" /></label
+      ><label>我的分类<input id="prefab-edit-tags" placeholder="例如：窗，木结构，日式" /></label
+      ><button id="prefab-save-metadata">保存名称与分类</button>
+    </details>
+    <p class="small">选择只查看详情；放置会进入可调整的三维预览，确认前不改场景。也可拖入场景。</p>
+  </section>
+</div>
+<p id="prefab-empty" class="small"></p>
