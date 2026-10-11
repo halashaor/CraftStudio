@@ -46,6 +46,8 @@ Prepare/inspect return `value.changes: {add,replace,remove,terrain,total}`; the 
 
 These operations retain the current workspace, revision, confirmed blocks and undo history. While viewing a slot, `scene.*` reads, AI context and background drafts still describe the canonical current design; visual meshes and display summaries show the chosen slot. Mutating requests return `COMPARISON_ACTIVE`; return with `comparison.end` before editing or exporting. The page adapter refreshes comparison views without marking the project dirty. Unconfirmed tools must be finished or paused before starting comparison. Slots and comparison receipts are session-only and do not survive project switching or engine reload; they are not saved project versions.
 
+`comparison.load` opens a complete saved `.craftlite` package as a separate read-only display source. Supply `bytes` (a `Uint8Array` or `ArrayBuffer`), `expectedRevision`, optional `workspaceId`, and `source: {projectId, version, name, time, note}`. The version is a positive integer, time is a valid date string, and note may be empty. On success `comparison.active` is `"history"`; the history slot describes the source without exposing its package or resource objects. `comparison.show` also accepts `slot: "history"` after a successful load. Invalid packages leave the current design and existing comparison untouched. Saved geometry and bundled resources are displayed together; canonical reads, drafts and return-to-current behavior stay unchanged. Load receipts are transient; equal `Uint8Array`/`ArrayBuffer` byte contents share the same request fingerprint, while different contents under a reused request ID are rejected.
+
 | 方法 | 主要参数 | 结果 |
 |---|---|---|
 | workspace.describe | — | 能力、版本、坐标范围、原点、蓝图掩码计数 |

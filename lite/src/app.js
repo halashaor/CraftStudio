@@ -1,3 +1,6 @@
+import { ProjectLibraryUI } from './ui/project-library-ui.js';
+import { SavedProjectLoader } from './storage/saved-project-loader.js';
+import { SavedVersionReview } from './storage/saved-version-review.js';
 import { comparisonMessage } from './view/comparison-access.js';
 import { HoverFeedback } from './selection/hover-feedback.js';
 import { CreateSceneView } from './rendering/create-scene-view.js';
@@ -2066,108 +2069,64 @@ async function save(copy = false) {
 for (const id of ['quick-save', 'save-version']) $(id).onclick = () => task(() => save());
 $('save-copy').onclick = () => task(() => save(true));
 projectExportUI({ $, task, exporter, download, notice });
-async function listLibrary() {
-  const f = $('library-filter').value,
-    items = await library.list({
-      query: $('library-query').value,
-      favorite: f === 'favorite',
-      kind: f === 'component' ? 'component' : '',
-      deleted: f === 'trash',
-    });
-  $('library-list').replaceChildren(
-    ...items.map((item) => {
-      const card = document.createElement('article');
-      card.className = 'library-card';
-      const h = document.createElement('h3'),
-        p = document.createElement('p');
-      h.textContent = item.title;
-      p.textContent = `${item.tags.map((t) => '#' + t).join(' ')} · v${item.head} · ${item.blocks.toLocaleString()} 方块`;
-      card.append(h, p);
-      const row = document.createElement('div');
-      row.className = 'row';
-      const add = (text, fn) => {
-        const b = document.createElement('button');
-        b.textContent = text;
-        b.onclick = () => task(fn);
-        row.append(b);
-      };
-      if (item.deleted)
-        add('恢复', async () => {
-          await library.update(item.id, { deleted: false });
-          await listLibrary();
-        });
-      else {
-        add('打开', () => openSaved(item.id));
-        if (item.kind === 'component')
-          add('插入当前场景', async () => {
-            const data = await library.get(item.id);
-            refresh(
-              await call('studio', {
-                command: 'component',
-                bytes: data.entry.bytes,
-                at: selected || numbers('studio-at'),
-                policy: policy(),
-              }),
-            );
-            await render();
-            markDirty();
-            $('library-dialog').close();
-            step('edit');
-          });
-        add(item.favorite ? '★' : '☆', async () => {
-          await library.update(item.id, { favorite: !item.favorite });
-          await listLibrary();
-        });
-        add('移入回收站', async () => {
-          await library.update(item.id, { deleted: true });
-          await listLibrary();
-        });
-        const details = document.createElement('details'),
-          s = document.createElement('summary');
-        s.textContent = '历史版本';
-        details.append(s);
-        details.ontoggle = async () => {
-          if (!details.open || details.dataset.loaded) return;
-          for (const v of await library.versions(item.id)) {
-            const b = document.createElement('button');
-            b.className = 'version';
-            b.textContent = 'v' + v.number + ' · ' + (v.note || new Date(v.time).toLocaleString());
-            b.onclick = () => task(() => openSaved(item.id, v.number));
-            details.append(b);
-          }
-          details.dataset.loaded = '1';
-        };
-        card.append(details);
-      }
-      card.append(row);
-      return card;
-    }),
-  );
-  if (!items.length) {
-    const p = document.createElement('p');
-    p.className = 'muted';
-    p.textContent = '还没有匹配的工程。保存后，可以在这里再次打开。';
-    $('library-list').append(p);
-  }
-}
-async function openSaved(id, version) {
+const savedVersionReview = new SavedVersionReview({
+  library,
+  call,
+  getSummary: () => summary,
+  beforeReview: () => {
+    if (cad?.isTransformActive() || summary?.preview)
+      throw Error('请先确认或暂存当前编辑，再查看正式版本');
+  },
+  refresh,
+  render,
+  opened: (source) => {
+    $('library-dialog').close();
+    step('edit');
+    notice(`正在只读查看 ${source.name} · v${source.version}，当前设计保持原样`);
+  },
+});
+const projectLibrary = new ProjectLibraryUI({
+  $,
+  library,
+  task,
+  openProject: (id) => openSaved(id),
+  previewVersion: (id, version) => savedVersionReview.preview(id, version),
+  branchVersion: (id, version) => openSaved(id, version, { copy: true }),
+  insertComponent: async (item) => {
+    const data = await library.get(item.id);
+    refresh(
+      await call('studio', {
+        command: 'component',
+        bytes: data.entry.bytes,
+        at: selected || numbers('studio-at'),
+        policy: policy(),
+      }),
+    );
+    await render();
+    markDirty();
+    $('library-dialog').close();
+    step('edit');
+  },
+});
+const listLibrary = () => projectLibrary.refresh();
+const savedProjectLoader = new SavedProjectLoader({ library, call });
+async function openSaved(id, version, { copy = false } = {}) {
+  if (cad?.isTransformActive() || summary?.preview)
+    throw Error('请先确认或暂存当前编辑，再打开工程或从历史新建方案');
   await checkpoint();
-  const data = await library.get(id, version),
-    draft = version ? null : await library.resume('draft:' + id);
-  let s;
-  if (draft) s = await call('resume', draft);
-  else {
-    const bytes = data.entry.bytes.slice();
-    s = await call('import', { name: 'stored.craftlite', bytes: bytes.buffer }, [bytes.buffer]);
-  }
-  active = data.item;
+  const { data, draft, summary: s } = await savedProjectLoader.open(id, { version, copy });
+  active = copy ? null : data.item;
   await rememberEngine();
   clearTextures();
   refresh(s, true);
-  $('save-title').value = active.title;
-  $('save-tags').value = active.tags.join(', ');
-  $('save-kind').value = active.kind;
-  $('save-note').value = '';
+  $('save-title').value = copy
+    ? `${data.item.title} · v${data.entry.number} 方案`
+    : data.item.title;
+  $('save-tags').value = data.item.tags.join(', ');
+  $('save-kind').value = data.item.kind;
+  $('save-note').value = copy
+    ? `基于 ${data.item.title} 的正式版本 v${data.entry.number} 新建方案`
+    : '';
   if (draft) restoreSaveForm($, s.saveForm);
   await render();
   fit();
@@ -2175,7 +2134,10 @@ async function openSaved(id, version) {
   $('library-dialog').close();
   step('edit');
   markDirty();
-  notice(draft ? '已恢复这个工程的编辑草稿' : '已读取本地工程版本 v' + data.entry.number);
+  if (copy) {
+    await save(true);
+    notice(`已从 v${data.entry.number} 建立独立方案，原工程与草稿保留`);
+  } else notice(draft ? '已恢复这个工程的编辑草稿' : '已读取本地工程版本 v' + data.entry.number);
 }
 $('open-library').onclick = () =>
   task(async () => {
@@ -2451,6 +2413,7 @@ studio = studioUI({
   requestRender: () => (needsRender = true),
 });
 cad = cadShell({
+  branchVersion: (source) => openSaved(source.projectId, source.version, { copy: true }),
   THREE,
   $,
   call,

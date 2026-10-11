@@ -3281,6 +3281,7 @@ input.dimension-scrubbing {
 }
 .comparison-choices {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
@@ -3297,6 +3298,7 @@ input.dimension-scrubbing {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-wrap: wrap;
   padding: 8px 12px;
   border-bottom: 2px solid #9fc5e7;
   background: #2d435a;
@@ -3311,6 +3313,37 @@ input.dimension-scrubbing {
 }
 #comparison-bar .comparison-choices {
   margin: 0 0 0 auto;
+}
+.comparison-summary {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.comparison-summary strong,
+.comparison-summary small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-summary small {
+  margin-top: 3px;
+  color: #c2d4e6;
+}
+.library-version {
+  padding: 12px 0;
+  border-top: 1px solid #445265;
+}
+.library-version small {
+  margin-left: 12px;
+  color: #aebdd0;
+}
+.library-version p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.library-history {
+  margin-top: 12px;
 }
 @media (max-width: 1000px) {
   #comparison-bar {

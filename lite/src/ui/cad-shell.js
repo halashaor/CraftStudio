@@ -35,6 +35,7 @@ import { constructionUI } from '../modeling/construction-ui.js';
 import { directEdit } from '../selection/direct-edit.js';
 import { AssetUI } from '../materials/asset-ui.js';
 export function cadShell({
+  branchVersion,
   THREE,
   $,
   call,
@@ -953,6 +954,7 @@ export function cadShell({
   const hasOperation = () =>
     direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive();
   const comparison = new ComparisonUI({
+    branchVersion,
     $,
     call,
     task,

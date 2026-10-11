@@ -3,6 +3,7 @@ import { requestReceipt, rememberReceipt } from './request-receipts.js';
 
 const methods = new Set([
   'comparison.capture',
+  'comparison.load',
   'comparison.show',
   'comparison.end',
   'comparison.inspect',

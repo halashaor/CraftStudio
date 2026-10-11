@@ -10,7 +10,18 @@ export function requestReceipt(request, receipts) {
     hasId = id !== undefined && id !== null;
   if (hasId && typeof id !== 'string' && !Number.isSafeInteger(id))
     reject('INVALID_REQUEST_ID', '请求 ID 需要字符串或安全整数');
-  const fingerprint = JSON.stringify({ method: request.method, params: request.params || {} });
+  const fingerprint = JSON.stringify(
+    { method: request.method, params: request.params || {} },
+    (_, value) => {
+      if (request.method !== 'comparison.load') return value;
+      if (!(value instanceof ArrayBuffer) && !(value instanceof Uint8Array)) return value;
+      const bytes = new Uint8Array(value);
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 32768)
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+      return { $binary: btoa(binary) };
+    },
+  );
   const previous = hasId ? receipts.get(id) : null;
   if (previous && previous.fingerprint !== fingerprint)
     reject('REQUEST_ID_REUSED', '同一请求 ID 不能用于不同操作');
@@ -23,6 +34,7 @@ export function rememberReceipt(receipts, context, result) {
 }
 const transientMethods = new Set([
   'comparison.capture',
+  'comparison.load',
   'comparison.show',
   'comparison.end',
   'proposal.prepare',

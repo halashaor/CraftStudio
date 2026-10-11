@@ -14,6 +14,7 @@ export class ComparisonUI {
     notice,
     captureSelection,
     restoreSelection,
+    branchVersion,
   }) {
     Object.assign(this, {
       $,
@@ -26,6 +27,7 @@ export class ComparisonUI {
       notice,
       captureSelection,
       restoreSelection,
+      branchVersion,
     });
     this.busy = false;
     this.workspaceId = null;
@@ -38,6 +40,13 @@ export class ComparisonUI {
     this.bar.hidden = true;
     this.bar.innerHTML = barMarkup;
     $('viewport').prepend(this.bar);
+    this.bar.querySelector('[data-comparison-branch]').onclick = () => {
+      const source = this.getSummary()?.comparison?.slots.find(
+        (record) => record.slot === 'history',
+      )?.source;
+      if (!source || this.busy) return;
+      this.task(() => this.branchVersion(source), '建立独立方案…');
+    };
     for (const slot of ['a', 'b'])
       $('studio-' + slot).onclick = () => this.operate('capture', slot);
     for (const button of this.buttons())
@@ -90,7 +99,9 @@ export class ComparisonUI {
             ? `已记录当前设计为 ${slot.toUpperCase()}，可修改设计后再记录另一份`
             : operation === 'end'
               ? '已返回当前设计，撤销历史保持不变'
-              : `正在只读查看方案 ${slot.toUpperCase()}`,
+              : slot === 'history'
+                ? '正在只读查看已保存的正式版本'
+                : `正在只读查看方案 ${slot.toUpperCase()}`,
         );
       } finally {
         this.busy = false;
@@ -120,10 +131,25 @@ export class ComparisonUI {
       this.savedSelection = null;
     }
     this.active = info.active;
+    const history = info.slots.find((record) => record.slot === 'history')?.source;
     this.bar.hidden = !info.active;
-    this.bar.querySelector('[data-comparison-status]').textContent = info.active
-      ? `正在查看方案 ${info.active.toUpperCase()}`
-      : '';
+    const title = this.bar.querySelector('[data-comparison-status]');
+    title.textContent =
+      info.active === 'history'
+        ? `正式 v${history.version} · ${history.name}`
+        : info.active
+          ? `正在查看方案 ${info.active.toUpperCase()}`
+          : '';
+    title.title = title.textContent;
+    const detail = this.bar.querySelector('[data-comparison-detail]');
+    detail.textContent =
+      info.active === 'history'
+        ? `只读 · ${new Date(history.time).toLocaleString()}${history.note ? ' · ' + history.note : ''}`
+        : '只读对比 · 相机可自由移动';
+    detail.title = detail.textContent;
+    const branch = this.bar.querySelector('[data-comparison-branch]');
+    branch.hidden = info.active !== 'history';
+    branch.disabled = this.busy;
     for (const slot of ['a', 'b']) {
       const record = info.slots.find((record) => record.slot === slot);
       this.$('studio-' + slot).disabled = this.busy || !!info.active || summary.preview;
@@ -133,6 +159,10 @@ export class ComparisonUI {
     }
     for (const button of this.buttons()) {
       const slot = button.dataset.comparisonShow;
+      if (slot === 'history') {
+        button.hidden = !history;
+        button.textContent = history ? `历史 v${history.version}` : '历史版本';
+      }
       button.disabled =
         this.busy || (slot !== 'current' && !info.slots.some((record) => record.slot === slot));
       button.setAttribute('aria-pressed', String(slot === (info.active || 'current')));

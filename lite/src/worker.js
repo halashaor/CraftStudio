@@ -82,6 +82,7 @@ function defaultResources(files = libraryResources) {
 }
 const comparisons = new ComparisonSession();
 const displaySite = () => comparisons.current || preview || site;
+const displayResources = () => comparisons.resources || resources;
 let brushDescriptors = null;
 let site = new Site(emptyProject()),
   resources = new Resources(),
@@ -180,7 +181,7 @@ const summary = () => {
         ? isolationKeys(displaySite(), isolationContext).bounds
         : null,
     },
-    resources: resources.summary(),
+    resources: displayResources().summary(),
   };
 };
 async function fingerprint(bytes) {
@@ -398,8 +399,9 @@ async function execute(action, data) {
           workspaceId: api.workspaceId,
           revision: api.revision,
         });
-      else if (data.operation === 'show') {
-        comparisons.show(data.slot);
+      else if (data.operation === 'show' || data.operation === 'load') {
+        if (data.operation === 'load') comparisons.load(data.bytes, data.source, api.workspaceId);
+        else comparisons.show(data.slot);
         if (!comparisonIsolation) {
           comparisonIsolation = { isolatedKeys, isolatedIds, isolationContext, isolationStack };
           isolatedKeys = isolatedIds = isolationContext = null;
@@ -944,7 +946,8 @@ async function execute(action, data) {
   }
 
   if (action === 'mesh') {
-    const current = displaySite();
+    const current = displaySite(),
+      resources = displayResources();
     const result = buildMesh(current, resources, data);
     const keys = [...new Set(result.buckets.map((b) => b.texture).filter(Boolean))],
       textures = Object.fromEntries(keys.map((k) => [k, resources.texture(k)]));
@@ -967,7 +970,7 @@ async function execute(action, data) {
         isolationVersion++;
       }
     }
-    return mesher.render(displaySite(), resources, {
+    return mesher.render(displaySite(), displayResources(), {
       ...data,
       isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
       isolationVersion,
@@ -995,6 +998,7 @@ async function execute(action, data) {
   }
   if (action === 'createScene') {
     const current = displaySite(),
+      resources = displayResources(),
       result = createScene.render(current, resources, data);
     if (result.reset || decorativeSite !== current || decorativeVersion !== resources.version) {
       decorativeSite = current;

@@ -37,6 +37,7 @@ const previewChanges = new Set([
   'proposal.prepare',
   'proposal.cancel',
   'comparison.capture',
+  'comparison.load',
   'comparison.show',
   'comparison.end',
 ]);
@@ -71,7 +72,8 @@ export class PageRequests {
   }
   async request(request) {
     const method = request?.method;
-    if (method === 'comparison.capture' || method === 'comparison.show') this.beforeComparison();
+    if (['comparison.capture', 'comparison.show', 'comparison.load'].includes(method))
+      this.beforeComparison();
     if (method === 'proposal.prepare') this.cancelOperations();
     if (storedMethods.has(method)) return this.baselineRequest(request);
     const result = await this.call('api', request);
