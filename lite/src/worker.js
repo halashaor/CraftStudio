@@ -31,6 +31,10 @@ import { resourceArchive } from './materials/resource-library.js';
 import { designerPlan, designInspection, selectedObjects } from './modeling/designer.js';
 import { featurePlan } from './modeling/features.js';
 import { geometryPlan, terrainPlan, surfaceColumns } from './modeling/construction.js';
+import {
+  ConstructionConflicts,
+  constructionConflictKind,
+} from './modeling/construction-conflicts.js';
 import { catalogue } from './materials/asset-catalog.js';
 import { DesignAPI } from './api/design-api.js';
 import { decorations } from './rendering/decorations.js';
@@ -442,7 +446,7 @@ async function execute(action, data) {
       palette = [],
       ids = new Map(),
       counts = { place: 0, replace: 0, remove: 0, cut: 0, fill: 0 },
-      conflicts = [],
+      conflicts = new ConstructionConflicts(),
       protection = new ObjectProtection(site.design);
     if (data.type === 'geometry' && data.config.guidesOnly && !data.config.editGuideId)
       plan.operations = [];
@@ -456,12 +460,12 @@ async function execute(action, data) {
           JSON.stringify(before?.nbt || null) === JSON.stringify(op.nbt || null))
       )
         continue;
+      const locked = protection.at(op.pos);
       try {
-        const locked = protection.at(op.pos);
         if (locked) throw Error('对象或集合已锁定：' + locked.name);
         site.allowed(op.pos, data.policy || {});
       } catch (e) {
-        if (conflicts.length < 20) conflicts.push({ pos: op.pos, message: e.message });
+        conflicts.add(op.pos, e.message, constructionConflictKind(site, op.pos, locked));
       }
       if (op.state) {
         const text = JSON.stringify(op.state);
@@ -523,7 +527,8 @@ async function execute(action, data) {
       closure: plan.closure || null,
       overlap: plan.overlap ? { ...plan.overlap, allPositions: undefined } : null,
       blocked: plan.blocked || null,
-      conflicts,
+      conflicts: conflicts.conflicts,
+      conflictSummary: conflicts.summary(),
       buckets: mesh.buckets,
       removedBuckets: red.buckets,
       textures,

@@ -3221,3 +3221,49 @@ input.dimension-scrubbing {
 .visual-context[data-phase='expression'] {
   border-left-color: #edbc78;
 }
+
+.preview-issues {
+  border: 1px solid #b16e70;
+  border-left: 3px solid #ef9093;
+  background: #352d36;
+  border-radius: 6px;
+  padding: 10px;
+  margin: 10px 0;
+}
+.preview-issues-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffdcdd;
+}
+.preview-issue-symbol {
+  color: #ffa9aa;
+  font-size: 24px;
+  line-height: 1;
+}
+.preview-issue-group {
+  padding: 10px 0;
+  border-top: 1px solid #614851;
+}
+.preview-issues .small {
+  color: #d6c7d0;
+  white-space: normal;
+}
+.preview-issues .row {
+  flex-wrap: wrap;
+}
+.preview-issues button {
+  min-height: 32px;
+}
+.preview-rules {
+  margin: 10px 0;
+  padding: 8px 0;
+  border-top: 1px solid #485669;
+}
+.preview-rules summary {
+  cursor: pointer;
+  color: #c6d2e1;
+}
+.preview-rules label {
+  margin-top: 8px;
+}

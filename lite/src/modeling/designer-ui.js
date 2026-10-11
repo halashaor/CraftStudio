@@ -1,4 +1,5 @@
 import viewMarkup0 from './views/designer-ui-panel.html';
+import { PreviewIssuesUI } from './preview-issues-ui.js';
 import { loadTextureInfo } from '../rendering/graphics-resources.js';
 import { objectHidden } from '../components/collections.js';
 import { PreviewHistory } from '../runtime/preview-history.js';
@@ -43,6 +44,14 @@ export function designerUI({
   panel.className = 'designer-panel';
   panel.innerHTML = viewMarkup0;
   $('scene').append(panel);
+  const issues = new PreviewIssuesUI({
+    THREE,
+    scene,
+    requestRender,
+    report: $('designer-report'),
+    policyControls: { terrain: $('allow-terrain'), existing: $('allow-existing') },
+    policyChanged: schedule,
+  });
   const n = (id) => Number($(id).value),
     config = () => ({
       operation: $('designer-operation').value,
@@ -209,6 +218,7 @@ export function designerUI({
   function holdExpression(input, message) {
     expressionPending.add(input);
     if (!active || !input.getClientRects().length) return;
+    issues.clear();
     version++;
     draft = null;
     clearTimeout(timer);
@@ -358,6 +368,7 @@ export function designerUI({
   }
   async function preview() {
     if (!active || committing) return;
+    issues.clear();
     const pending = pendingExpression();
     if (pending) {
       holdExpression(pending, pending.validationMessage || '请先完成参数计算式');
@@ -452,6 +463,7 @@ export function designerUI({
       panel.dataset.previewWorkspace = result.workspaceId;
       panel.dataset.previewState = 'ready';
       draft = result;
+      issues.show(result.conflictSummary);
       if (result.materialChange) {
         const select = $('designer-paint-source'),
           previous = select.value,
@@ -515,7 +527,7 @@ export function designerUI({
             result.arraySpacing.step.join(' / ')
           : '') +
         (result.warnings.length ? '\n' + result.warnings.join('\n') : '') +
-        (result.conflicts.length ? '\n存在保护冲突，请调整参数或场地改动规则。' : '');
+        (result.conflictSummary.count ? `\n${result.conflictSummary.count} 格受保护，需调整` : '');
       $('designer-apply').disabled =
         result.conflicts.length > 0 || result.materialChange?.changed === 0;
       show();
@@ -531,6 +543,7 @@ export function designerUI({
   }
   function schedule() {
     if (!active || committing || restoringParameters) return;
+    issues.clear();
     const pending = pendingExpression();
     if (pending) {
       holdExpression(pending, pending.validationMessage || '请先完成参数计算式');
@@ -545,6 +558,7 @@ export function designerUI({
   }
   function close() {
     if (committing) return;
+    issues.clear();
     if (draft?.id) call('cancelConstruction', { id: draft.id }).catch(() => {});
     draft = null;
     active = false;
@@ -776,6 +790,8 @@ export function designerUI({
       notice('设计操作已确认，可一次撤销');
     } catch (e) {
       $('designer-report').textContent = e.message;
+      notice(e.message, true);
+      committing = false;
       schedule();
     } finally {
       committing = false;

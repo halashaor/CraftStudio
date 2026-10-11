@@ -1,4 +1,5 @@
 import { SketchContextUI } from '../ui/sketch-context-ui.js';
+import { PreviewIssuesUI } from './preview-issues-ui.js';
 import { pointPlacement, surfacePathKinds } from '../sketch/placement-mode.js';
 import { SketchNodeDrag, nearestScreenNode } from '../sketch/sketch-node-drag.js';
 import viewMarkup0 from './views/construction-ui-panel.html';
@@ -207,6 +208,14 @@ export function constructionUI({
       : '此草图没有关联的生成结果';
   }
   const surfaceMarkers = new THREE.Group();
+  const issues = new PreviewIssuesUI({
+    THREE,
+    scene,
+    requestRender,
+    report: $('construction-report'),
+    policyControls: { terrain: $('allow-terrain'), existing: $('allow-existing') },
+    policyChanged: schedule,
+  });
   scene.add(surfaceMarkers);
   const surfaceFocus = document.createElement('button');
   surfaceFocus.id = 'construction-surface-focus';
@@ -440,6 +449,13 @@ export function constructionUI({
     allowTerrain:
       type === 'terrain' || $('figure-terrain').value === 'grade' || policy().allowTerrain,
   });
+  function syncPolicyRules() {
+    issues.setPolicyOverrides(
+      type === 'terrain' || $('figure-terrain').value === 'grade'
+        ? { terrain: '当前整地方式包含挖填，已允许改动地形；保留区与对象锁定仍有效。' }
+        : {},
+    );
+  }
   function remove(n) {
     if (!n) return;
     scene.remove(n);
@@ -643,6 +659,7 @@ export function constructionUI({
   function holdExpression(input, message) {
     expressionPending.set(input, message);
     if (!active) return;
+    issues.clear();
     if (draft?.id) call('cancelConstruction', { id: draft.id }).catch(() => {});
     token++;
     draft = null;
@@ -969,6 +986,7 @@ export function constructionUI({
       cancelAnimationFrame(liveFrame);
       liveFrame = 0;
       draft = result;
+      issues.show(result.conflictSummary);
       showSurfaceIssues(result.surfaceFit);
       overlapData = result.overlap;
       overlapOverlay.draw(overlapData?.positions);
@@ -1009,7 +1027,9 @@ export function constructionUI({
             ' 格'
           : '') +
         (result.warnings.length ? '。' + result.warnings.join('；') : '') +
-        (result.conflicts.length ? '。存在保护冲突，请调整位置。' : '') +
+        (result.conflictSummary.count
+          ? ` · ${result.conflictSummary.count} 格受保护，需调整`
+          : '') +
         (result.blocked ? '。' + result.blocked.message : '') +
         (overlapData?.count ? ' · 红框：重叠位置' : '') +
         (drawing ? ' · ' + drawingHint() : '');
@@ -1033,6 +1053,7 @@ export function constructionUI({
       visibility();
     },
     onError: (e) => {
+      issues.clear();
       clearSurfaceIssues();
       draft = null;
       $('construction-apply').disabled = true;
@@ -1043,6 +1064,8 @@ export function constructionUI({
   });
   function schedule() {
     if (!active || committing) return;
+    syncPolicyRules();
+    issues.clear();
     surfaceMarkers.visible = false;
     surfaceFocus.hidden = true;
     if (pendingExpression()) {
@@ -1672,6 +1695,7 @@ export function constructionUI({
   };
   function close({ remember = true } = {}) {
     if (committing) return;
+    issues.clear();
     clearSurfaceIssues();
     for (const input of [...expressionPending.keys()]) expressionBindings.get(input)?.restore();
     expressionPending.clear();
@@ -2291,6 +2315,8 @@ export function constructionUI({
             : '点击终点；随后直接拖动圆点调整，X / Y / Z 可约束方向';
   }
   function beginDrawing() {
+    syncPolicyRules();
+    issues.clear();
     clearSurfaceIssues();
     bezierSamples = null;
     polylineClosed = false;
@@ -3211,6 +3237,8 @@ export function constructionUI({
       return resultIdentity;
     } catch (e) {
       $('construction-report').textContent = e.message;
+      notice(e.message, true);
+      committing = false;
       schedule();
       return null;
     } finally {
