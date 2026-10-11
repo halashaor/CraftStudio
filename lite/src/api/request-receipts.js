@@ -22,6 +22,9 @@ export function rememberReceipt(receipts, context, result) {
   if (receipts.size > 256) receipts.delete(receipts.keys().next().value);
 }
 const transientMethods = new Set([
+  'comparison.capture',
+  'comparison.show',
+  'comparison.end',
   'proposal.prepare',
   'proposal.cancel',
   'construction.prepare',

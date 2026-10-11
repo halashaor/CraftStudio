@@ -1,6 +1,11 @@
+import { comparisonMethodAllowed, comparisonMessage } from '../view/comparison-access.js';
 import { requestReceipt, rememberReceipt } from './request-receipts.js';
 
 const methods = new Set([
+  'comparison.capture',
+  'comparison.show',
+  'comparison.end',
+  'comparison.inspect',
   'proposal.prepare',
   'proposal.inspect',
   'proposal.commit',
@@ -36,15 +41,15 @@ const previewWrites = new Set([
   'workplanes.put',
   'workplanes.remove',
 ]);
-const readMethods = new Set(['proposal.inspect', 'design.inspect']);
+const readMethods = new Set(['proposal.inspect', 'design.inspect', 'comparison.inspect']);
 function reject(code, message) {
   throw Object.assign(Error(message), { code });
 }
 
 // Planning and ordinary edits share one request namespace and receipt cache.
 export class PlanningAPI {
-  constructor({ api, execute, summary, proposal, operations, preview }) {
-    Object.assign(this, { api, execute, summary, proposal, operations, preview });
+  constructor({ api, execute, summary, proposal, operations, preview, comparison = () => null }) {
+    Object.assign(this, { api, execute, summary, proposal, operations, preview, comparison });
   }
   get methods() {
     return [...methods];
@@ -55,14 +60,21 @@ export class PlanningAPI {
       if (receipt.replay) return receipt.replay;
       const method = request.method,
         params = request.params || {};
+      if (this.comparison() && !comparisonMethodAllowed(method))
+        reject('COMPARISON_ACTIVE', comparisonMessage);
       if (!methods.has(method)) {
         if (this.preview() && previewWrites.has(method))
           reject('PREVIEW_ACTIVE', '请先采用或取消预览');
         return this.api.execute(request, receipt);
       }
-      const value = method.startsWith('proposal.')
-        ? await this.proposalRequest(method, params)
-        : await this.constructionRequest(method, params);
+      const value = method.startsWith('comparison.')
+        ? await this.execute('comparison', {
+            ...params,
+            operation: method.slice('comparison.'.length),
+          })
+        : method.startsWith('proposal.')
+          ? await this.proposalRequest(method, params)
+          : await this.constructionRequest(method, params);
       const result = {
         schema: 'craftstudio-design/1',
         id: request.id ?? null,

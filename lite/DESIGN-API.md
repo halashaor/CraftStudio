@@ -40,6 +40,12 @@ Prepare/inspect return `value.changes: {add,replace,remove,terrain,total}`; the 
 
 ## 基础方法
 
+### Read-only design comparison / 只读方案比较
+
+`comparison.capture` and `comparison.show` take `slot: "a" | "b"`, `expectedRevision` and optional `workspaceId`. `comparison.end` returns to the editable design; `comparison.inspect` reads the slot descriptors. Both also require the current revision. Results contain the display summary and `comparison: {active, slots:[{slot,name,capturedRevision,capturedAt}]}`. `workspace.describe` includes the same comparison metadata.
+
+These operations retain the current workspace, revision, confirmed blocks and undo history. While viewing a slot, `scene.*` reads, AI context and background drafts still describe the canonical current design; visual meshes and display summaries show the chosen slot. Mutating requests return `COMPARISON_ACTIVE`; return with `comparison.end` before editing or exporting. The page adapter refreshes comparison views without marking the project dirty. Unconfirmed tools must be finished or paused before starting comparison. Slots and comparison receipts are session-only and do not survive project switching or engine reload; they are not saved project versions.
+
 | 方法 | 主要参数 | 结果 |
 |---|---|---|
 | workspace.describe | — | 能力、版本、坐标范围、原点、蓝图掩码计数 |

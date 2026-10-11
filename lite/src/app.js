@@ -1,3 +1,4 @@
+import { comparisonMessage } from './view/comparison-access.js';
 import { HoverFeedback } from './selection/hover-feedback.js';
 import { CreateSceneView } from './rendering/create-scene-view.js';
 import { ResourceController } from './materials/resource-controller.js';
@@ -99,6 +100,9 @@ window.addEventListener('craftstudio-navigation-end', () => {
   viewNavigation?.end();
 });
 const pageRequests = new PageRequests({
+  beforeComparison: () => {
+    if (cad?.isTransformActive()) throw Error('请先确认或暂存当前编辑，再比较方案');
+  },
   call,
   baselineRequest,
   cancelOperations: () => cad?.cancelOperations(),
@@ -517,6 +521,11 @@ async function baselineRequest(request) {
       library.desktop = info;
       if (library.store?.info) library.store.info = info;
     }
+    if (
+      request.method === 'scene.exportStoredProject' &&
+      (await call('summary')).comparison?.active
+    )
+      throw Error(comparisonMessage);
     if (request.method === 'scene.exportStoredProject' && (await call('summary')).preview)
       throw Error('请先采用或取消预览再导出');
     const ref = await call('baselineReference', { cachedKey: baselineSource?.manifest?.baseKey }),
@@ -1126,6 +1135,16 @@ $('save-kind').addEventListener('change', () => {
 });
 
 async function checkpoint() {
+  if (summary?.comparison?.active) {
+    refresh(
+      await call('comparison', {
+        operation: 'end',
+        workspaceId: summary.workspaceId,
+        expectedRevision: summary.revision,
+      }),
+    );
+    await render();
+  }
   if (!hasDocument || (!drafts.dirty && active) || summary?.preview) return;
   if (!storageOK) throw Error('当前设计尚未保存，请先下载完整工程，再切换场景');
   if (!active) {
@@ -1368,7 +1387,7 @@ function setNavigation() {
       : 'crosshair';
 }
 function chooseTool(value) {
-  if (cad?.beforeToolChange() === false) return;
+  if (cad?.beforeToolChange(value) === false) return;
   if (studio?.isWalking()) studio.exitWalk(false);
   if (stroke) releaseStroke();
   tool = value;
@@ -1668,6 +1687,10 @@ renderer.domElement.addEventListener(
       return;
     if (stroke) {
       e.preventDefault();
+      return;
+    }
+    if (summary.comparison?.active) {
+      notice(comparisonMessage);
       return;
     }
     if (summary.preview) {
@@ -1984,6 +2007,7 @@ const exporter = new ProjectExporter({
   selection: () => cad?.exportSelection(),
 });
 async function save(copy = false) {
+  if (summary?.comparison?.active) throw Error(comparisonMessage);
   if (summary?.preview) throw Error('请先采用或取消预览');
   if (!storageOK) throw Error('本地数据库不可用，可下载完整工程文件');
   const snapshot = structuredClone(summary),

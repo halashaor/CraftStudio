@@ -1,4 +1,5 @@
 const readMethods = new Set([
+  'comparison.inspect',
   'workspace.describe',
   'scene.readRegion',
   'scene.getBlocks',
@@ -17,6 +18,7 @@ const readMethods = new Set([
   'design.inspect',
 ]);
 const writes = new Set([
+  'comparison',
   'rename',
   'preview',
   'platform',

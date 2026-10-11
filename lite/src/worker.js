@@ -1,3 +1,5 @@
+import { ComparisonSession } from './view/comparison-session.js';
+import { comparisonActionAllowed, comparisonMessage } from './view/comparison-access.js';
 import { screenBoxSelection } from './selection/screen-box.js';
 import { PlanningAPI } from './api/planning-api.js';
 import { importRegionInput } from './minecraft/region-set.js';
@@ -78,6 +80,8 @@ function defaultResources(files = libraryResources) {
   for (const f of files) r.addZip(new Uint8Array(f.bytes), f.name);
   return r;
 }
+const comparisons = new ComparisonSession();
+const displaySite = () => comparisons.current || preview || site;
 let brushDescriptors = null;
 let site = new Site(emptyProject()),
   resources = new Resources(),
@@ -90,6 +94,7 @@ let isolatedKeys = null,
   isolationContext = null,
   isolationStack = [];
 let constructionDraft = null;
+let comparisonIsolation = null;
 let baseBytes = null,
   baseKey = crypto.randomUUID();
 let cachedAssets = null,
@@ -130,50 +135,54 @@ let decorativeSite = null,
   decorativeVersion = -1;
 const decorativeSent = new Set(),
   visualSignatures = new Map();
-const summary = () => ({
-  revision: api.revision,
-  workspaceId: api.workspaceId,
-  ...(preview || site).summary(),
-  design: {
-    ...(preview || site).design,
-    componentDefinitions: (preview || site).design.componentDefinitions?.map((d) => ({
-      ...d,
-      blocks: undefined,
-      blockCount: d.blocks.length,
-    })),
-    objects: (preview || site).design.objects.map((o) => ({
-      ...o,
-      componentRecords: undefined,
-      componentTrackedCells: o.componentRecords?.length,
-      ...(o.generation
-        ? {
-            generation: {
-              ...o.generation,
-              records: undefined,
-              trackedCells: o.generation.records?.length || 0,
-            },
-          }
-        : {}),
-    })),
-  },
-  preview: !!preview,
-  proposal: previewAnchor ? { ...previewAnchor } : null,
-  view: {
-    isolated: !!isolatedKeys,
-    contextVisible: !!isolatedKeys && !!isolationContext?.contextVisible,
-    isolatedCells: isolatedKeys?.size || 0,
-    depth: isolatedKeys ? isolationStack.length + 1 : 0,
-    objectNames: isolatedIds
-      ? (preview || site).design.objects
-          .filter((o) => isolatedIds.includes(o.id))
-          .map((o) => o.name)
-      : [],
-    editBounds: isolationContext?.includeNew
-      ? isolationKeys(preview || site, isolationContext).bounds
-      : null,
-  },
-  resources: resources.summary(),
-});
+const summary = () => {
+  const comparison = comparisons.describe(api.workspaceId);
+  return {
+    revision: api.revision,
+    workspaceId: api.workspaceId,
+    ...displaySite().summary(),
+    design: {
+      ...displaySite().design,
+      componentDefinitions: displaySite().design.componentDefinitions?.map((d) => ({
+        ...d,
+        blocks: undefined,
+        blockCount: d.blocks.length,
+      })),
+      objects: displaySite().design.objects.map((o) => ({
+        ...o,
+        componentRecords: undefined,
+        componentTrackedCells: o.componentRecords?.length,
+        ...(o.generation
+          ? {
+              generation: {
+                ...o.generation,
+                records: undefined,
+                trackedCells: o.generation.records?.length || 0,
+              },
+            }
+          : {}),
+      })),
+    },
+    preview: !!preview,
+    comparison,
+    proposal: previewAnchor ? { ...previewAnchor } : null,
+    view: {
+      isolated: !!isolatedKeys,
+      contextVisible: !!isolatedKeys && !!isolationContext?.contextVisible,
+      isolatedCells: isolatedKeys?.size || 0,
+      depth: isolatedKeys ? isolationStack.length + 1 : 0,
+      objectNames: isolatedIds
+        ? displaySite()
+            .design.objects.filter((o) => isolatedIds.includes(o.id))
+            .map((o) => o.name)
+        : [],
+      editBounds: isolationContext?.includeNew
+        ? isolationKeys(displaySite(), isolationContext).bounds
+        : null,
+    },
+    resources: resources.summary(),
+  };
+};
 async function fingerprint(bytes) {
   if (!self.crypto?.subtle) throw Error('浏览器不支持文件 SHA-256 校验，请使用新版 Edge/Chrome');
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
@@ -187,6 +196,8 @@ async function ensureBaseline() {
   }
 }
 function hydrate(project) {
+  comparisons.sync(null);
+  comparisonIsolation = null;
   self.postMessage({ progress: '正在校验方块与建立区块索引' });
   isolatedKeys = null;
   isolatedIds = null;
@@ -209,6 +220,8 @@ function hydrate(project) {
   return summary();
 }
 function unpackPackage(pkg) {
+  comparisons.sync(null);
+  comparisonIsolation = null;
   self.postMessage({ progress: '正在恢复设计与区块索引' });
   isolatedKeys = null;
   isolatedIds = null;
@@ -241,8 +254,11 @@ const planningAPI = new PlanningAPI({
   proposal: () => previewAnchor,
   operations: () => previewOperations,
   preview: () => !!preview,
+  comparison: () => comparisons.active,
 });
 async function run(action, data) {
+  comparisons.sync(api.workspaceId);
+  if (comparisons.active && !comparisonActionAllowed(action)) throw Error(comparisonMessage);
   if (action === 'toolContext') {
     if (!baseKey?.startsWith('baseline:')) await ensureBaseline();
     const value = {
@@ -270,6 +286,8 @@ async function run(action, data) {
       data,
     );
   if (action === 'engineRestore' && self.enginePersistence) {
+    comparisons.sync(null);
+    comparisonIsolation = null;
     const restored = self.enginePersistence.restore(data);
     site = restored.site;
     libraryResources = restored.files;
@@ -298,6 +316,7 @@ async function run(action, data) {
     const reply = await planningAPI.request(data);
     if (reply.ok && data.method === 'workspace.describe') {
       reply.value.previewActive = !!preview;
+      reply.value.comparison = comparisons.describe(api.workspaceId);
       reply.value.view = {
         isolated: !!isolatedKeys,
         isolatedCells: isolatedKeys?.size || 0,
@@ -353,6 +372,7 @@ async function run(action, data) {
     previewAnchor.workspaceId = api.workspaceId;
   }
   if (result?.sourceBlocks !== undefined) {
+    result.comparison = comparisons.describe(api.workspaceId);
     result.proposal = previewAnchor ? { ...previewAnchor } : null;
     result.revision = api.revision;
     result.workspaceId = api.workspaceId;
@@ -360,6 +380,36 @@ async function run(action, data) {
   return result;
 }
 async function execute(action, data) {
+  if (comparisons.active && !comparisonActionAllowed(action)) throw Error(comparisonMessage);
+  if (action === 'comparison') {
+    api.guard(data);
+    if (data.operation === 'end') {
+      comparisons.end();
+      if (comparisonIsolation) {
+        ({ isolatedKeys, isolatedIds, isolationContext, isolationStack } = comparisonIsolation);
+        comparisonIsolation = null;
+        isolationVersion++;
+      }
+    } else if (data.operation !== 'inspect') {
+      if (preview || constructionDraft || site.stroke || api.transactions.size)
+        throw Error('请先完成或暂存当前编辑，再比较方案');
+      if (data.operation === 'capture')
+        comparisons.capture(data.slot, site, {
+          workspaceId: api.workspaceId,
+          revision: api.revision,
+        });
+      else if (data.operation === 'show') {
+        comparisons.show(data.slot);
+        if (!comparisonIsolation) {
+          comparisonIsolation = { isolatedKeys, isolatedIds, isolationContext, isolationStack };
+          isolatedKeys = isolatedIds = isolationContext = null;
+          isolationStack = [];
+          isolationVersion++;
+        }
+      } else throw Error('未知方案比较操作');
+    }
+    return summary();
+  }
   if (action === 'import') {
     self.postMessage({ progress: '正在解析文件结构' });
     const bytes = new Uint8Array(data.bytes);
@@ -417,7 +467,7 @@ async function execute(action, data) {
   }
   if (action === 'screenBoxSelection') {
     api.guard(data);
-    return screenBoxSelection(preview || site, {
+    return screenBoxSelection(displaySite(), {
       ...data,
       isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
     });
@@ -894,19 +944,19 @@ async function execute(action, data) {
   }
 
   if (action === 'mesh') {
-    const current = preview || site;
+    const current = displaySite();
     const result = buildMesh(current, resources, data);
     const keys = [...new Set(result.buckets.map((b) => b.texture).filter(Boolean))],
       textures = Object.fromEntries(keys.map((k) => [k, resources.texture(k)]));
     return { ...result, textures };
   }
   if (action === 'meshChunks') {
-    if (isolationContext) isolatedKeys = isolationKeys(preview || site, isolationContext).keys;
+    if (isolationContext) isolatedKeys = isolationKeys(displaySite(), isolationContext).keys;
     if (isolatedIds) {
-      const list = (preview || site).design.objects.filter((o) => isolatedIds.includes(o.id));
+      const list = displaySite().design.objects.filter((o) => isolatedIds.includes(o.id));
       if (list.length)
         isolatedKeys = isolationKeys(
-          preview || site,
+          displaySite(),
           isolationContext || { objectIds: isolatedIds },
         ).keys;
       else {
@@ -917,19 +967,19 @@ async function execute(action, data) {
         isolationVersion++;
       }
     }
-    return mesher.render(preview || site, resources, {
+    return mesher.render(displaySite(), resources, {
       ...data,
       isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
       isolationVersion,
-      hidden: (preview || site).design.objects
-        .filter((o) => objectHidden((preview || site).design, o))
+      hidden: displaySite()
+        .design.objects.filter((o) => objectHidden(displaySite().design, o))
         .map((o) => ({ min: o.min, max: o.max, cells: o.cells })),
-      animated: Object.entries(data.excludeWholeKinetics ? (preview || site).design.animations : {})
+      animated: Object.entries(data.excludeWholeKinetics ? displaySite().design.animations : {})
         .filter(
           ([id, a]) =>
             a.min &&
             a.max &&
-            selection(preview || site, a.min, a.max).blocks.some((b) =>
+            selection(displaySite(), a.min, a.max).blocks.some((b) =>
               /^create:(windmill_bearing|mechanical_bearing|white_sail|black_sail)$/.test(
                 b.state.Name,
               ),
@@ -939,12 +989,12 @@ async function execute(action, data) {
         .map(([id, a]) => ({
           min: a.min,
           max: a.max,
-          cells: (preview || site).design.objects.find((o) => o.id === id)?.cells,
+          cells: displaySite().design.objects.find((o) => o.id === id)?.cells,
         })),
     });
   }
   if (action === 'createScene') {
-    const current = preview || site,
+    const current = displaySite(),
       result = createScene.render(current, resources, data);
     if (result.reset || decorativeSite !== current || decorativeVersion !== resources.version) {
       decorativeSite = current;
@@ -1037,11 +1087,11 @@ async function execute(action, data) {
       );
     return result;
   }
-  if (action === 'inspect') return (preview || site).inspect(data.pos);
+  if (action === 'inspect') return displaySite().inspect(data.pos);
   if (action === 'search') {
     const candidates = resources.catalogue(data.query || ''),
-      existing = (preview || site).palette
-        .filter((s) =>
+      existing = displaySite()
+        .palette.filter((s) =>
           (s.Name + ' ' + Object.values(s.Properties || {}).join(' '))
             .toLowerCase()
             .includes((data.query || '').toLowerCase()),
@@ -1201,7 +1251,7 @@ async function execute(action, data) {
     const info = await run('preview', { operations: plan.operations });
     return { ...info, platformDepth: plan.deepest };
   }
-  if (action === 'diff') return (preview || site).diff();
+  if (action === 'diff') return displaySite().diff();
   if (action === 'heightmap') return site.heightmap(null, Infinity);
   if (action === 'buildProject') {
     if (preview) throw Error('请先采用方案');
@@ -1316,10 +1366,11 @@ async function execute(action, data) {
   }
   if (action === 'load') return unpackPackage(data.package);
   if (action === 'context') {
-    const s = summary(),
+    const s = site.summary(),
       diff = site.diff();
     return {
       schema: 'craftstudio-request/1',
+      comparison: comparisons.describe(api.workspaceId),
       interface: api.execute({ method: 'workspace.describe' }).value,
       request: data.prompt,
       site: {

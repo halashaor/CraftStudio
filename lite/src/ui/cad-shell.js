@@ -1,3 +1,5 @@
+import { ComparisonUI } from './comparison-ui.js';
+import { comparisonMessage } from '../view/comparison-access.js';
 import { selectionSettingsUI } from './selection-settings-ui.js';
 import { screenObjectMatches } from '../selection/screen-box.js';
 import { ObjectTreeUI } from './object-tree-ui.js';
@@ -96,10 +98,16 @@ export function cadShell({
     notice,
   });
   const busyReason = () =>
-    operations.busyReason() || (getSummary()?.preview ? '请先采用或取消 AI 提案预览' : '');
+    operations.busyReason() ||
+    (getSummary()?.comparison?.active ? comparisonMessage : '') ||
+    (getSummary()?.preview ? '请先采用或取消 AI 提案预览' : '');
   const selectionReason = () =>
     busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : '');
   function prepareOperation(owner) {
+    if (getSummary()?.comparison?.active) {
+      notice(comparisonMessage);
+      return false;
+    }
     if (!operations.prepare(owner)) return false;
     chooseTool('inspect');
     return true;
@@ -944,7 +952,40 @@ export function cadShell({
 
   const hasOperation = () =>
     direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive();
+  const comparison = new ComparisonUI({
+    $,
+    call,
+    task,
+    refresh,
+    render,
+    getSummary,
+    notice,
+    beforeReview: () => {
+      const reason =
+        operations.busyReason() ||
+        (hasOperation() ? '请先确认或暂存当前编辑，再比较方案' : '') ||
+        (getSummary()?.preview ? '请先采用或取消提案预览' : '');
+      if (reason) {
+        notice(reason);
+        return false;
+      }
+      return true;
+    },
+    captureSelection: () =>
+      selectionActive
+        ? { range: structuredClone(studio.getSelection()), ids: wholeObjectIds() }
+        : null,
+    restoreSelection: (value) => {
+      if (!value) $('cad-selection-clear').click();
+      else if (value.ids.length) selectObjects(value.ids);
+      else studio.selectRange(value.range);
+    },
+  });
   function handleHistory(direction) {
+    if (getSummary()?.comparison?.active) {
+      comparison.operate('end');
+      return true;
+    }
     if (
       construction.expressionHistory(direction) ||
       construction.drawingHistory(direction) ||
@@ -996,12 +1037,16 @@ export function cadShell({
       button.dataset.baseLabel = button.textContent;
       button.dataset.baseTitle = button.title;
     }
+    const comparing = !!getSummary()?.comparison?.active;
+    button.disabled = comparing;
     const pending = hasOperation();
     const label = pending ? '保存已确认部分' : button.dataset.baseLabel;
     if (button.textContent !== label) button.textContent = label;
-    button.title = pending
-      ? '当前预览尚未确认；保存已有方案，预览仍可继续'
-      : button.dataset.baseTitle;
+    button.title = comparing
+      ? '返回当前设计后保存'
+      : pending
+        ? '当前预览尚未确认；保存已有方案，预览仍可继续'
+        : button.dataset.baseTitle;
   }
   const syncHistory = () => {
     syncSaveScope();
@@ -1204,7 +1249,13 @@ export function cadShell({
     },
     hasWorkplaneGrid: () => construction.hasWorkplaneGrid(),
     toggleWorkplaneGrid: () => construction.toggleWorkplaneGrid(),
-    beforeToolChange: () => operations.allow(),
+    beforeToolChange: (tool) => {
+      if (getSummary()?.comparison?.active && tool !== 'inspect') {
+        notice(comparisonMessage);
+        return false;
+      }
+      return operations.allow();
+    },
     brushConfig: brushOptions.config,
     hasSelection: () => selectionActive,
     openLegacy: (name) =>
@@ -1214,6 +1265,8 @@ export function cadShell({
     enterWorkspace,
     toolChanged,
     update: (s) => {
+      comparison.update(s);
+      syncSaveScope();
       if (selectionWorkspace && selectionWorkspace !== s.workspaceId) {
         $('cad-selection-clear').click();
         for (const id of ['studio-min', 'studio-max', 'studio-at']) $(id).value = '0 0 0';

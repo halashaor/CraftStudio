@@ -65,6 +65,7 @@ export function isolationUI({
   return {
     update: (s) => {
       const v = s.view || {};
+      button.disabled = !!s.comparison?.active;
       bar.hidden = !v.isolated;
       $('isolation-context-visible').checked = !!v.contextVisible;
       $('isolation-context-status').textContent = v.contextVisible
@@ -73,7 +74,7 @@ export function isolationUI({
       button.textContent = v.isolated ? '继续隔离' : '隔离编辑';
       $('isolation-label').textContent =
         '隔离中 · ' + (v.objectNames?.join('、') || '当前选择') + ' · ' + (v.depth || 1) + ' 层';
-      if (!v.isolated) stack.length = 0;
+      if (!v.isolated && !s.comparison?.active) stack.length = 0;
     },
     mask: (s) => s?.view?.editBounds || null,
   };

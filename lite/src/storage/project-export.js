@@ -1,3 +1,4 @@
+import { comparisonMessage } from '../view/comparison-access.js';
 import { datapackArchive } from './datapack-export.js';
 import { Site } from '../core/site.js';
 import { strToU8 } from 'fflate';
@@ -9,6 +10,7 @@ export class ProjectExporter {
   }
   capture(title) {
     const current = this.context();
+    if (current.summary?.comparison?.active) throw Error(comparisonMessage);
     if (!current.summary) throw Error('工作台还在准备，请稍后导出');
     return {
       title: title || current.title || current.summary.name,

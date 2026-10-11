@@ -33,7 +33,13 @@ const sceneChanges = new Set([
   'history.undo',
   'history.redo',
 ]);
-const previewChanges = new Set(['proposal.prepare', 'proposal.cancel']);
+const previewChanges = new Set([
+  'proposal.prepare',
+  'proposal.cancel',
+  'comparison.capture',
+  'comparison.show',
+  'comparison.end',
+]);
 const storedCapabilities = [
   ['baseline-chunks/1', ['scene.baselineManifest', 'scene.readBaselineChunks']],
   ['workspace-chunks/1', ['scene.chunkSnapshot', 'scene.readStoredChunks']],
@@ -50,6 +56,7 @@ export class PageRequests {
     refresh,
     markDirty,
     render,
+    beforeComparison = () => {},
   }) {
     Object.assign(this, {
       call,
@@ -59,10 +66,12 @@ export class PageRequests {
       refresh,
       markDirty,
       render,
+      beforeComparison,
     });
   }
   async request(request) {
     const method = request?.method;
+    if (method === 'comparison.capture' || method === 'comparison.show') this.beforeComparison();
     if (method === 'proposal.prepare') this.cancelOperations();
     if (storedMethods.has(method)) return this.baselineRequest(request);
     const result = await this.call('api', request);

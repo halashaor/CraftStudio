@@ -38,7 +38,7 @@ export function studioUI({
   const views = document.createElement('details');
   views.id = 'studio-views';
   views.className = 'card';
-  views.innerHTML = `<summary>现场体验与方案比较</summary><label>环境<select id="studio-light"><option value="day">白天</option><option value="sunset">黄昏</option><option value="night">夜晚</option></select></label><div class="row"><button id="studio-view-save">收藏当前视角</button><button id="studio-walk">进入漫游</button></div><p class="small">空间浏览：连续 WASD 按视线移动、Q/E 升降、Shift 加速；右键原地观察，Enter 保留视角退出，Esc 返回原视角。不模拟游戏碰撞。</p><div id="studio-cameras"></div><div class="row"><button id="studio-a">记为方案 A</button><button id="studio-b">记为方案 B</button></div><div class="row"><button id="studio-show-a">同视角看 A</button><button id="studio-show-b">同视角看 B</button></div><p class="small">比较保留当前相机。A/B 临时快照请分别保存正式版本。</p>`;
+  views.innerHTML = `<summary>现场体验与方案比较</summary><label>环境<select id="studio-light"><option value="day">白天</option><option value="sunset">黄昏</option><option value="night">夜晚</option></select></label><div class="row"><button id="studio-view-save">收藏当前视角</button><button id="studio-walk">进入漫游</button></div><p class="small">空间浏览：连续 WASD 按视线移动、Q/E 升降、Shift 加速；右键原地观察，Enter 保留视角退出，Esc 返回原视角。不模拟游戏碰撞。</p><div id="studio-cameras"></div><section id="studio-comparison"></section>`;
   $('step-check').append(views);
   const outline = new THREE.Box3Helper(new THREE.Box3(), 0xf5bd52);
   outline.visible = false;
@@ -50,9 +50,7 @@ export function studioUI({
     selectedStart = null,
     motion = [],
     walk = false,
-    drag = null,
-    a = null,
-    b = null;
+    drag = null;
   const regionOutlines = new THREE.Group();
   scene.add(regionOutlines);
   let selectionMembers = null,
@@ -537,29 +535,6 @@ export function studioUI({
     }
   });
 
-  for (const [id, key] of [
-    ['studio-a', 'a'],
-    ['studio-b', 'b'],
-  ])
-    $(id).onclick = () =>
-      task(async () => {
-        const p = await call('package');
-        if (key === 'a') a = p;
-        else b = p;
-        notice('已记录方案 ' + key.toUpperCase());
-      });
-  for (const [id, key] of [
-    ['studio-show-a', 'a'],
-    ['studio-show-b', 'b'],
-  ])
-    $(id).onclick = () =>
-      task(async () => {
-        const p = key === 'a' ? a : b;
-        if (!p) throw Error('请先记录这个方案');
-        refresh(await call('load', { package: p }));
-        await render();
-        markDirty();
-      });
   function picked(pos, shift) {
     selectionSnapshot = null;
     selectionRegions = null;
