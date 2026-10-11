@@ -1,5 +1,14 @@
 export class ObjectTreeUI {
-  constructor({ host, onSelect, onFrame, onChange, onEditGuide, onEditFeature, onDetach }) {
+  constructor({
+    host,
+    onSelect,
+    onFrame,
+    onChange,
+    onEditGuide,
+    onEditFeature,
+    onEditMesh,
+    onDetach,
+  }) {
     Object.assign(this, {
       host,
       onSelect,
@@ -7,6 +16,7 @@ export class ObjectTreeUI {
       onChange,
       onEditGuide,
       onEditFeature,
+      onEditMesh,
       onDetach,
     });
     this.rows = new Map();
@@ -95,7 +105,9 @@ export class ObjectTreeUI {
       ? '已独立化'
       : relation.sources.some((source) => source.missing)
         ? '来源参照已失效'
-        : (relation.outdated ? '待更新 · ' : '') + '源草图 · ' + relation.sources.length;
+        : (relation.outdated ? '待更新 · ' : '') +
+          (object.generation?.type === 'mesh' ? '源模型 · ' : '源草图 · ') +
+          relation.sources.length;
     details.append(title);
     for (const issue of relation.issues || []) {
       const message = document.createElement('p');
@@ -107,10 +119,22 @@ export class ObjectTreeUI {
     for (const source of relation.sources) {
       const button = document.createElement('button');
       button.textContent =
-        source.name + ' · ' + (source.editable ? '编辑源草图' : source.missing ? '已失效' : '参照');
-      button.dataset.sourceGuideId = source.id;
+        source.name +
+        ' · ' +
+        (source.editable
+          ? source.kind === 'mesh'
+            ? '调整模型与方块'
+            : '编辑源草图'
+          : source.missing
+            ? '已失效'
+            : '参照');
+      if (source.kind === 'mesh') button.dataset.sourceMeshId = source.id;
+      else button.dataset.sourceGuideId = source.id;
       button.disabled = !source.editable;
-      button.onclick = () => this.onEditGuide(source.id);
+      button.onclick = () =>
+        source.kind === 'mesh'
+          ? this.onEditMesh({ sourceId: source.id, objectId: object.id })
+          : this.onEditGuide(source.id);
       details.append(button);
     }
     if (object.generation?.type === 'feature') {
@@ -150,7 +174,7 @@ export class ObjectTreeUI {
     button = document.createElement('button');
     button.className = 'generation-detach';
     button.textContent = '独立化';
-    button.title = '保留方块并断开后续草图更新';
+    button.title = '保留方块并断开后续来源更新';
     button.onclick = () => this.onDetach(object.id);
     row.append(button);
   }

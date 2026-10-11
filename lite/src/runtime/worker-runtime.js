@@ -4,6 +4,8 @@ export function responseTransfers(action, value) {
   const transfers = [];
   if (value instanceof Uint8Array) {
     transfers.push(value.buffer);
+  } else if (action === 'meshSourceGeometry') {
+    transfers.push(value.positions.buffer);
   } else if (meshActions.has(action) || action === 'meshChunks' || action === 'createScene') {
     const buckets = meshActions.has(action)
       ? value.buckets

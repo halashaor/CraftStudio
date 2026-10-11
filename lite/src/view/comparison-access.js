@@ -9,6 +9,7 @@ const actions = new Set([
   'meshChunks',
   'createScene',
   'inspect',
+  'meshSourceGeometry',
   'designInspect',
   'search',
   'assetCatalogue',
@@ -33,6 +34,8 @@ const actions = new Set([
 ]);
 const methods = new Set([
   'workspace.describe',
+  'meshes.list',
+  'meshes.read',
   'scene.readRegion',
   'scene.getBlocks',
   'scene.chunkSnapshot',

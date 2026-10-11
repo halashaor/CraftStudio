@@ -774,6 +774,7 @@ export function designerUI({
   $('designer-apply').onclick = async () => {
     if (!draft || committing) return;
     committing = true;
+    panel.dataset.previewState = 'applying';
     $('designer-apply').disabled = true;
     try {
       refresh(

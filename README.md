@@ -8,7 +8,7 @@ CraftStudio focuses on architectural appearance and creative freedom. Sketches, 
 
 > The current application interface is primarily in Chinese. This README is the default English documentation; the complete Chinese version is linked above.
 
-[Quick start](#quick-start) · [Design workflow](#design-workflow) · [Workspace and navigation](#workspace-and-navigation) · [Materials and project palettes](#materials-and-project-palettes) · [Sketches and generated forms](#sketches-and-generated-forms) · [Selection, transforms and components](#selection-transforms-and-components) · [Saving and resuming work](#saving-and-resuming-work) · [AI and game integration](#ai-and-game-integration) · [Development](#development)
+[Quick start](#quick-start) · [Design workflow](#design-workflow) · [Workspace and navigation](#workspace-and-navigation) · [Materials and project palettes](#materials-and-project-palettes) · [Sketches and generated forms](#sketches-and-generated-forms) · [Imported-model workflow](#imported-model-workflow) · [Selection, transforms and components](#selection-transforms-and-components) · [Saving and resuming work](#saving-and-resuming-work) · [AI and game integration](#ai-and-game-integration) · [Development](#development)
 
 ## Quick start
 
@@ -61,7 +61,7 @@ The library caches resource assets in SQLite locally or IndexedDB in Lite and re
 5. **Refine and compare.** Edit blocks, transform selections, reuse components, and inspect the original site, final design, and change views.
 6. **Confirm and save.** Preview generation before committing it. Confirmed modeling operations can be undone as one operation. Save an editable project and export the required blueprint.
 
-The interface uses a fixed tool column, central 3D viewport, right-side scene collection and properties, and a bottom material/component shelf. Modeling panels stay outside the viewport. Dragging sketch handles provides immediate shape feedback while the worker calculates the precise block result.
+The interface uses a fixed tool column, central 3D viewport, right-side scene collection and properties, and a bottom material/component shelf. Modeling panels stay outside the viewport. Dragging sketch handles provides immediate shape feedback while the worker calculates the precise block result. Labelled diagrams show sketch shapes, extrusion/loft/sweep, and surface/solid conversion. Node hover and drag feedback indicate which point can be grabbed. Preview status distinguishes drawing, calculation, protected conflicts, and a result ready to confirm; linked sketch edits identify their building updates. The default scene tree leaves more room for active tools, while manually resized layouts remain respected.
 
 
 
@@ -71,6 +71,7 @@ The interface uses a fixed tool column, central 3D viewport, right-side scene co
 - **Editable sketch sources:** reopen saved sketches from the scene collection or by double-clicking their guide. Confirmed source edits can rebuild linked geometry/extrusion/loft/sweep outputs with one undo. Hand edits and deleted cells are preserved by default; missing legacy provenance and unrelated collisions are reported. Generated objects can be detached into independent voxel objects. Their source details also offer Repair/change modeling sources: select replacement sections or a sweep path by name, preview, then confirm. Object/output-guide identities and downstream references remain stable; supported manual edits and one-step undo are retained. Custom-section sweeps track both the section and path. The parameter panel follows the operation: extrusion distance for extrudes, section width/height for rectangular sweeps, section/path inputs for lofts and custom-section sweeps, and wall thickness when hollow is enabled. In this panel, Enter in a numeric field updates preview; Enter in the viewport confirms only a ready result, and Esc cancels. Enter on a focused button keeps its native action. Space toggles focused controls and remains viewport navigation elsewhere. Generation ownership records are required.
 - **Sketches and modeling:** lines, open/closed polylines, Bézier curves, rectangles, circles, ellipses, arcs, polygons, extrusion, lofting, path generation, and terrain-following geometry. Curve rasterization can use slabs and stairs when suitable block variants are available. Ground-following/graded roads skip water, conflicting buildings/plants and absent ground, including widened/diagonal connection candidates; grading preserves the entire skipped column instead of placing road blocks after declining earthworks. Support generation preflights whole known-ground-to-deck columns, skips blocked pillars as a whole, and reports grounded/blocked/missing/buried/selection-clipped candidates. This describes planned voxel geometry, not engineering load capacity. Free-height design remains available.
 - **Arbitrary planar profiles:** recognize inclined closed outlines; extrude forward, backward, or symmetrically; create hollow forms and cuts. Noncoplanar outlines are rejected rather than flattened. Inclined loft sections must be parallel.
+- **Imported models:** place, rotate and scale OBJ geometry on the existing site, preview surface or solid block conversion, and confirm a linked result. Model sources and per-result settings survive editable project saves; rebuilds preserve hand edits and manual deletions by default.
 - **Component definitions:** linked instances share a saved definition and fixed placement transforms. Publish edits from supported rotated/mirrored instances, preserve sibling overrides by default, expand the source range, or make one instance unique. Ordinary copies remain independent.
 - **Isolation workflow:** focus the selected object/region with a visible status bar, enter nested views, and restore the previous camera (including orthographic zoom) on exit. Basic human placement/brush edits stay within the nearby edit range and skip hidden object members; explicit AI edits retain their own policies.
 - **Editing and reuse:** block states, clipboard operations, selection transforms, mirrors, arrays, object groups, and reusable components.
@@ -92,6 +93,7 @@ Selection NBT/ZIP exports can optionally include scene entities inside the selec
 | Sponge `.schem` | Import and export; format conversion has metadata limits |
 | Litematica `.litematic` | Import; not a lossless Litematica round trip |
 | Anvil `.mca` | Import a world-coordinate selection across one or multiple region files |
+| Wavefront `.obj` | Add polygon geometry as a reusable model source; convert to blocks with chosen materials; MTL/textures are not converted |
 | Resource-pack ZIPs and mod/game JARs | Read supported model and texture assets from selected files |
 | Delivery `.zip` | Blueprint, placement and scoped reports; optional editable project; direct reopening |
 | `.craftlite` | Portable editable designer project |
@@ -188,6 +190,20 @@ The scene list offers a needs-attention filter for generated objects. Missing re
 Recorded generation diagnostics also follow producer/output-guide dependencies: downstream objects name problematic upstream objects, actual cycle members are marked separately, and ambiguous output ownership is reported. Detached outputs stop propagation. Source details show the reasons. These checks inspect recorded relationships and explicit outdated flags; they do not replace geometry validation.
 
 Generated objects also report broken, cyclic or outdated offset-outline ancestry. Repairing the named offset source clears the diagnostic after confirmation; cancelling retains the original, and undo restores it. An upstream offset awaiting rebuild is a warning rather than a missing-source error.
+
+## Imported-model workflow
+
+Open **Modeling → Model to blocks (模型转方块)**, or **File → Add external OBJ model**. This adds a reusable source to the current project while retaining its terrain and buildings.
+
+1. **Place the model.** Pick a position in the scene, then use the move, rotate and scale handles or numeric fields. The position anchor is the model's bottom center; sizes are in blocks. The reference mesh follows adjustments immediately while the block preview recalculates.
+2. **Choose the result.** Use Surface shell for a skin, or Solid fill for a closed model. Choose the main block from the material library. Optional slab/stair fitting uses available or explicitly selected variants and reports boundaries that need the main block instead.
+3. **Review in 3D.** Toggle the model reference and block preview separately. The report shows additions, replacements and removals; protected locations have markers and navigation controls. Move or resize the model, or deliberately adjust the applicable site rules, before confirming.
+4. **Confirm or keep a reference.** Confirm blocks creates one linked object and one undo step. Save model reference only keeps the source pose without placing blocks. Unconfirmed transformation/conversion previews do not alter site blocks.
+5. **Return to the source.** Open the generated object's model source to adjust and rebuild that result. Hand edits and manual deletions are preserved by default; replacing them requires the explicit rebuild option. Reuse the source for another result with its own position, rotation, size and materials. In Model sources, Replace geometry marks linked results as needing an update; moving or hiding the reference alone does not move them. Detach or remove linked results before removing their source.
+
+Editable project versions and `.craftlite` files retain the original OBJ, source pose and each result's generation records. Reopening supports further linked edits. Blueprint exports contain the confirmed Minecraft blocks; reference meshes are not game blocks. Historical version previews display their own model sources while retaining the current design.
+
+The current importer reads OBJ polygon geometry. It does not convert MTL files, textures or vertex colors to block palettes; select blocks from CraftStudio's library. Solid conversion requires a closed mesh, and voxel conversion remains an approximation to review at the intended block scale. This workflow does not establish that an exported structure has been built or simulated in Minecraft.
 
 ## Terrain-aware construction
 

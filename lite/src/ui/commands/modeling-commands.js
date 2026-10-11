@@ -11,6 +11,13 @@ export function registerModelingCommands({
   getSummary,
 }) {
   add(
+    'mesh-model',
+    '模型转方块 / 导入 OBJ',
+    '建模',
+    invoke('cad-mesh', 'model'),
+    'mesh obj 模型 三维 导入',
+  );
+  add(
     'precise-rectangle',
     '精确矩形沿路径生成',
     '建模',

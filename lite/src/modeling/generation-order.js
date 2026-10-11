@@ -1,4 +1,5 @@
 import { generationLinks } from './generation-links.js';
+import { generationSourceKey, resolveGenerationSource } from './generation-source.js';
 export function affectedGeneration(design, guideId, isDetached = (o) => !!o.generation?.detached) {
   const links = generationLinks(design),
     byId = new Map((design.objects || []).map((o) => [o.id, o])),
@@ -6,11 +7,14 @@ export function affectedGeneration(design, guideId, isDetached = (o) => !!o.gene
     seenGuides = new Set(),
     selected = new Set(),
     detached = new Set(),
-    queue = [guideId];
+    queue = [
+      generationSourceKey(typeof guideId === 'string' ? { kind: 'guide', id: guideId } : guideId),
+    ];
   for (const link of links.objects)
     for (const source of link.sources) {
-      if (!reverse.has(source.id)) reverse.set(source.id, []);
-      reverse.get(source.id).push(link.id);
+      const key = generationSourceKey(source);
+      if (!reverse.has(key)) reverse.set(key, []);
+      reverse.get(key).push(link.id);
     }
   while (queue.length) {
     const id = queue.shift();
@@ -24,7 +28,8 @@ export function affectedGeneration(design, guideId, isDetached = (o) => !!o.gene
       }
       if (selected.has(objectId)) continue;
       selected.add(objectId);
-      if (o.guideId && o.guideId !== id) queue.push(o.guideId);
+      if (o.guideId && o.generation?.type !== 'mesh')
+        queue.push(generationSourceKey({ kind: 'guide', id: o.guideId }));
     }
   }
   return {
@@ -40,18 +45,19 @@ export function orderedGeneration(design, objects) {
     links = new Map(generationLinks(design).objects.map((o) => [o.id, o])),
     producer = new Map(),
     edges = new Map(objects.map((o) => [o.id, new Set()])),
-    indegree = new Map(objects.map((o) => [o.id, 0])),
-    guides = new Set((design.guides || []).map((g) => g.id));
+    indegree = new Map(objects.map((o) => [o.id, 0]));
   for (const o of objects)
-    if (o.guideId) {
-      if (producer.has(o.guideId) && producer.get(o.guideId) !== o.id)
+    if (o.guideId && o.generation?.type !== 'mesh') {
+      const key = generationSourceKey({ kind: 'guide', id: o.guideId });
+      if (producer.has(key) && producer.get(key) !== o.id)
         throw Error('多个关联结果使用同一输出辅助线，请修复来源关系');
-      producer.set(o.guideId, o.id);
+      producer.set(key, o.id);
     }
   for (const o of objects)
     for (const source of links.get(o.id)?.sources || []) {
-      if (!guides.has(source.id)) throw Error('生成参照已失效：' + o.name + '，请重新选择来源');
-      const from = producer.get(source.id);
+      if (!resolveGenerationSource(design, source))
+        throw Error('生成参照已失效：' + o.name + '，请重新选择来源');
+      const from = producer.get(generationSourceKey(source));
       if (from && from !== o.id && !edges.get(from).has(o.id)) {
         edges.get(from).add(o.id);
         indegree.set(o.id, indegree.get(o.id) + 1);

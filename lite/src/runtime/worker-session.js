@@ -1,4 +1,6 @@
 const readMethods = new Set([
+  'meshes.list',
+  'meshes.read',
   'comparison.inspect',
   'workspace.describe',
   'scene.readRegion',

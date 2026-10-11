@@ -38,7 +38,10 @@ export function workspaceLayout({ $, library, notice }) {
       orientation: 'horizontal',
       sign: 1,
       read: () => tree.getBoundingClientRect().height,
-      default: () => right.clientHeight * 0.45,
+      default: () =>
+        right.dataset.editing
+          ? Math.min(170, right.clientHeight * 0.23)
+          : right.clientHeight * 0.45,
       bounds: () => {
         const extra = [...right.children]
           .filter(

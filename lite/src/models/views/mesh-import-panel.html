@@ -1,0 +1,93 @@
+<div class="construction-header">
+  <strong>模型转方块</strong>
+  <button id="mesh-model-frame" title="完整显示当前模型">定位</button>
+  <button id="mesh-model-close" title="取消未确认的变换">×</button>
+</div>
+<section class="mesh-model-source">
+  <label
+    >模型来源<select id="mesh-model-source">
+      <option value="">选择已导入模型</option>
+    </select></label
+  >
+  <button id="mesh-model-import">导入 OBJ 模型…</button>
+  <input id="mesh-model-file" type="file" accept=".obj" hidden />
+  <p id="mesh-model-source-info" class="small">
+    导入模型作为设计参考，再选择方块生成。现有场地保留。
+  </p>
+</section>
+<section id="mesh-model-controls" hidden>
+  <label>名称<input id="mesh-model-name" maxlength="128" value="模型方块" /></label>
+  <div class="mesh-model-flow visual-context" aria-label="模型转换流程">
+    <span>① 放好模型</span><span aria-hidden="true">→</span><span>② 预览方块</span
+    ><span aria-hidden="true">→</span><span>③ 确认</span>
+  </div>
+  <button id="mesh-model-place">在场景中点击定位</button>
+  <p id="mesh-model-placement" class="small" role="status"></p>
+  <div class="row mesh-model-tools" aria-label="模型变换">
+    <button id="mesh-model-move" data-mesh-tool="translate" aria-pressed="true">移动</button>
+    <button id="mesh-model-rotate" data-mesh-tool="rotate" aria-pressed="false">旋转</button>
+    <button id="mesh-model-scale" data-mesh-tool="scale" aria-pressed="false">缩放</button>
+  </div>
+  <fieldset class="mesh-model-coordinates">
+    <legend>底部中心位置（格）</legend>
+    <div class="row">
+      <label>X<input id="mesh-pos-x" type="number" step="0.5" value="0" /></label>
+      <label>Y<input id="mesh-pos-y" type="number" step="0.5" value="0" /></label>
+      <label>Z<input id="mesh-pos-z" type="number" step="0.5" value="0" /></label>
+    </div>
+  </fieldset>
+  <fieldset class="mesh-model-coordinates">
+    <legend>旋转（度）</legend>
+    <div class="row">
+      <label>X<input id="mesh-rot-x" type="number" step="15" value="0" /></label>
+      <label>Y<input id="mesh-rot-y" type="number" step="15" value="0" /></label>
+      <label>Z<input id="mesh-rot-z" type="number" step="15" value="0" /></label>
+    </div>
+  </fieldset>
+  <fieldset class="mesh-model-coordinates">
+    <legend>模型自身尺寸（格）</legend>
+    <div class="row">
+      <label>X<input id="mesh-size-x" type="number" step="0.5" min="0.01" value="16" /></label>
+      <label>Y<input id="mesh-size-y" type="number" step="0.5" min="0.01" value="16" /></label>
+      <label>Z<input id="mesh-size-z" type="number" step="0.5" min="0.01" value="16" /></label>
+    </div>
+    <label class="check"
+      ><input id="mesh-model-uniform" type="checkbox" checked />等比修改尺寸</label
+    >
+  </fieldset>
+  <div class="row">
+    <label class="check"
+      ><input id="mesh-model-show-source" type="checkbox" checked />模型参考</label
+    >
+    <label class="check"
+      ><input id="mesh-model-show-blocks" type="checkbox" checked />方块预览</label
+    >
+  </div>
+  <hr />
+  <label
+    >生成方式<select id="mesh-model-mode">
+      <option value="surface">表面外壳</option>
+      <option value="solid">填充实体（闭合模型）</option>
+    </select></label
+  >
+  <label class="check"
+    ><input id="mesh-model-smart" type="checkbox" checked />用半砖、楼梯细化轮廓</label
+  >
+  <div class="mesh-model-materials">
+    <button id="mesh-model-material">主体：当前素材</button>
+    <button id="mesh-model-slab">半砖：自动匹配</button>
+    <button id="mesh-model-stairs">楼梯：自动匹配</button>
+  </div>
+  <label id="mesh-model-manual-label" hidden
+    >原结果中的手工改动<select id="mesh-model-manual">
+      <option value="preserve">保留手改与手动删除</option>
+      <option value="overwrite">替换手改，按模型重建</option>
+    </select></label
+  >
+  <p id="mesh-model-report" class="small" role="status">选择模型后预览生成结果。</p>
+  <div class="construction-footer">
+    <button id="mesh-model-save">仅保存模型参考</button>
+    <button id="mesh-model-apply" class="primary" disabled>确认生成方块</button>
+  </div>
+  <p class="small">紫灰色是模型参考，绿色是待生成方块。确认前不会改动场地；确认后可一次撤销。</p>
+</section>

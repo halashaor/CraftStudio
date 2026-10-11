@@ -1,3 +1,6 @@
+import { meshImportUI } from '../models/mesh-import-ui.js';
+import { MeshSourceView } from '../models/mesh-source-view.js';
+import { MeshSourceBrowser } from '../models/mesh-source-browser.js';
 import { ComparisonUI } from './comparison-ui.js';
 import { comparisonMessage } from '../view/comparison-access.js';
 import { selectionSettingsUI } from './selection-settings-ui.js';
@@ -51,6 +54,7 @@ export function cadShell({
   policy,
   studio,
   renderer,
+  controls,
   cast,
   hitCell,
   getSummary,
@@ -95,6 +99,7 @@ export function cadShell({
       { id: 'construction', controller: construction, close: construction.close },
       { id: 'designer', controller: designer, close: designer.close },
       { id: 'measurement', controller: measurement, close: measurement.close },
+      { id: 'mesh', controller: mesh, close: mesh.close },
     ],
     notice,
   });
@@ -332,6 +337,7 @@ export function cadShell({
   modify.body.prepend(repeatButton);
 
   const construction = constructionUI({
+    controls,
     beforeOpen: () => prepareOperation('construction'),
     getSummary,
     library,
@@ -419,6 +425,62 @@ export function cadShell({
     designer.open();
   };
   $('cad-modify-open').after(designerButton);
+  const mesh = meshImportUI({
+    THREE,
+    $,
+    scene,
+    getCamera,
+    renderer,
+    call,
+    refresh,
+    render,
+    markDirty,
+    policy,
+    notice,
+    navigation,
+    requestRender,
+    getSummary,
+    cast,
+    hitCell,
+    beforeOpen: () => prepareOperation('mesh'),
+    pickMaterial: (callback, label) =>
+      requestMaterial(callback, mesh, $('mesh-model-panel'), label || '模型方块材质'),
+  });
+  materialPicker.observe($('mesh-model-panel'), 'hidden');
+  const meshButton = document.createElement('button');
+  meshButton.id = 'cad-mesh';
+  meshButton.textContent = '模型转方块';
+  meshButton.onclick = () => task(() => mesh.open());
+  $('cad-feature').after(meshButton);
+  const meshFileButton = document.createElement('button');
+  meshFileButton.id = 'file-add-mesh';
+  meshFileButton.textContent = '加入外部 OBJ 模型…';
+  meshFileButton.onclick = () => {
+    if (busyReason()) return notice(busyReason());
+    file.dialog.close();
+    task(async () => {
+      if (await mesh.open()) $('mesh-model-file').click();
+    });
+  };
+  file.body.prepend(meshFileButton);
+  const meshSourcesView = new MeshSourceView({ THREE, scene, call, requestRender, notice });
+  window.addEventListener('craftstudio-mesh-editing', () => {
+    if (getSummary()) meshSourcesView.update(getSummary(), mesh.editingSourceId());
+  });
+  const meshSourceHost = document.createElement('section');
+  objects.before(meshSourceHost);
+  const meshSourceBrowser = new MeshSourceBrowser({
+    host: meshSourceHost,
+    call,
+    task,
+    refresh,
+    render,
+    markDirty,
+    notice,
+    getSummary,
+    busyReason,
+    open: (options) => task(() => mesh.open(options)),
+  });
   const objectTree = new ObjectTreeUI({
     host: objects,
     onSelect: (id, event) => {
@@ -446,6 +508,7 @@ export function cadShell({
         await render();
       });
     },
+    onEditMesh: (options) => task(() => mesh.open(options)),
     onEditGuide: (id) =>
       window.dispatchEvent(new CustomEvent('craftstudio-edit-sketch', { detail: { id } })),
     onEditFeature: (objectId) =>
@@ -536,7 +599,11 @@ export function cadShell({
     getObjectId: () =>
       selectionActive && objectOnly && selectedObjects.size === 1 ? [...selectedObjects][0] : null,
     isOperating: () =>
-      direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),
+      direct.isActive() ||
+      construction.isActive() ||
+      designer.isActive() ||
+      measurement.isActive() ||
+      mesh.isActive(),
     call,
     refresh,
     markDirty,
@@ -709,6 +776,10 @@ export function cadShell({
   }
   renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
   renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (hasOperation()) {
+      pointer = null;
+      return;
+    }
     pointer = {
       x: e.clientX,
       y: e.clientY,
@@ -725,9 +796,7 @@ export function cadShell({
       pointer.button !== 0 ||
       document.querySelector('[data-tool="inspect"]').classList.contains('active') === false ||
       e.altKey ||
-      direct.isActive() ||
-      construction.isActive() ||
-      designer.isActive() ||
+      hasOperation() ||
       renderer.domElement.style.cursor === 'grab'
     )
       return;
@@ -757,6 +826,12 @@ export function cadShell({
     });
   });
   renderer.domElement.addEventListener('pointerup', (e) => {
+    if (hasOperation()) {
+      marquee?.remove();
+      marquee = null;
+      pointer = null;
+      return;
+    }
     if (!pointer) return;
     if (pointer.button === 2 && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 5) {
       menu.open(e.clientX, e.clientY);
@@ -952,7 +1027,11 @@ export function cadShell({
   });
 
   const hasOperation = () =>
-    direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive();
+    direct.isActive() ||
+    construction.isActive() ||
+    designer.isActive() ||
+    measurement.isActive() ||
+    mesh.isActive();
   const comparison = new ComparisonUI({
     branchVersion,
     $,
@@ -989,6 +1068,7 @@ export function cadShell({
       return true;
     }
     if (
+      mesh.previewHistory(direction) ||
       construction.expressionHistory(direction) ||
       construction.drawingHistory(direction) ||
       construction.parameterHistory(direction) ||
@@ -1010,6 +1090,7 @@ export function cadShell({
     construction.close();
     designer.close();
     measurement.close();
+    mesh.close();
     notice('已取消当前预览，场景中的已确认改动保持原样');
     return true;
   }
@@ -1057,15 +1138,18 @@ export function cadShell({
       directHistory = direct.historyState(),
       designerHistory = designer.parameterState(),
       measurementHistory = measurement.historyState(),
-      drawing = directHistory.active
-        ? directHistory
-        : designerHistory.active
-          ? designerHistory
-          : measurementHistory.active
-            ? measurementHistory
-            : picking.active
-              ? picking
-              : parameters;
+      meshHistory = mesh.historyState(),
+      drawing = meshHistory.active
+        ? meshHistory
+        : directHistory.active
+          ? directHistory
+          : designerHistory.active
+            ? designerHistory
+            : measurementHistory.active
+              ? measurementHistory
+              : picking.active
+                ? picking
+                : parameters;
     $('undo').disabled = drawing.active
       ? !drawing.undo
       : !hasOperation() && !getSummary()?.preview && !getSummary()?.undo;
@@ -1074,7 +1158,13 @@ export function cadShell({
       : hasOperation() || !!getSummary()?.preview || !getSummary()?.redo;
   };
   const operationObserver = new MutationObserver(syncHistory);
-  for (const id of ['direct-edit-bar', 'construction-panel', 'designer-panel', 'measurement-panel'])
+  for (const id of [
+    'direct-edit-bar',
+    'construction-panel',
+    'designer-panel',
+    'measurement-panel',
+    'mesh-model-panel',
+  ])
     operationObserver.observe($(id), {
       attributes: true,
       attributeFilter: ['hidden', 'data-drawing-points', 'data-local-history'],
@@ -1155,6 +1245,7 @@ export function cadShell({
     frameSelection: zoomSelection,
   });
   workspace = workspaceUI({
+    mesh,
     $,
     construction,
     designer,
@@ -1248,6 +1339,7 @@ export function cadShell({
       construction.close();
       designer.close();
       measurement.close();
+      mesh.close();
     },
     hasWorkplaneGrid: () => construction.hasWorkplaneGrid(),
     toggleWorkplaneGrid: () => construction.toggleWorkplaneGrid(),
@@ -1268,6 +1360,9 @@ export function cadShell({
     toolChanged,
     update: (s) => {
       comparison.update(s);
+      mesh.update(s);
+      meshSourcesView.update(s, mesh.editingSourceId());
+      meshSourceBrowser.update(s);
       syncSaveScope();
       if (selectionWorkspace && selectionWorkspace !== s.workspaceId) {
         $('cad-selection-clear').click();
@@ -1305,6 +1400,7 @@ export function cadShell({
         s.changes ||
         s.design?.guides?.length ||
         s.design?.measurements?.length ||
+        s.design?.meshSources?.length ||
         hasOperation()
       );
       $('cad-original-row').textContent = s.sourceBlocks ? '▧ 原始场地 · 保留' : '▧ 尚未导入场地';
@@ -1331,10 +1427,20 @@ export function cadShell({
     exportSelection: () => (selectionActive ? structuredClone(studio.getSelection()) : null),
     zoomSelection,
     isTransformActive: () =>
-      direct.isActive() || construction.isActive() || designer.isActive() || measurement.isActive(),
+      direct.isActive() ||
+      construction.isActive() ||
+      designer.isActive() ||
+      measurement.isActive() ||
+      mesh.isActive(),
     viewChanged: () => {
       direct.updateCamera();
       construction.viewChanged();
+      mesh.viewChanged();
+    },
+    setNavigationHeld: (held) => {
+      construction.setNavigationHeld(held);
+      direct.setNavigationHeld(held);
+      mesh.setNavigationHeld(held);
     },
     clearSelection: () => {
       $('cad-selection-clear').click();
@@ -1411,7 +1517,11 @@ export function cadShell({
     return frameSceneBounds(pointBounds(guide?.points || []));
   }
   function zoomSelection() {
-    return frameSceneBounds(construction.framingBounds()) || frameBlockSelection();
+    return (
+      frameSceneBounds(mesh.framingBounds()) ||
+      frameSceneBounds(construction.framingBounds()) ||
+      frameBlockSelection()
+    );
   }
   function frameBlockSelection() {
     if (!selectionActive) return false;

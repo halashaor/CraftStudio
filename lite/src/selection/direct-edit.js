@@ -38,6 +38,7 @@ export function directEdit({
   proxy.add(offset);
   scene.add(parent);
   const control = new TransformControls(getCamera(), renderer.domElement);
+  control.enabled = false;
   control.setTranslationSnap(1);
   control.setRotationSnap(Math.PI / 2);
   control.setSpace('world');
@@ -79,8 +80,21 @@ export function directEdit({
     fieldStarts = new Map(),
     expressionBindings = new Map();
   let dragStart = null;
+  function syncGizmoEnabled() {
+    control.enabled = !!(
+      active &&
+      !active.floating &&
+      control.object &&
+      !loading &&
+      !applying &&
+      !navigationHeld
+    );
+    if (!control.enabled) control.axis = null;
+  }
+  control.addEventListener('object-changed', syncGizmoEnabled);
   function loadingState(value) {
     loading = value;
+    syncGizmoEnabled();
     bar.setAttribute('aria-busy', String(value));
     for (const id of [
       'direct-dx',
@@ -180,15 +194,7 @@ export function directEdit({
   renderer.domElement.addEventListener('pointerdown', (e) => (dragPointerId = e.pointerId), true);
   renderer.domElement.addEventListener('pointercancel', () => endDrag(true));
   renderer.domElement.addEventListener('lostpointercapture', () => endDrag(true));
-  window.addEventListener('keydown', (e) => {
-    if (dialogOwnsKeyboard()) return;
-    if (e.code === 'Space' && !textEditing(document.activeElement)) navigationHeld = true;
-  });
-  window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') navigationHeld = false;
-  });
   window.addEventListener('blur', () => {
-    navigationHeld = false;
     endDrag(true);
   });
   function pointerAnchor(e) {
@@ -520,7 +526,7 @@ export function directEdit({
     }
     let committed = false;
     applying = true;
-    control.enabled = false;
+    syncGizmoEnabled();
     $('direct-apply').disabled = true;
     try {
       const receipt = await call(
@@ -572,7 +578,7 @@ export function directEdit({
       notice(committed ? '修改已提交，场景显示未刷新：' + e.message : e.message, true);
     } finally {
       applying = false;
-      control.enabled = true;
+      syncGizmoEnabled();
       $('direct-apply').disabled = false;
     }
   }
@@ -712,6 +718,11 @@ export function directEdit({
       '重复上次' + { move: '移动', copy: '复制', rotate: '旋转' }[recipe.mode] + ' · 预览';
   }
   return {
+    setNavigationHeld: (held) => {
+      if (held && !navigationHeld) endDrag(true);
+      navigationHeld = held;
+      syncGizmoEnabled();
+    },
     begin,
     cancel,
     copy,

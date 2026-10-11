@@ -1,4 +1,5 @@
 import { requestReceipt, rememberReceipt } from './request-receipts.js';
+import { meshDescriptors, readMesh, meshMutation } from '../models/mesh-sources.js';
 import {
   listSelectionSets,
   resolveSelectionSet,
@@ -251,6 +252,8 @@ export class DesignAPI {
           'terrain.readColumns',
           'materials.collect',
           'objects.list',
+          'meshes.list',
+          'meshes.read',
           'selectionSets.list',
           'selectionSets.resolve',
           'prefabs.list',
@@ -286,6 +289,10 @@ export class DesignAPI {
             'transaction.inspect',
             'transaction.commit',
             'transaction.abort',
+            'meshes.list',
+            'meshes.read',
+            'meshes.put',
+            'meshes.remove',
             'measurements.list',
             'measurements.put',
             'measurements.remove',
@@ -388,7 +395,9 @@ export class DesignAPI {
           if (!site.originConfirmed) fail('ORIGIN_UNKNOWN', '请先确认世界原点');
           value.frame.origin = value.frame.origin.map((n, a) => n + site.origin[a]);
         }
-      } else if (method === 'measurements.list')
+      } else if (method === 'meshes.list') value = meshDescriptors(site.design);
+      else if (method === 'meshes.read') value = readMesh(site.design, p.id);
+      else if (method === 'measurements.list')
         value = { items: listedMeasurements(site, p.space), space: p.space || 'local' };
       else if (method === 'materials.collect') {
         if (p.space !== undefined && !['local', 'world'].includes(p.space))
@@ -482,6 +491,8 @@ export class DesignAPI {
         mutated = true;
       } else if (
         [
+          'meshes.put',
+          'meshes.remove',
           'views.put',
           'views.remove',
           'measurements.put',
@@ -534,6 +545,8 @@ export class DesignAPI {
         }
         if (method === 'palettes.put' || method === 'palettes.remove')
           value = paletteMutation(target, method, p);
+        if (method === 'meshes.put' || method === 'meshes.remove')
+          value = meshMutation(target, method, p);
         if (method === 'collections.put' || method === 'collections.remove')
           value = collectionMutation(target, method, p);
         if (method === 'views.put' || method === 'views.remove')
@@ -606,6 +619,7 @@ export class DesignAPI {
           value = {
             ...(method === 'edit.brush' ||
             method === 'objects.rename' ||
+            method.startsWith('meshes.') ||
             method.startsWith('workplanes.') ||
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
@@ -623,6 +637,7 @@ export class DesignAPI {
             ...this.commit(target),
             ...(method === 'edit.brush' ||
             method === 'objects.rename' ||
+            method.startsWith('meshes.') ||
             method.startsWith('workplanes.') ||
             method.startsWith('measurements.') ||
             method.startsWith('views.') ||
@@ -657,6 +672,8 @@ export class DesignAPI {
             'transaction.begin',
             'transaction.apply',
             'transaction.abort',
+            'meshes.put',
+            'meshes.remove',
             'objects.put',
             'collections.put',
             'collections.remove',

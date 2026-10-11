@@ -1382,6 +1382,7 @@ $('cut').oninput = () => {
 };
 let spaceHeld = false;
 function setNavigation() {
+  cad?.setNavigationHeld(spaceHeld);
   controls.mouseButtons.LEFT = spaceHeld ? THREE.MOUSE.ROTATE : null;
   renderer.domElement.style.cursor = spaceHeld
     ? 'grab'
@@ -2413,6 +2414,7 @@ studio = studioUI({
   requestRender: () => (needsRender = true),
 });
 cad = cadShell({
+  controls,
   branchVersion: (source) => openSaved(source.projectId, source.version, { copy: true }),
   THREE,
   $,

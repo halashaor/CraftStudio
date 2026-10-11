@@ -1,4 +1,5 @@
 // Read-only relationship diagnostics. Geometry validation remains in generators.
+import { generationSourceKey } from './generation-source.js';
 export function diagnoseGeneration(design, objects) {
   const records = new Map((design?.objects || []).map((o) => [o.id, o]));
   const byId = new Map(objects.map((o) => [o.id, o])),
@@ -10,9 +11,10 @@ export function diagnoseGeneration(design, objects) {
     const record = records.get(o.id);
     if (o.detached || !record?.guideId) continue;
     // Geometry uses its own sketch as source, rather than producing that sketch.
-    if (record.generation?.type === 'geometry') continue;
-    if (!producers.has(record.guideId)) producers.set(record.guideId, []);
-    producers.get(record.guideId).push(o.id);
+    if (['geometry', 'mesh'].includes(record.generation?.type)) continue;
+    const key = generationSourceKey({ kind: 'guide', id: record.guideId });
+    if (!producers.has(key)) producers.set(key, []);
+    producers.get(key).push(o.id);
   }
   for (const o of objects) {
     parents.set(o.id, new Set());
@@ -21,7 +23,7 @@ export function diagnoseGeneration(design, objects) {
   for (const o of objects)
     if (!o.detached)
       for (const source of o.sources) {
-        const ids = producers.get(source.id) || [];
+        const ids = producers.get(generationSourceKey(source)) || [];
         if (ids.length > 1)
           issue(o, {
             severity: 'error',

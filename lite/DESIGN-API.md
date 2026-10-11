@@ -125,14 +125,59 @@ Create 的运动预览由方块状态、原生模型及装置 NBT 自动决定�
 
 地形支持当前高度上的贴地曲线、自动落地支撑、局部整平、邻域中值平滑、连续坡面和沿设计高度挖填。实际高度来自当前场地数据；保留水面和受阻列，缺数据不造平地。确认前显示挖填与保护冲突。
 
-公开接口增加 construction.prepare / construction.commit。prepare 参数为 {type:'geometry'|'terrain',config,policy}，返回预览 ID、辅助线、数量与冲突；includeMesh:true 可取得网格。commit 参数为 {id,policy,name?}，检查预览基准版本后提交。
+公开接口增加 construction.prepare / construction.commit。prepare 参数为 {type:'geometry'|'terrain'|'feature'|'designer'|'mesh',config,policy}，返回预览 ID、辅助线、数量与冲突；includeMesh:true 可取得网格。commit 参数为 {id,policy,name?}，检查预览基准版本后提交。
+
+### OBJ model sources and block conversion / OBJ 模型来源与方块生成
+
+OBJ sources are reusable project data, added without replacing the terrain. The API reads polygon geometry only: MTL files, texture maps and vertex colors are not converted to block materials. Choose `state` and optional material roles explicitly. A saved source is a reference mesh; only confirmed conversion results become Minecraft blocks.
+
+| Method | Parameters | Result |
+|---|---|---|
+| meshes.list | expectedRevision?, workspaceId?, transactionId? | Array of source descriptors, without `objText` |
+| meshes.read | id, expectedRevision?, workspaceId?, transactionId? | Complete source including original `objText` |
+| meshes.put | source:{id?,name?,objText?,transform?,hidden?}, expectedRevision or transactionId, workspaceId? | Source descriptor plus commit/staging metadata |
+| meshes.remove | id, expectedRevision or transactionId, workspaceId? | Removal receipt; rejects sources with attached generated results |
+
+Creating a source requires `name` and OBJ text. Updating an existing `source.id` may supply only changed fields. Descriptors contain `id`, `name`, `format:"obj"`, `revision`, `sourceKey`, `bounds`, `triangleCount`, `warnings`, `topology`, `transform` and `hidden`. Initial source revision is 1; changing the OBJ text increments it and marks linked results `outdated`. This source revision differs from the outer reply's workspace `revision`, which is used for request guards. Renaming, hiding or changing the source's default pose does not change geometry revision or move existing results. Invalid imports leave the current design intact. Source mutations support transactions, one-step undo and the normal request-ID replay rules; list/read are read-only. Display summaries omit OBJ text, while editable project saves retain it.
+
+`transform` is `{position:[x,y,z],rotation:[x,y,z],scale:[x,y,z]}`. Position is the source bounding box's bottom-center anchor in local block units. Rotation uses XYZ Euler angles in degrees. Scale multiplies the original OBJ coordinates around that anchor; components must be finite and nonzero. New-source defaults are position/rotation `[0,0,0]` and scale `[1,1,1]`; a partial source update retains unspecified position/rotation/scale arrays. Construction inherits omitted arrays from the source reference and captures the complete pose in its result recipe. Converted cells must fit local coordinates 0–4095. Translate known world coordinates using the confirmed project origin; this construction API does not interpret a `space:"world"` flag.
+
+After `meshes.put`, request `construction.prepare` with `type:"mesh"` and a config such as:
+
+```js
+{
+  sourceId: importedSourceId,
+  transform: {
+    position: [32, 8, 32],
+    rotation: [0, 30, 0],
+    scale: [2, 2, 2]
+  },
+  mode: 'surface', // 'solid' requires a closed mesh
+  smart: true,
+  state: {Name: 'minecraft:stone_bricks'},
+  roles: {
+    slab: {Name: 'minecraft:stone_brick_slab'},
+    stairs: {Name: 'minecraft:stone_brick_stairs'}
+  }
+}
+```
+
+`mode` defaults to `surface`; `smart` defaults to false for API calls. Optional `roles.full`, `roles.slab` and `roles.stairs` hold explicit block-state objects. Smart conversion samples half-block occupancy and fits full blocks, slabs or stairs where supported. Missing matching shapes fall back to the main block with a warning; unknown Mod block IDs remain valid and can receive their model/texture resources later. Surface mode supports open meshes. Solid mode checks closed topology and fills sampled interior cells; thin features and cavities require inspection at the chosen scale. Conversion and triangulation have computation budgets and report errors instead of committing partial results.
+
+Prepare uses the existing `policy`, workspace and revision contract. It returns change counts, protection conflicts and optional `meshStats`; `includeMesh:true` includes the visual block preview. `construction.commit` with the returned preview ID, current guard, `policy` and optional `name` applies one undoable edit. A failed protection check leaves the design unchanged. `config.saveOnly:true` instead saves the reference pose without generating blocks; optional `sourceName` renames that saved reference. A normal conversion hides its source reference by default; `hideSource:false` keeps it visible. `construction.cancel` discards the candidate, while the separately imported source remains in the project.
+
+To rebuild one result, add its `objectId` and pass the desired recipe. `manualStrategy:"preserve"` is the default and retains hand edits and manually deleted cells; `"overwrite"` explicitly replaces them. Each generated object retains its own transform and materials, so changing the reference pose or creating another result does not move existing copies. Replacing the source text marks dependents for a later explicit rebuild. Unrelated collisions, locks, detached results and missing source/ownership data are rejected rather than silently overwritten.
+
+Mesh results have `kind:"mesh"`, `meshSourceId`, a saved `recipe`, and `generation.type:"mesh"`. Their typed references are `generation.sourceRefs:[{kind:"mesh",id:sourceId}]`, with the captured version in `generation.sourceVersions["mesh:" + sourceId]`. They do not fabricate an output sketch ID. `generation.links` reports `sources[].kind` and `meshes[].dependents`, distinguishing meshes and guides even when their IDs match. Existing guide sources remain compatible.
+
+Editable `.craftlite` files, formal versions and local checkpoints retain source text, poses and generation records for later rebuilding. During A/B or historical comparison, `meshes.list/read` describe the canonical current design, while viewport rendering uses the displayed snapshot's own sources; mesh mutations remain blocked by `COMPARISON_ACTIVE`. Blueprint exports contain confirmed blocks, not reference meshes. This API does not assert successful execution or simulation in Minecraft.
 
 
 ### 轮廓建模
 
 `construction.prepare` 支持 `params.type="feature"`，`params.config` 的 `operation` 为 `extrude`、`loft` 或 `sweep`。直接提供 `profiles: [[[x,y,z],...],...]`，或引用已保存辅助线的 `profileIds`。闭合截面要求同一 `plane`（xz / xy / yz）；放样至少两个不同标高的截面。拉伸参数为 `depth` 和 `symmetric`；共有参数 `state`、`hollow`、`thickness`、`caps`、`cut`。路径生成提供密集采样的 `path` 或保存的 `pathId`，以及 `width` / `height`，使用竖直矩形截面。
 
-prepare 返回预览 ID、方块数量、保护冲突和辅助线，不修改场景。`construction.commit` 提交该 ID，拒绝已被场景变化作废的预览，记录辅助几何、建模对象并支持一次撤销。轮廓建模沿用场地保护规则；空心体和布尔切除在方块格上执行。此 prepare/commit 扩展当前不保证请求 ID 重放的幂等性。创建纯辅助轮廓可用 `type="geometry"` 和 `config.guidesOnly=true`。
+prepare 返回预览 ID、方块数量、保护冲突和辅助线，不修改场景。`construction.commit` 提交该 ID，拒绝已被场景变化作废的预览，记录辅助几何、建模对象并支持一次撤销。轮廓建模沿用场地保护规则；空心体和布尔切除在方块格上执行。准备／提交请求沿用公共请求 ID 重放规则。创建纯辅助轮廓可用 `type="geometry"` 和 `config.guidesOnly=true`。
 
 
 ### 设计师工具与检查

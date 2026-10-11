@@ -1,4 +1,7 @@
 import { ComparisonSession } from './view/comparison-session.js';
+import { meshDescriptors, getParsedMesh } from './models/mesh-sources.js';
+import { meshConstructionPlan } from './models/mesh-construction.js';
+import { centeredMeshPositions } from './models/mesh-transform.js';
 import { comparisonActionAllowed, comparisonMessage } from './view/comparison-access.js';
 import { screenBoxSelection } from './selection/screen-box.js';
 import { PlanningAPI } from './api/planning-api.js';
@@ -144,6 +147,7 @@ const summary = () => {
     ...displaySite().summary(),
     design: {
       ...displaySite().design,
+      meshSources: meshDescriptors(displaySite().design),
       componentDefinitions: displaySite().design.componentDefinitions?.map((d) => ({
         ...d,
         blocks: undefined,
@@ -479,20 +483,22 @@ async function execute(action, data) {
     const materialCatalogue = catalogue(site, resources),
       available = new Set(materialCatalogue.map((i) => i.id)),
       plan =
-        data.type === 'terrain'
-          ? terrainPlan(site, data.config)
-          : data.type === 'feature'
-            ? featurePlan(site, { ...data.config, available: [...available] })
-            : data.type === 'designer'
-              ? designerPlan(
-                  site,
-                  data.config,
-                  available,
-                  new Map(materialCatalogue.map((i) => [i.id, i])),
-                )
-              : data.config.editGuideId
-                ? editSketchPlan(site, data.config, available)
-                : geometryPlan(site, data.config, available),
+        data.type === 'mesh'
+          ? meshConstructionPlan(site, data.config, available)
+          : data.type === 'terrain'
+            ? terrainPlan(site, data.config)
+            : data.type === 'feature'
+              ? featurePlan(site, { ...data.config, available: [...available] })
+              : data.type === 'designer'
+                ? designerPlan(
+                    site,
+                    data.config,
+                    available,
+                    new Map(materialCatalogue.map((i) => [i.id, i])),
+                  )
+                : data.config.editGuideId
+                  ? editSketchPlan(site, data.config, available)
+                  : geometryPlan(site, data.config, available),
       cells = new Map(),
       removed = new Map(),
       palette = [],
@@ -575,6 +581,7 @@ async function execute(action, data) {
       surfaceFit: plan.surfaceFit || null,
       warnings: plan.warnings,
       usedRoles: plan.usedRoles,
+      meshStats: plan.meshStats || null,
       scope: plan.scope || null,
       closure: plan.closure || null,
       overlap: plan.overlap ? { ...plan.overlap, allPositions: undefined } : null,
@@ -644,6 +651,14 @@ async function execute(action, data) {
       });
       if (object) site.design.objects.push(object);
     }
+    if (draft.plan.newMeshObject) {
+      const object = generatedObject(site, captured, {
+        type: 'mesh',
+        config: draft.plan.newMeshObject,
+        name: data.name || '模型生成结果',
+      });
+      if (object) site.design.objects.push(object);
+    }
     mesher.changed(site);
     createScene.changedCells(site);
     constructionDraft = null;
@@ -666,6 +681,17 @@ async function execute(action, data) {
     return summary();
   }
   if (action === 'summary') return summary();
+  if (action === 'meshSourceGeometry') {
+    if (data.expectedRevision !== undefined || data.workspaceId) api.guard(data);
+    const design = displaySite().design;
+    const parsed = getParsedMesh(design, data.id);
+    const descriptor = meshDescriptors(design).find((source) => source.id === data.id);
+    return {
+      ...descriptor,
+      coordinateSpace: 'source-pivot',
+      positions: centeredMeshPositions(parsed),
+    };
+  }
   if (action === 'viewIsolation') {
     if (typeof data.contextVisible === 'boolean') {
       if (!isolationContext) throw Error('请先进入局部视图');

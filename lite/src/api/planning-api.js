@@ -18,6 +18,8 @@ const methods = new Set([
   'view.isolate',
 ]);
 const previewWrites = new Set([
+  'meshes.put',
+  'meshes.remove',
   'views.put',
   'views.remove',
   'measurements.put',

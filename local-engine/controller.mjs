@@ -1,5 +1,7 @@
 import { EngineWorkspace } from './workspace.mjs';
 const canonical = new Set([
+  'meshes.put',
+  'meshes.remove',
   'edit.apply',
   'edit.brush',
   'selection.transform',

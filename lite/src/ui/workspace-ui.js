@@ -1,16 +1,27 @@
 import { workspaceLayout } from './workspace-layout.js';
+import { ModelingChoicesUI } from './modeling-choices.js';
+import { PreviewStateUI } from './preview-state-ui.js';
+import { illustrateTools } from './tool-illustrations.js';
 export function workspaceUI({
   $,
   construction,
   designer,
   direct,
   measurement,
+  mesh,
   dock,
   chooseTool,
   library,
   notice,
 }) {
   document.body.classList.add('studio-workspace');
+  new ModelingChoicesUI($);
+  for (const [panel, apply, report] of [
+    ['construction-panel', 'construction-apply', 'construction-report'],
+    ['designer-panel', 'designer-apply', 'designer-report'],
+    ['mesh-model-panel', 'mesh-model-apply', 'mesh-model-report'],
+  ])
+    new PreviewStateUI({ panel: $(panel), apply: $(apply), report: $(report) });
   const left = $('cad-browser'),
     right = $('cad-inspector'),
     viewport = $('viewport');
@@ -63,6 +74,7 @@ export function workspaceUI({
   measure.title = '点取位置，测量间距、高差与坡度';
   measure.onclick = () => measurement.open();
   left.append(measure);
+  illustrateTools(left);
   const bar = $('cad-ribbon');
   const allCommands = document.createElement('div');
   allCommands.id = 'workspace-commands';
@@ -70,7 +82,7 @@ export function workspaceUI({
   const commandIds = {
     edit: ['cad-copy-direct', 'cad-paste-direct', 'cad-modify-open', 'cad-components-open'],
     draw: ['cad-figure'],
-    model: ['cad-feature', 'cad-create-open', 'cad-designer'],
+    model: ['cad-feature', 'cad-mesh', 'cad-create-open', 'cad-designer'],
     site: ['cad-terrain'],
   };
   for (const [k, ids] of Object.entries(commandIds))
@@ -125,6 +137,7 @@ export function workspaceUI({
     { node: $('designer-panel'), close: designer.close, category: () => 'model' },
     { node: $('direct-edit-bar'), close: direct.cancel, category: () => 'edit' },
     { node: $('measurement-panel'), close: measurement.close },
+    { node: $('mesh-model-panel'), close: mesh.close, category: () => 'model' },
   ];
   for (const p of panels) {
     p.node.classList.add('workspace-task-panel');
@@ -182,6 +195,7 @@ export function workspaceUI({
     tasks.hidden = !current;
     defaults.hidden = !!current;
     right.dataset.editing = current?.node.id || '';
+    layout.apply();
     if (previous && !visible(previous)) {
       const focused = document.activeElement;
       if (
@@ -226,7 +240,12 @@ export function workspaceUI({
     if (id === 'construction-apply') {
       const report = $('construction-report');
       report.classList.add('workspace-result');
-      row.prepend($('sketch-snap-feedback'), report);
+      row.prepend(
+        $('sketch-snap-feedback'),
+        $('construction-panel').querySelector('.preview-state'),
+        report,
+        $('sketch-stroke-blocks'),
+      );
     }
     panel.append(row);
   }
@@ -250,6 +269,7 @@ export function workspaceUI({
       construction.close();
       designer.close();
       direct.cancel();
+      mesh.close();
       dialog.setAttribute('open', '');
       return true;
     },

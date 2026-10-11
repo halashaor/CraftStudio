@@ -1,4 +1,5 @@
 import { ObjectProtection } from '../components/object-protection.js';
+import { meshDescriptors } from '../models/mesh-sources.js';
 import { restoreDraftHistory } from '../storage/draft-history.js';
 import { VoxelOverlayMap } from './voxel-overlay-map.js';
 import { emptyProject, stateKey } from '../minecraft/codec.js';
@@ -344,7 +345,9 @@ export class Site {
       entities: (this.base.entities || []).length,
       blockEntities: this.blockEntityCount,
       materials,
-      design: this.design,
+      design: this.design.meshSources
+        ? { ...this.design, meshSources: meshDescriptors(this.design) }
+        : this.design,
       protected: this.protected,
       undo: this.undo.length,
       redo: this.redo.length,

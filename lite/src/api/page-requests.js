@@ -6,6 +6,8 @@ const storedMethods = new Set([
   'scene.exportStoredProject',
 ]);
 const sceneChanges = new Set([
+  'meshes.put',
+  'meshes.remove',
   'view.isolate',
   'construction.commit',
   'proposal.commit',

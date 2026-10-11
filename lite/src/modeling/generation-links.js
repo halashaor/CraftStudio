@@ -1,43 +1,28 @@
 import { diagnoseGeneration } from './generation-diagnostics.js';
 import { offsetSourceStatuses } from './guide-provenance.js';
-function sourceIds(object) {
-  if (object.generation?.detached) return [];
-  const raw = object.generation?.sources || [
-      ...(object.recipe?.profileIds || []),
-      ...(object.recipe?.pathId ? [object.recipe.pathId] : []),
-      ...(object.generation?.type === 'geometry' && object.guideId ? [object.guideId] : []),
-    ],
-    ids = [];
-  for (const id of raw) {
-    if (typeof id !== 'string') continue;
-    if (id.startsWith('loop:')) {
-      try {
-        const loop = JSON.parse(id.slice(5));
-        if (Array.isArray(loop)) ids.push(...loop.filter((v) => typeof v === 'string'));
-      } catch {}
-    } else ids.push(id);
-  }
-  return [...new Set(ids)];
-}
+import { generationSourceRefs, resolveGenerationSource } from './generation-source.js';
 export function generationLinks(design) {
   const guides = new Map((design?.guides || []).map((g) => [g.id, g])),
     offsets = offsetSourceStatuses(guides),
     objects = (design?.objects || [])
-      .filter((o) => o.generation || sourceIds(o).length)
+      .filter((o) => o.generation || generationSourceRefs(o).length)
       .map((o) => ({
         id: o.id,
         name: o.name,
         detached: !!o.generation?.detached,
         outdated: !!o.generation?.outdated,
-        sources: sourceIds(o).map((id) => {
-          const g = guides.get(id);
+        sources: generationSourceRefs(o).map(({ kind, id }) => {
+          const g = resolveGenerationSource(design, { kind, id });
           return {
+            kind,
             id,
             name: g?.name || '参照已失效',
             missing: !g,
-            editable: !!g?.recipe?.kind && Array.isArray(g.recipe.points),
+            editable: kind === 'mesh' ? !!g : !!g?.recipe?.kind && Array.isArray(g.recipe.points),
             revision: g?.revision ?? 0,
-            ...(g?.provenance?.kind === 'offset' ? { offset: offsets.get(id) } : {}),
+            ...(kind === 'guide' && g?.provenance?.kind === 'offset'
+              ? { offset: offsets.get(id) }
+              : {}),
           };
         }),
       }));
@@ -51,6 +36,7 @@ export function generationLinks(design) {
               severity: 'error',
               code: 'MISSING_SOURCE',
               sourceId: source.id,
+              sourceKind: source.kind,
               message: '来源参照已失效',
             })),
           ...object.sources
@@ -62,7 +48,7 @@ export function generationLinks(design) {
               message: '偏移来源「' + source.name + '」：' + (source.offset.reason || '轮廓待重建'),
             })),
           ...(object.outdated
-            ? [{ severity: 'warning', code: 'OUTDATED', message: '源草图已变化，结果待更新' }]
+            ? [{ severity: 'warning', code: 'OUTDATED', message: '来源已变化，结果待更新' }]
             : []),
         ];
     object.status = object.issues.some((issue) => issue.severity === 'error')
@@ -77,7 +63,8 @@ export function generationLinks(design) {
   const dependents = new Map([...guides.keys()].map((id) => [id, []]));
   for (const o of objects)
     for (const source of o.sources)
-      dependents.get(source.id)?.push({ id: o.id, name: o.name, outdated: o.outdated });
+      if (source.kind === 'guide')
+        dependents.get(source.id)?.push({ id: o.id, name: o.name, outdated: o.outdated });
   return {
     objects,
     guides: [...guides.values()].map((g) => ({
@@ -85,6 +72,15 @@ export function generationLinks(design) {
       name: g.name,
       dependents: dependents.get(g.id),
       ...(g.provenance?.kind === 'offset' ? { source: offsets.get(g.id) } : {}),
+    })),
+    meshes: (design?.meshSources || []).map((source) => ({
+      id: source.id,
+      name: source.name,
+      dependents: objects
+        .filter((object) =>
+          object.sources.some((ref) => ref.kind === 'mesh' && ref.id === source.id),
+        )
+        .map((object) => ({ id: object.id, name: object.name, outdated: object.outdated })),
     })),
   };
 }

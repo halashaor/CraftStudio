@@ -1,7 +1,9 @@
 import { SketchContextUI } from '../ui/sketch-context-ui.js';
+import { constructionOutput } from './preview-presentation.js';
 import { PreviewIssuesUI } from './preview-issues-ui.js';
 import { pointPlacement, surfacePathKinds } from '../sketch/placement-mode.js';
 import { SketchNodeDrag, nearestScreenNode } from '../sketch/sketch-node-drag.js';
+import { SketchNodeFeedback } from '../sketch/sketch-node-feedback.js';
 import viewMarkup0 from './views/construction-ui-panel.html';
 import { SketchSnapController } from '../sketch/snap-controller.js';
 import { validToolIntent } from '../storage/tool-intents.js';
@@ -52,6 +54,7 @@ export function constructionUI({
   scene,
   getCamera,
   renderer,
+  controls,
   call,
   refresh,
   render,
@@ -117,6 +120,7 @@ export function constructionUI({
     persistent = new THREE.Group();
   scene.add(handles, persistent);
   const control = new TransformControls(getCamera(), renderer.domElement);
+  control.enabled = false;
   control.setTranslationSnap(0.5);
   control.setSpace('world');
   control.setSize(0.65);
@@ -167,7 +171,33 @@ export function constructionUI({
     historyVersion = 0;
   let polylineClosed = false,
     bezierSamples = null;
-  let nodeDrag = null;
+  let nodeDrag = null,
+    navigationHeld = false;
+  function syncGizmoEnabled() {
+    control.enabled = !!(
+      active &&
+      control.object &&
+      handles.visible &&
+      !drawing &&
+      !committing &&
+      !planePicking &&
+      !terrainPicking &&
+      !slopePicking &&
+      !navigationHeld
+    );
+    if (!control.enabled) control.axis = null;
+  }
+  control.addEventListener('object-changed', syncGizmoEnabled);
+  const nodeFeedback = new SketchNodeFeedback({
+    element: renderer.domElement,
+    changed: () => {
+      highlightNode();
+      requestRender();
+    },
+  });
+  controls.addEventListener('change', () => {
+    if (!nodeDrag?.state && !control.dragging) nodeFeedback.clear();
+  });
   let movementAxes = 'free',
     dragPickedAxis = null;
   const profiles = () => closedProfiles(savedGuides);
@@ -291,9 +321,14 @@ export function constructionUI({
   function syncHandoff() {
     const auxiliary = auxiliaryEditing();
     $('construction-apply').textContent =
-      type === 'geometry' && $('figure-guides-only').checked ? '保存辅助曲线' : '确认方块放置';
+      draft?.regeneration?.objects > 0
+        ? '更新草图与关联结果'
+        : type === 'geometry' && $('figure-guides-only').checked
+          ? '保存辅助曲线'
+          : '确认方块放置';
     $('figure-guides-only').disabled = false;
     handoff.hidden = !active || type !== 'geometry' || drawing || !$('figure-guides-only').checked;
+    $('sketch-stroke-blocks').hidden = handoff.hidden;
     if (handoff.hidden) return;
     const actions = handoffActions(),
       ready =
@@ -541,6 +576,10 @@ export function constructionUI({
       planeLock: $('sketch-plane-lock').checked,
       guidesOnly: $('figure-guides-only').checked,
       previewState: panel.dataset.previewState,
+      previewOutput: panel.dataset.previewOutput,
+      canConfirm: !$('construction-apply').disabled,
+      pointCount: drawing ? anchors.length : points.length,
+      selectedNode: pickIndex,
       snap: Number($('sketch-snap').value),
       materialName: materialName(material),
       width: Number($('figure-width').value),
@@ -549,6 +588,7 @@ export function constructionUI({
   });
   function choosePointPlacement(mode) {
     if (committing) return;
+    nodeFeedback.clear();
     const before = captureParameters();
     $('sketch-pick-surface').checked = mode === 'surface';
     if (mode === 'surface') {
@@ -889,6 +929,10 @@ export function constructionUI({
     if (active && !drawing && (coordinateField(e.target) || parameterField(e.target)))
       fieldStart = captureParameters();
   });
+  panel.addEventListener('craftstudio-choice-start', (e) => {
+    if (active && !drawing && optionField(e.target))
+      optionStart = { input: e.target, before: captureParameters() };
+  });
   panel.addEventListener('focusout', (e) => {
     if (coordinateField(e.target) || parameterField(e.target)) {
       const before = fieldStart;
@@ -947,7 +991,7 @@ export function constructionUI({
         panel.dataset.liveMs = String(info.ms || 0);
         panel.dataset.liveBounds = JSON.stringify(info.bounds || []);
         panel.dataset.liveVoxels = String(info.voxels || 0);
-        panel.dataset.previewState = 'live';
+        panel.dataset.previewState = drawing ? 'drawing' : 'live';
         for (const n of [guideNode, ghost, red]) if (n) n.visible = false;
         $('construction-report').textContent =
           info.error ||
@@ -1001,6 +1045,12 @@ export function constructionUI({
       scene.add(guideNode, ghost, red);
       const c = result.counts,
         parts = result.usedRoles;
+      panel.dataset.previewOutput = constructionOutput({
+        type,
+        guidesOnly: $('figure-guides-only').checked,
+        counts: c,
+        regeneration: result.regeneration,
+      });
       $('construction-report').textContent =
         `新增 ${c.place} · 替换 ${c.replace} · 移除 ${c.remove}` +
         (parts?.slab ? ` · 半砖 ${parts.slab}` : '') +
@@ -1063,6 +1113,7 @@ export function constructionUI({
     },
   });
   function schedule() {
+    syncGizmoEnabled();
     if (!active || committing) return;
     syncPolicyRules();
     issues.clear();
@@ -1140,19 +1191,25 @@ export function constructionUI({
       ' 格';
   }
   function highlightNode() {
-    for (const node of pointNodes)
-      node.material.color.setHex(
-        node.userData.index === pickIndex
-          ? 0xffffff
-          : node.userData.index === 0 || node.userData.index === points.length - 1
-            ? 0x80cfff
-            : 0xf8c480,
+    for (const node of pointNodes) {
+      const style = nodeFeedback.appearance(
+        node,
+        node.userData.index === pickIndex,
+        node.userData.index === 0 || node.userData.index === points.length - 1,
       );
+      node.material.color.setHex(style.color);
+      node.userData.feedbackState = style.state;
+    }
     for (const [i, row] of [...$('figure-points').children].entries()) {
       row.classList.toggle('selected', i === pickIndex);
       row.querySelector('button')?.setAttribute('aria-pressed', String(i === pickIndex));
+      const hovered = nodeFeedback.node?.userData.index === i;
+      row.style.outline = hovered ? '1px solid #65e5f0' : '';
+      row.style.outlineOffset = hovered ? '1px' : '';
     }
     panel.dataset.selectedNode = String(pickIndex);
+    if (nodeFeedback.node) panel.dataset.hoveredNode = String(nodeFeedback.node.userData.index);
+    else delete panel.dataset.hoveredNode;
   }
   function syncControlPolygon() {
     if (controlPolygon && type === 'geometry' && !drawing) {
@@ -1274,6 +1331,7 @@ export function constructionUI({
     );
   }
   function makeHandles() {
+    nodeFeedback.clear();
     if (controlPolygon) {
       handles.remove(controlPolygon);
       controlPolygon.geometry.dispose();
@@ -1316,7 +1374,12 @@ export function constructionUI({
           perPixel = camera.isOrthographicCamera
             ? (camera.top - camera.bottom) / camera.zoom / height
             : (2 * Math.max(0.001, depth) * Math.tan((camera.fov * Math.PI) / 360)) / height;
-        node.scale.setScalar(perPixel * (i === pickIndex ? 7 : 5) * 4);
+        node.scale.setScalar(
+          perPixel *
+            nodeFeedback.appearance(node, i === pickIndex, i === 0 || i === points.length - 1)
+              .size *
+            4,
+        );
         node.updateMatrixWorld(true);
       };
       handles.add(node);
@@ -1406,6 +1469,8 @@ export function constructionUI({
   });
   control.addEventListener('change', requestRender);
   control.addEventListener('dragging-changed', (e) => {
+    if (e.value && type === 'geometry') nodeFeedback.show(control.object, true);
+    else nodeFeedback.clear();
     if (e.value) {
       fieldStart = null;
       dragPickedAxis = control.axis;
@@ -1695,6 +1760,7 @@ export function constructionUI({
   };
   function close({ remember = true } = {}) {
     if (committing) return;
+    nodeFeedback.clear();
     issues.clear();
     clearSurfaceIssues();
     for (const input of [...expressionPending.keys()]) expressionBindings.get(input)?.restore();
@@ -2315,6 +2381,7 @@ export function constructionUI({
             : '点击终点；随后直接拖动圆点调整，X / Y / Z 可约束方向';
   }
   function beginDrawing() {
+    nodeFeedback.clear();
     syncPolicyRules();
     issues.clear();
     clearSurfaceIssues();
@@ -2653,6 +2720,7 @@ export function constructionUI({
     return !spatialDrawing() && origin ? workplane([origin], $('figure-plane').value) : null;
   }
   function planeStatus() {
+    syncGizmoEnabled();
     if (workingFrame) $('figure-plane').value = 'custom';
     else if ($('figure-plane').value === 'custom') $('figure-plane').value = 'xz';
     const frame = drawingFrame(),
@@ -2678,7 +2746,9 @@ export function constructionUI({
     panel.dataset.workplane = workingFrame ? JSON.stringify(workingFrame) : '';
   }
   function beginPlanePick(mode) {
+    nodeFeedback.clear();
     planePicking = mode;
+    syncGizmoEnabled();
     planePickPoints = [];
     token++;
     precise.cancel();
@@ -2864,6 +2934,7 @@ export function constructionUI({
     navigation,
     begin: (index) => {
       pickIndex = index;
+      nodeFeedback.show(pointNodes[index], true);
       control.axis = null;
       control.attach(pointNodes[index]);
       dragStart = captureParameters();
@@ -2879,6 +2950,7 @@ export function constructionUI({
       requestRender();
     },
     finish: () => {
+      nodeFeedback.clear();
       const before = dragStart;
       dragStart = null;
       panel.dataset.dragging = 'false';
@@ -2887,16 +2959,64 @@ export function constructionUI({
       precise.request(true);
     },
     cancel: () => {
+      nodeFeedback.clear();
       const before = dragStart;
       dragStart = null;
       panel.dataset.dragging = 'false';
       if (before) restoreParameters(before);
     },
   });
+  const navigationCursor = () =>
+    navigationHeld || (renderer.domElement.style.cursor === 'grab' && !nodeFeedback.ownsCursor);
+  function screenNode(event) {
+    const rect = renderer.domElement.getBoundingClientRect(),
+      camera = getCamera();
+    camera.updateMatrixWorld(true);
+    return nearestScreenNode(pointNodes, {
+      pointer: [event.clientX, event.clientY],
+      project: (node) => {
+        const p = node.position.clone().project(camera);
+        return [
+          rect.left + ((p.x + 1) * rect.width) / 2,
+          rect.top + ((1 - p.y) * rect.height) / 2,
+          p.z,
+        ];
+      },
+    });
+  }
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (nodeDrag?.state || control.dragging) return;
+    if (
+      !active ||
+      type !== 'geometry' ||
+      drawing ||
+      committing ||
+      planePicking ||
+      terrainPicking ||
+      slopePicking ||
+      event.buttons ||
+      navigationCursor() ||
+      (control.axis && control.axis !== 'XYZ')
+    ) {
+      nodeFeedback.clear();
+      return;
+    }
+    nodeFeedback.show(screenNode(event));
+  });
+  renderer.domElement.addEventListener('pointerleave', () => {
+    if (!nodeDrag?.state && !control.dragging) nodeFeedback.clear();
+  });
+  renderer.domElement.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (event.button !== 0) nodeFeedback.clear();
+    },
+    true,
+  );
   renderer.domElement.addEventListener(
     'pointerdown',
     (e) => {
-      if (!active || e.button !== 0 || renderer.domElement.style.cursor === 'grab') return;
+      if (!active || e.button !== 0 || navigationCursor()) return;
       if (planePicking) {
         drawingDown = { x: e.clientX, y: e.clientY };
         e.preventDefault();
@@ -2940,17 +3060,7 @@ export function constructionUI({
       getCamera().updateMatrixWorld(true);
       ray.setFromCamera(pointer, getCamera());
       if (type === 'geometry' && !committing) {
-        const selected = nearestScreenNode(pointNodes, {
-          pointer: [e.clientX, e.clientY],
-          project: (node) => {
-            const p = node.position.clone().project(getCamera());
-            return [
-              rect.left + ((p.x + 1) * rect.width) / 2,
-              rect.top + ((1 - p.y) * rect.height) / 2,
-              p.z,
-            ];
-          },
-        });
+        const selected = screenNode(e);
         if (selected && (!control.axis || control.axis === 'XYZ')) {
           nodeDrag.start(e, selected);
           return;
@@ -3135,6 +3245,7 @@ export function constructionUI({
       );
   });
   renderer.domElement.addEventListener('pointercancel', () => {
+    nodeFeedback.clear();
     cancelControlDrag();
     drawingDown = null;
     if (slopeDrag) {
@@ -3143,6 +3254,7 @@ export function constructionUI({
     }
   });
   window.addEventListener('blur', () => {
+    nodeFeedback.clear();
     cancelControlDrag();
     if (slopeDrag) {
       stopSlope(true);
@@ -3210,7 +3322,10 @@ export function constructionUI({
       workspaceId: getSummary().workspaceId,
     };
     committing = true;
+    nodeFeedback.clear();
+    syncGizmoEnabled();
     const id = draft.id;
+    panel.dataset.previewState = 'applying';
     $('construction-apply').disabled = true;
     try {
       refresh(
@@ -3243,6 +3358,7 @@ export function constructionUI({
       return null;
     } finally {
       committing = false;
+      syncGizmoEnabled();
     }
   }
   $('construction-apply').onclick = () => confirmConstruction();
@@ -3426,6 +3542,12 @@ export function constructionUI({
     );
   }
   return {
+    setNavigationHeld: (held) => {
+      if (held && !navigationHeld) cancelControlDrag();
+      navigationHeld = held;
+      nodeFeedback.clear();
+      syncGizmoEnabled();
+    },
     workspaceCategory: () => ({ geometry: 'draw', feature: 'model', terrain: 'site' })[type],
     highlightSources: (ids) => {
       snapping.highlightSources(ids);
@@ -3528,6 +3650,9 @@ export function constructionUI({
       }
       requestRender();
     },
-    viewChanged: () => (control.camera = getCamera()),
+    viewChanged: () => {
+      control.camera = getCamera();
+      nodeFeedback.clear();
+    },
   };
 }
