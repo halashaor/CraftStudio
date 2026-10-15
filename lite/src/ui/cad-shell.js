@@ -1250,7 +1250,7 @@ export function cadShell({
     enterWorkspace,
     toolChanged,
     update: (s) => {
-      if (marqueeSelection.element) marqueeSelection.cancel();
+      marqueeSelection.update(s);
       comparison.update(s);
       mesh.update(s);
       meshSourcesView.update(s, mesh.editingSourceId());

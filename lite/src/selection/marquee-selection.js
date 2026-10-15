@@ -99,7 +99,10 @@ export class MarqueeSelection {
   start(event) {
     this.cancel();
     if (this.blocked() || (event.button === 0 && !this.getOptions().enabled)) return;
+    const head = this.getSummary();
     this.pointer = {
+      workspaceId: head.workspaceId,
+      revision: head.revision,
       x: event.clientX,
       y: event.clientY,
       button: event.button,
@@ -207,5 +210,16 @@ export class MarqueeSelection {
     this.element = null;
     this.view.clear();
     if (p && this.canvas.hasPointerCapture(p.id)) this.canvas.releasePointerCapture(p.id);
+  }
+  update(summary) {
+    const p = this.pointer;
+    if (
+      p &&
+      (p.workspaceId !== summary.workspaceId ||
+        p.revision !== summary.revision ||
+        summary.preview ||
+        summary.comparison?.active)
+    )
+      this.cancel();
   }
 }
