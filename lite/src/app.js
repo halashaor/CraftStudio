@@ -2438,7 +2438,6 @@ cad = cadShell({
   cast,
   hitCell,
   getSummary: () => summary,
-  projectPoint: (pos) => new THREE.Vector3(...pos).project(camera),
   scene,
   getCamera: () => camera,
   navigation: (enabled) => (controls.enabled = enabled),

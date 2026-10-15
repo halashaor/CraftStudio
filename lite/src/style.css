@@ -2869,12 +2869,12 @@ input.dimension-scrubbing {
   background: #48c69a22;
 }
 #cad-marquee::after {
-  content: attr(data-label);
+  content: attr(data-label) '\a' attr(data-feedback);
   position: absolute;
   left: 0;
   top: 0;
   transform: translateY(-100%);
-  white-space: nowrap;
+  white-space: pre;
   padding: 4px 6px;
   border-radius: 3px;
   background: #223347ed;

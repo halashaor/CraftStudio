@@ -98,6 +98,7 @@ export function screenBoxSelection(
     showExisting = true,
     isolateKeys = null,
   },
+  cache = null,
 ) {
   if (
     ![matrix, inverse].every(
@@ -182,56 +183,91 @@ export function screenBoxSelection(
           for (const z of [min[2], max[2]])
             corners.push(projectScreen([x, y, z], matrix, viewport));
       if (!corners.some((p) => !p || p[2] < -1) && !screenBoxMatches(corners, box, true)) continue;
+      const stored = cache?.chunks.get(key);
+      if (stored) {
+        yield stored;
+        continue;
+      }
       const original = site.baseChunks.get(key) || new Map(),
-        overlay = site.overlayChunks.get(key) || new Map();
-      for (const [id, block] of original) yield overlay.get(id) || block;
-      for (const [id, block] of overlay) if (!original.has(id)) yield block;
+        overlay = site.overlayChunks.get(key) || new Map(),
+        data = [];
+      const add = (raw) => {
+        const block = display(raw.pos);
+        if (!block) return;
+        const pos = block.pos,
+          state = site.palette[block.state],
+          lo = [...pos],
+          hi = pos.map((v) => v + 1);
+        if (/_slab$/.test(state.Name)) {
+          if (state.Properties?.type === 'top') lo[1] += 0.5;
+          else if (state.Properties?.type !== 'double') hi[1] -= 0.5;
+        }
+        const center = lo.map((v, a) => (v + hi[a]) / 2),
+          projected = projectScreen(center, matrix, viewport);
+        if (!projected || projected[2] < -1 || projected[2] > 1) return;
+        const corners = [];
+        for (const x of [lo[0], hi[0]])
+          for (const y of [lo[1], hi[1]])
+            for (const z of [lo[2], hi[2]])
+              corners.push(projectScreen([x, y, z], matrix, viewport));
+        const valid = corners.filter(Boolean);
+        if (!valid.length) return;
+        if (valid.every((p) => p[2] < -1) || valid.every((p) => p[2] > 1)) return;
+        data.push(
+          coordKey(...pos),
+          Math.min(...valid.map((p) => p[0])),
+          Math.min(...valid.map((p) => p[1])),
+          Math.max(...valid.map((p) => p[0])),
+          Math.max(...valid.map((p) => p[1])),
+          Number(valid.length === 8),
+          projected[0],
+          projected[1],
+          center[1],
+        );
+      };
+      for (const [id, block] of original) add(overlay.get(id) || block);
+      for (const [id, block] of overlay) if (!original.has(id)) add(block);
+      // Each record: key, screen bounds, complete projection, screen center, world center Y.
+      const packed = new Float64Array(data);
+      if (cache && cache.cells + packed.length / 9 <= cache.limit) {
+        cache.chunks.set(key, packed);
+        cache.cells += packed.length / 9;
+      }
+      yield packed;
     }
   }
   const members = [];
-  for (const raw of candidates()) {
-    const block = display(raw.pos);
-    if (!block) continue;
-    const pos = block.pos,
-      state = site.palette[block.state],
-      lo = [...pos],
-      hi = pos.map((v) => v + 1);
-    if (/_slab$/.test(state.Name)) {
-      if (state.Properties?.type === 'top') lo[1] += 0.5;
-      else if (state.Properties?.type !== 'double') hi[1] -= 0.5;
+  for (const data of candidates())
+    for (let i = 0; i < data.length; i += 9) {
+      const [key, x0, y0, x1, y1, complete, sx, sy, cy] = data.subarray(i, i + 9);
+      const hit = crossing
+        ? x0 <= box.max[0] && y0 <= box.max[1] && x1 >= box.min[0] && y1 >= box.min[1]
+        : complete && x0 >= box.min[0] && y0 >= box.min[1] && x1 <= box.max[0] && y1 <= box.max[1];
+      if (!hit) continue;
+      const pos = coords(key);
+      if (depth === 'visible') {
+        let visible = cache?.visibility.get(key);
+        if (visible === undefined) {
+          const center = [pos[0] + 0.5, cy, pos[2] + 0.5],
+            start = unproject((sx / viewport[0]) * 2 - 1, 1 - (sy / viewport[1]) * 2, -1, inverse),
+            startsInside = pos.every((n, a) => n === Math.floor(start[a])),
+            buried =
+              !startsInside &&
+              [
+                [1, 0, 0],
+                [-1, 0, 0],
+                [0, 1, 0],
+                [0, -1, 0],
+                [0, 0, 1],
+                [0, 0, -1],
+              ].every((offset) => display(pos.map((n, a) => n + offset[a])));
+          visible = !buried && visibleCell(start, center, pos, (p) => !!display(p));
+          if (cache && cache.visibility.size < cache.limit) cache.visibility.set(key, visible);
+        }
+        if (!visible) continue;
+      }
+      members.push(pos);
     }
-    const center = lo.map((v, a) => (v + hi[a]) / 2),
-      projected = projectScreen(center, matrix, viewport);
-    if (!projected || projected[2] < -1 || projected[2] > 1) continue;
-    const corners = [];
-    for (const x of [lo[0], hi[0]])
-      for (const y of [lo[1], hi[1]])
-        for (const z of [lo[2], hi[2]]) corners.push(projectScreen([x, y, z], matrix, viewport));
-    if (!screenBoxMatches(corners, box, crossing)) continue;
-    if (depth === 'visible') {
-      const start = unproject(
-        (projected[0] / viewport[0]) * 2 - 1,
-        1 - (projected[1] / viewport[1]) * 2,
-        -1,
-        inverse,
-      );
-      const startsInside = pos.every((n, a) => n === Math.floor(start[a]));
-      if (
-        !startsInside &&
-        [
-          [1, 0, 0],
-          [-1, 0, 0],
-          [0, 1, 0],
-          [0, -1, 0],
-          [0, 0, 1],
-          [0, 0, -1],
-        ].every((offset) => display(pos.map((n, a) => n + offset[a])))
-      )
-        continue;
-      if (!visibleCell(start, center, pos, (p) => !!display(p))) continue;
-    }
-    members.push([...pos]);
-  }
   if (!members.length) return null;
   return {
     min: [0, 1, 2].map((a) => members.reduce((v, p) => Math.min(v, p[a]), Infinity)),

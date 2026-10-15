@@ -3,7 +3,8 @@ import { meshDescriptors, getParsedMesh } from './models/mesh-sources.js';
 import { meshConstructionPlan } from './models/mesh-construction.js';
 import { centeredMeshPositions } from './models/mesh-transform.js';
 import { comparisonActionAllowed, comparisonMessage } from './view/comparison-access.js';
-import { screenBoxSelection } from './selection/screen-box.js';
+import { ScreenSelectionQuery } from './selection/screen-selection-query.js';
+const screenSelection = new ScreenSelectionQuery();
 import { PlanningAPI } from './api/planning-api.js';
 import { importRegionInput } from './minecraft/region-set.js';
 import { renameObjects } from './selection/object-naming.js';
@@ -473,7 +474,7 @@ async function execute(action, data) {
   }
   if (action === 'screenBoxSelection') {
     api.guard(data);
-    return screenBoxSelection(displaySite(), {
+    return screenSelection.query(displaySite(), {
       ...data,
       isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
     });

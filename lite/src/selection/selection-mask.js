@@ -86,3 +86,13 @@ export function combineSelection(current, incoming, operation = 'replace') {
     max = current.max.map((n, a) => (operation === 'add' ? Math.max(n, region.max[a]) : n));
   return { min, max, regions };
 }
+
+// Explicit members let the UI prove an empty result without expanding arbitrary box volumes.
+export function knownEmptySelection(selection) {
+  const included = (selection.regions || [selection]).filter(
+    (r) => !r.operation || ['replace', 'add'].includes(r.operation),
+  );
+  if (included.some((r) => !Array.isArray(r.members))) return false;
+  const contains = selectionPredicate(selection);
+  return !included.some((r) => r.members.some((p) => contains(Array.isArray(p) ? p : coords(p))));
+}

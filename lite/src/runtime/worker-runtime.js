@@ -29,6 +29,8 @@ export function responseTransfers(action, value) {
   if (action === 'selectionPreview' && ArrayBuffer.isView(value.members)) {
     transfers.push(value.members.buffer);
   }
+  if (action === 'screenBoxSelection' && value?.coordinates)
+    transfers.push(value.coordinates.buffer);
   return transfers;
 }
 

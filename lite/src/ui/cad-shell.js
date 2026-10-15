@@ -4,7 +4,7 @@ import { MeshSourceBrowser } from '../models/mesh-source-browser.js';
 import { ComparisonUI } from './comparison-ui.js';
 import { comparisonMessage } from '../view/comparison-access.js';
 import { selectionSettingsUI } from './selection-settings-ui.js';
-import { screenObjectMatches } from '../selection/screen-box.js';
+import { MarqueeSelection } from '../selection/marquee-selection.js';
 import { ObjectTreeUI } from './object-tree-ui.js';
 import { ObjectSelectionBinding } from '../selection/object-selection-binding.js';
 import { MaterialPicker } from '../materials/material-picker.js';
@@ -13,7 +13,7 @@ import { SelectionSetsUI } from '../selection/selection-sets-ui.js';
 import { viewportContextMenu } from './viewport-context-menu.js';
 import { objectNameUI } from '../selection/object-name-ui.js';
 import { componentContextUI } from '../components/component-context-ui.js';
-import { selectionPredicate } from '../selection/selection-mask.js';
+import { selectionPredicate, knownEmptySelection } from '../selection/selection-mask.js';
 import { coords } from '../core/site.js';
 import {
   combineObjectIds,
@@ -58,13 +58,13 @@ export function cadShell({
   cast,
   hitCell,
   getSummary,
-  projectPoint,
   scene,
   getCamera,
   navigation,
   requestRender,
 }) {
-  let workspace = null,
+  let marqueeSelection = null,
+    workspace = null,
     sketchBrowser = null,
     collectionBrowser = null;
   const {
@@ -110,6 +110,7 @@ export function cadShell({
   const selectionReason = () =>
     busyReason() || (!selectionActive ? '请先选择方块、对象或区域' : '');
   function prepareOperation(owner) {
+    marqueeSelection?.cancel();
     if (getSummary()?.comparison?.active) {
       notice(comparisonMessage);
       return false;
@@ -583,6 +584,7 @@ export function cadShell({
     studio.clearSelection();
     direct.cancel();
     selectionActive = false;
+    $('download-selection').disabled = true;
     objectCandidates.clear();
     objectOnly = false;
     selectedObjects.clear();
@@ -620,6 +622,7 @@ export function cadShell({
   $('ai-preview').textContent = '查看方案';
   $('ai-open').hidden = true;
   function toolChanged(tool) {
+    marqueeSelection?.cancel();
     materialPicker.clear();
     if (measurement.isActive()) measurement.close();
     brushOptions.toolChanged(tool);
@@ -727,8 +730,57 @@ export function cadShell({
     ],
   });
   const contextMenu = menu.element;
-  let pointer = null,
-    marquee = null;
+  marqueeSelection = new MarqueeSelection({
+    THREE,
+    canvas: renderer.domElement,
+    scene,
+    controls,
+    getCamera,
+    getSummary,
+    call,
+    notice,
+    requestRender,
+    menu,
+    blocked: () => hasOperation() || renderer.domElement.style.cursor === 'grab',
+    getSelection: () => (selectionActive ? structuredClone(studio.getSelection()) : null),
+    getOptions: () => ({
+      enabled: !!document.querySelector('[data-tool="inspect"].active'),
+      operation: $('cad-selection-mode').value,
+      target: $('cad-selection-target').value,
+      hit: $('cad-box-hit').value,
+      depth: $('cad-box-depth').value,
+      mode: window.CraftStudio.displayState().mode,
+      cut: +$('cut').value,
+      plants: $('plants').checked,
+      showGround: $('ground').checked,
+      showExisting: $('existing').checked,
+    }),
+    commit: (result, input) => {
+      const range = input.target === 'objects' ? result.range : result;
+      if (range) {
+        if (input.target === 'objects') selectObjects(result.objectIds, input.operation);
+        else studio.selectRange(range, input.operation);
+        if (selectionActive && knownEmptySelection(studio.getSelection()))
+          $('cad-selection-clear').click();
+      } else if (['replace', 'intersect'].includes(input.operation))
+        $('cad-selection-clear').click();
+      $('pick-panel').hidden = true;
+      notice(
+        !selectionActive
+          ? '已清空选择'
+          : !range
+            ? '框内没有命中，原选择保留'
+            : input.operation === 'replace'
+              ? '已选中 ' +
+                (input.target === 'objects'
+                  ? result.objectIds.length + ' 个对象'
+                  : range.members.length + ' 个方块')
+              : { add: '已完成加选', subtract: '已完成减选', intersect: '已保留选择交集' }[
+                  input.operation
+                ],
+      );
+    },
+  });
   renderer.domElement.addEventListener(
     'wheel',
     (e) => {
@@ -748,6 +800,7 @@ export function cadShell({
     { capture: true, passive: false },
   );
   function pickObject(e, hit) {
+    const pointer = marqueeSelection.pointer;
     if (
       $('cad-selection-target').value !== 'objects' ||
       e.button !== 0 ||
@@ -767,7 +820,7 @@ export function cadShell({
       index = e.altKey ? (current + 1) % candidates.length : Math.max(0, current),
       object = candidates[index];
     selectObjects([object.id], pointer.operation);
-    pointer = null;
+    marqueeSelection.cancel();
     e.preventDefault();
     e.stopImmediatePropagation();
     if (candidates.length > 1)
@@ -775,168 +828,6 @@ export function cadShell({
     return true;
   }
   renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-  renderer.domElement.addEventListener('pointerdown', (e) => {
-    if (hasOperation()) {
-      pointer = null;
-      return;
-    }
-    pointer = {
-      x: e.clientX,
-      y: e.clientY,
-      button: e.button,
-      start: e.button === 0 ? cast(e) : null,
-      shift: e.shiftKey,
-      ctrl: e.ctrlKey,
-      operation: e.ctrlKey ? 'subtract' : e.shiftKey ? 'add' : $('cad-selection-mode').value,
-    };
-  });
-  renderer.domElement.addEventListener('pointermove', (e) => {
-    if (
-      !pointer ||
-      pointer.button !== 0 ||
-      document.querySelector('[data-tool="inspect"]').classList.contains('active') === false ||
-      e.altKey ||
-      hasOperation() ||
-      renderer.domElement.style.cursor === 'grab'
-    )
-      return;
-    if (Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 8) return;
-    if (!marquee) {
-      marquee = document.createElement('div');
-      marquee.id = 'cad-marquee';
-      document.body.append(marquee);
-    }
-    const crossing =
-      $('cad-box-hit').value === 'crossing' ||
-      ($('cad-box-hit').value === 'direction' && e.clientX < pointer.x);
-    marquee.dataset.crossing = String(crossing);
-    marquee.dataset.operation = pointer.operation;
-    marquee.dataset.label =
-      { replace: '重新选择', add: '增加', subtract: '减去', intersect: '保留交集' }[
-        pointer.operation
-      ] +
-      ' · ' +
-      (crossing ? '框到就选' : '完全框入') +
-      ' · Esc 取消';
-    Object.assign(marquee.style, {
-      left: Math.min(pointer.x, e.clientX) + 'px',
-      top: Math.min(pointer.y, e.clientY) + 'px',
-      width: Math.abs(e.clientX - pointer.x) + 'px',
-      height: Math.abs(e.clientY - pointer.y) + 'px',
-    });
-  });
-  renderer.domElement.addEventListener('pointerup', (e) => {
-    if (hasOperation()) {
-      marquee?.remove();
-      marquee = null;
-      pointer = null;
-      return;
-    }
-    if (!pointer) return;
-    if (pointer.button === 2 && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 5) {
-      menu.open(e.clientX, e.clientY);
-    }
-    if (marquee) {
-      const requestPointer = pointer;
-      const rect = renderer.domElement.getBoundingClientRect(),
-        lo = [Math.min(pointer.x, e.clientX), Math.min(pointer.y, e.clientY)],
-        hi = [Math.max(pointer.x, e.clientX), Math.max(pointer.y, e.clientY)],
-        crossing =
-          $('cad-box-hit').value === 'crossing' ||
-          ($('cad-box-hit').value === 'direction' && e.clientX < pointer.x);
-      const selected =
-        $('cad-selection-target').value === 'objects'
-          ? (getSummary()?.design.objects || []).filter((o) => {
-              if (objectHidden(getSummary().design, o)) return false;
-              return screenObjectMatches(o, {
-                box: { min: lo, max: hi },
-                crossing,
-                project: (point) => {
-                  const p = projectPoint(point);
-                  return [
-                    rect.left + ((p.x + 1) * rect.width) / 2,
-                    rect.top + ((1 - p.y) * rect.height) / 2,
-                    p.z,
-                  ];
-                },
-              });
-            })
-          : [];
-      if (selected.length) {
-        selectObjects(
-          selected.map((o) => o.id),
-          pointer.operation,
-        );
-        $('pick-panel').hidden = true;
-      } else if ($('cad-selection-target').value === 'blocks') {
-        const camera = getCamera();
-        camera.updateMatrixWorld(true);
-        const viewProjection = new THREE.Matrix4().multiplyMatrices(
-            camera.projectionMatrix,
-            camera.matrixWorldInverse,
-          ),
-          head = getSummary();
-        const parameters = {
-          workspaceId: head.workspaceId,
-          expectedRevision: head.revision,
-          matrix: viewProjection.toArray(),
-          inverse: viewProjection.clone().invert().toArray(),
-          viewport: [rect.width, rect.height],
-          box: {
-            min: lo.map((n, a) => n - [rect.left, rect.top][a]),
-            max: hi.map((n, a) => n - [rect.left, rect.top][a]),
-          },
-          crossing,
-          depth: $('cad-box-depth').value,
-          mode: window.CraftStudio.displayState().mode,
-          cut: +$('cut').value,
-          plants: $('plants').checked,
-          showGround: $('ground').checked,
-          showExisting: $('existing').checked,
-        };
-        task(async () => {
-          const range = await call('screenBoxSelection', parameters);
-          const current = getSummary();
-          if (current.workspaceId !== head.workspaceId || current.revision !== head.revision)
-            throw Error('场景已变化，请重新框选');
-          if (range) studio.selectRange(range, requestPointer.operation);
-          else if (requestPointer.operation === 'replace') $('cad-selection-clear').click();
-          notice(
-            range
-              ? '已框选 ' + range.members.length + ' 个方块'
-              : '框内没有命中的方块；可切换穿透或对象选择',
-          );
-        }, '正在框选方块…');
-      } else if (requestPointer.operation === 'replace') $('cad-selection-clear').click();
-      marquee.remove();
-      marquee = null;
-    }
-    pointer = null;
-  });
-  const cancelMarquee = () => {
-    pointer = null;
-    marquee?.remove();
-    marquee = null;
-  };
-  renderer.domElement.addEventListener('pointercancel', cancelMarquee);
-  window.addEventListener('blur', cancelMarquee);
-  window.addEventListener(
-    'keydown',
-    (e) => {
-      if (
-        !marquee ||
-        e.key !== 'Escape' ||
-        dialogOwnsKeyboard() ||
-        textEditing(document.activeElement)
-      )
-        return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      cancelMarquee();
-      notice('已取消本次框选，原选择保留');
-    },
-    true,
-  );
   window.addEventListener('keydown', (e) => {
     if (dialogOwnsKeyboard()) return;
     if (e.target.closest?.('[data-shortcut-scope=commands]')) return;
@@ -1359,6 +1250,7 @@ export function cadShell({
     enterWorkspace,
     toolChanged,
     update: (s) => {
+      if (marqueeSelection.element) marqueeSelection.cancel();
       comparison.update(s);
       mesh.update(s);
       meshSourcesView.update(s, mesh.editingSourceId());
@@ -1438,6 +1330,7 @@ export function cadShell({
       mesh.viewChanged();
     },
     setNavigationHeld: (held) => {
+      if (held) marqueeSelection.cancel();
       construction.setNavigationHeld(held);
       direct.setNavigationHeld(held);
       mesh.setNavigationHeld(held);
