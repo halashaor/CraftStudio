@@ -8,12 +8,12 @@ export function responseTransfers(action, value) {
     transfers.push(value.positions.buffer);
   } else if (meshActions.has(action) || action === 'meshChunks' || action === 'createScene') {
     const buckets = meshActions.has(action)
-      ? value.buckets
+      ? [...value.buckets]
       : action === 'meshChunks'
         ? value.chunks.flatMap((chunk) => chunk.buckets)
         : Object.values(value.definitions).flatMap((model) => model.buckets);
 
-    if (action === 'assetPreview') {
+    if (action === 'assetPreview' || action === 'prepareConstruction') {
       buckets.push(
         ...Object.values(value.motions?.definitions || {}).flatMap((model) => model.buckets),
       );

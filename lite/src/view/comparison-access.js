@@ -31,6 +31,7 @@ const actions = new Set([
   'resume',
   'endStroke',
   'cancelConstruction',
+  'constructionDisplay',
 ]);
 const methods = new Set([
   'workspace.describe',

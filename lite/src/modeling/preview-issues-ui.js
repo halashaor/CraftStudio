@@ -57,6 +57,9 @@ export class PreviewIssuesUI {
     this.policyHint.hidden = !this.policyHint.textContent;
     this.syncPolicy();
   }
+  setAdvice(overrides) {
+    this.adviceOverrides = overrides;
+  }
   syncPolicy() {
     for (const [kind, input] of Object.entries(this.inputs)) {
       input.checked = !!this.policyOverrides[kind] || this.policyControls[kind].checked;
@@ -104,7 +107,7 @@ export class PreviewIssuesUI {
       row.dataset.issueKind = group.kind;
       title.textContent = `${group.label} · ${group.count} 格`;
       help.className = detail.className = 'small';
-      help.textContent = advice[group.kind];
+      help.textContent = this.adviceOverrides?.[group.kind] || advice[group.kind];
       actions.className = 'row';
       locate.type = 'button';
       locate.dataset.issueLocate = group.kind;

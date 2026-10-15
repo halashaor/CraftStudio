@@ -76,6 +76,7 @@ export function registerModelingCommands({
     boolean: 'boolean union subtract',
     editFeature: 'edit feature',
     paint: 'paint material recolor 换材质 配色',
+    blockState: 'properties block state 朝向 形态 半砖 楼梯 属性',
     instance: 'linked instance',
     syncInstances: 'update component',
     makeUniqueInstance: 'make unique',
@@ -88,7 +89,7 @@ export function registerModelingCommands({
       option.textContent,
       '排列 / 编辑',
       () => {
-        workspace.selectCategory('model');
+        workspace.selectCategory(option.value === 'blockState' ? 'edit' : 'model');
         designer.open(option.value);
       },
       aliases[option.value] || '',

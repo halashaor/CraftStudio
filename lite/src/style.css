@@ -3628,3 +3628,25 @@ input.dimension-scrubbing {
   background: #554b72;
   border-color: #bba3e5;
 }
+#state-edit-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+#state-edit-fields label {
+  margin: 0;
+  padding-left: 7px;
+  border-left: 2px solid transparent;
+}
+#state-edit-fields label[data-changed='true'] {
+  border-left-color: var(--design-result);
+}
+#state-edit-fields select {
+  min-width: 0;
+}
+#state-edit-fields > p {
+  grid-column: 1 / -1;
+}
+#block-state-editor > .row {
+  margin-top: 12px;
+}

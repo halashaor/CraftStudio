@@ -127,6 +127,37 @@ Create 的运动预览由方块状态、原生模型及装置 NBT 自动决定�
 
 公开接口增加 construction.prepare / construction.commit。prepare 参数为 {type:'geometry'|'terrain'|'feature'|'designer'|'mesh',config,policy}，返回预览 ID、辅助线、数量与冲突；includeMesh:true 可取得网格。commit 参数为 {id,policy,name?}，检查预览基准版本后提交。
 
+### Block property edits / 方块属性编辑
+
+`construction.prepare` accepts `type:"designer"` with `operation:"blockState"`. Use an exact local selection (including optional `members` / `regions`) or `objectIds`, an existing block `sourceName`, and a string-valued property delta:
+
+```js
+const head = await CraftStudio.request({ method: 'workspace.describe' });
+const prepared = await CraftStudio.request({
+  method: 'construction.prepare',
+  params: {
+    workspaceId: head.workspaceId,
+    expectedRevision: head.revision,
+    type: 'designer',
+    config: {
+      operation: 'blockState',
+      selection: { min: [4, 2, 4], max: [6, 2, 4], members: [[4, 2, 4], [6, 2, 4]] },
+      sourceName: 'minecraft:oak_stairs',
+      properties: { facing: 'east' }
+    },
+    policy: { allowExisting: false, allowTerrain: false }
+  }
+});
+```
+
+The result includes `stateChange:{sources,sourceName,selected,matched,changed,unchanged,excluded,nbtPreserved,reusableState}`. Each source has its count and `properties:[{key,values,missing,mixed,choices}]`. An empty property delta can inspect this metadata; a no-change commit is rejected. A missing selected type returns available source metadata with `blocked.code:"STATE_SOURCE_MISSING"`; it never silently targets a different type. `reusableState` is non-null only when all results of the selected type have the same block state, and never includes container/contraption NBT.
+
+Confirm with the existing `construction.commit` ID and policy. Only the requested properties change; names, other properties, exact selection membership and typed block-entity NBT are preserved. Protection, revision guards and one-step undo still apply. Explicit API patches are not limited to resource-derived UI choices. Loaded model conditions and common fallbacks are not a full runtime state schema or neighbor simulation.
+
+`includeMesh:true` also returns applicable Create `motions` definitions/instances; default compact responses omit all mesh/motion geometry. The built-in editor temporarily hides replaced cell geometry for an accurate in-place preview and restores it on cancel. This mask is display state, not a project edit. `captureView().scene.unconfirmed` marks active tool/proposal visuals; canonical read and export APIs continue to return confirmed data. The older `scene.preview` field retains its proposal-only meaning.
+
+方块属性编辑复用原预览／确认契约，参数使用局部坐标。先按类型读取属性和混合值，再提交明确的字符串属性差量；不替换整份 Properties，也不改方块实体数据。资源提供的可选值不是游戏状态白名单。未确认预览不写入工程；正常保存和导出只包含已确认内容。
+
 ### OBJ model sources and block conversion / OBJ 模型来源与方块生成
 
 OBJ sources are reusable project data, added without replacing the terrain. The API reads polygon geometry only: MTL files, texture maps and vertex colors are not converted to block materials. Choose `state` and optional material roles explicitly. A saved source is a reference mesh; only confirmed conversion results become Minecraft blocks.
@@ -191,6 +222,7 @@ prepare 返回预览 ID、方块数量、保护冲突和辅助线，不修改场
 - `radialArray`: `center:[x,y,z]` 放置锚点圆心，`radius`，`angle`，`count`（副本数量），`follow`。保留原件，跟随朝向按 90 度吸附。
 - `mirror`: `axis:x/z`，`plane` 整格或半格坐标，生成副本。
 - `offset`: `guideId` 闭合轮廓，`distance`，`guidesOnly`，可选 `state`。新轮廓保存在 design.guides。
+- `blockState`: `sourceName` 和 `properties` 字符串差量，保留未改属性与 NBT。
 - `pushpull`: `axis`，`face:min/max`，`distance`；正值复制边界层，负值缩短选择。
 - `boolean`: 恰好两个对象（主体在先），`mode:union/subtract/intersect`，`consumeTool`；按体素占用计算。
 - `syncInstances` / `detachInstance`: 选择一个关联实例；同步主实例须未旋转。

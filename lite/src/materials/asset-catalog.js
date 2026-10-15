@@ -1,3 +1,4 @@
+import { fallbackStateChoices, resourceStateChoices } from './state-choices.js';
 const terms = {
   cut: '切制',
   polished: '磨制',
@@ -43,6 +44,7 @@ const terms = {
   cogwheel: '齿轮',
   large: '大型',
   bearing: '轴承',
+  mechanical: '机械',
   windmill: '风车',
   lantern: '灯笼',
   fence: '围栏',
@@ -227,33 +229,12 @@ export function catalogue(site, resources) {
   ])
     add({ Name });
   for (const item of map.values()) {
-    const n = item.id.split(':')[1],
-      defaults = /stairs$/.test(n)
-        ? {
-            facing: ['north', 'east', 'south', 'west'],
-            half: ['bottom', 'top'],
-            shape: ['straight', 'inner_left', 'inner_right', 'outer_left', 'outer_right'],
-            waterlogged: ['false', 'true'],
-          }
-        : /slab$/.test(n)
-          ? { type: ['bottom', 'top', 'double'], waterlogged: ['false', 'true'] }
-          : /log$|pillar$|shaft$/.test(n)
-            ? { axis: ['y', 'x', 'z'] }
-            : {};
-    for (const [k, v] of Object.entries(defaults))
-      item.choices[k] = [...new Set([...(item.choices[k] || []), ...v])];
     const raw = resources.json(
       'assets/' + item.source + '/blockstates/' + item.id.split(':')[1] + '.json',
     );
-    for (const key of Object.keys(raw.variants || {}))
-      for (const pair of key.split(',')) {
-        const [k, v] = pair.split('=');
-        if (v) {
-          item.choices[k] ||= [];
-          for (const value of v.split('|'))
-            if (!item.choices[k].includes(value)) item.choices[k].push(value);
-        }
-      }
+    for (const choices of [fallbackStateChoices(item.id), resourceStateChoices(raw)])
+      for (const [key, values] of Object.entries(choices))
+        item.choices[key] = [...new Set([...(item.choices[key] || []), ...values])];
     if (!Object.keys(item.states[0]?.Properties || {}).length && Object.keys(item.choices).length)
       item.states[0] = {
         Name: item.id,

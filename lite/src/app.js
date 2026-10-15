@@ -237,6 +237,7 @@ window.CraftStudio = Object.freeze({
         revision: summary?.revision,
         workspaceId: summary?.workspaceId,
         preview: !!summary?.preview,
+        unconfirmed: !!summary?.preview || !!cad?.isTransformActive(),
         view: summary?.view,
         mode,
         cut: +$('cut').value,
@@ -842,10 +843,17 @@ async function syncCreate(data) {
 }
 function updateMotion() {
   host.dataset.motionTime = createScene.time.toFixed(3);
-  return createScene.update({
+  const clock = getMotionState(),
+    moving = createScene.update(clock);
+  const previewMoving = cad?.updatePreviewMotion(clock);
+  return moving || previewMoving;
+}
+function getMotionState() {
+  return {
+    time: createScene.time,
     demo: $('create-demo').checked,
     rpmFallback: Number($('create-rpm').value) || 0,
-  });
+  };
 }
 for (const id of ['create-visible']) $(id).onchange = () => task(render, '更新机械动力模型…');
 for (const id of ['create-demo', 'create-rpm'])
@@ -917,8 +925,13 @@ function scheduleViewport() {
 }
 controls.addEventListener('change', scheduleViewport);
 window.addEventListener('craftstudio-layout-resized', scheduleViewport);
-let renderTail = Promise.resolve();
+let renderTail = Promise.resolve(),
+  notifiedViewMode = null;
 function render(viewportOnly = false) {
+  if (notifiedViewMode !== mode) {
+    notifiedViewMode = mode;
+    window.dispatchEvent(new Event('craftstudio-view-mode'));
+  }
   const next = renderTail.then(() => renderNow(viewportOnly));
   renderTail = next.catch(() => {});
   return next;
@@ -2414,6 +2427,7 @@ studio = studioUI({
   requestRender: () => (needsRender = true),
 });
 cad = cadShell({
+  getMotionState,
   controls,
   branchVersion: (source) => openSaved(source.projectId, source.version, { copy: true }),
   THREE,

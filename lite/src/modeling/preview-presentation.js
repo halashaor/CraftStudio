@@ -21,6 +21,14 @@ export function previewPresentation({
       label: '正在确认',
       detail: '完成后可一次撤销',
     };
+  if (state === 'state-input')
+    return {
+      id: 'idle',
+      tone: 'source',
+      symbol: '◇',
+      label: '选择要修改的属性',
+      detail: '没有待提交改动；其余属性保持原值',
+    };
   if (drawing || ['drawing', 'slope-drawing'].includes(state))
     return {
       id: 'drawing',

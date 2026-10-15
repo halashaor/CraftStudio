@@ -1,3 +1,4 @@
+import { blockStateEditPlan } from '../materials/block-state-edit.js';
 import { objectLocked } from '../components/object-protection.js';
 import { brushPlan } from '../selection/tool-mask.js';
 import { selectionCellValues } from './studio.js';
@@ -145,6 +146,34 @@ export function designerPlan(
   available = new Set(),
   descriptors = new Map([...available].map((id) => [id, { choices: {} }])),
 ) {
+  if (c.operation === 'blockState') {
+    const points = c.objectIds?.length
+      ? [
+          ...new Map(
+            selectedObjects(site, c, { allowLocked: true })
+              .flatMap((o) => o.cells)
+              .map((value) => {
+                const p =
+                  typeof value === 'number'
+                    ? coords(value)
+                    : Array.isArray(value)
+                      ? value
+                      : value.split(',').map(Number);
+                return [coordKey(...p), p];
+              }),
+          ).values(),
+        ]
+      : c.selection
+        ? Array.from(
+            selectionCellValues(site, c.selection.min, c.selection.max, {
+              keys: c.selection.members,
+              regions: c.selection.regions,
+            }),
+            (b) => b.pos,
+          )
+        : [];
+    return blockStateEditPlan(site, points, c, descriptors);
+  }
   const operation = c.operation,
     design = structuredClone(site.design),
     warnings = [],

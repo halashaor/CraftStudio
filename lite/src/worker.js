@@ -4,7 +4,9 @@ import { meshConstructionPlan } from './models/mesh-construction.js';
 import { centeredMeshPositions } from './models/mesh-transform.js';
 import { comparisonActionAllowed, comparisonMessage } from './view/comparison-access.js';
 import { ScreenSelectionQuery } from './selection/screen-selection-query.js';
+import { ConstructionDisplay, replacementMask } from './modeling/construction-display.js';
 const screenSelection = new ScreenSelectionQuery();
+const constructionDisplay = new ConstructionDisplay();
 import { PlanningAPI } from './api/planning-api.js';
 import { importRegionInput } from './minecraft/region-set.js';
 import { renameObjects } from './selection/object-naming.js';
@@ -99,6 +101,8 @@ let isolatedKeys = null,
   isolationContext = null,
   isolationStack = [];
 let constructionDraft = null;
+const constructionMask = () =>
+  !preview && !comparisons.current ? constructionDisplay.mask(constructionDraft, api) : null;
 let comparisonIsolation = null;
 let baseBytes = null,
   baseKey = crypto.randomUUID();
@@ -532,7 +536,7 @@ async function execute(action, data) {
           ids.set(text, palette.length);
           palette.push(op.state);
         }
-        cells.set(key, { pos: op.pos, state: ids.get(text) });
+        cells.set(key, { pos: op.pos, state: ids.get(text), ...(op.nbt ? { nbt: op.nbt } : {}) });
         removed.delete(key);
         before ? counts.replace++ : counts.place++;
         if (terrainType(op.state.Name) === 'ground' && !before) counts.fill++;
@@ -551,10 +555,24 @@ async function execute(action, data) {
       }
     }
     const fake = { cells, overlay: new Map(), palette },
-      mesh = buildMesh(fake, resources),
+      withMotions = !!plan.stateChange && data.config.previewCreate !== false,
+      motions = withMotions
+        ? new CreateScene().render(
+            new Site({
+              ...emptyProject(),
+              size: site.size,
+              origin: site.origin,
+              palette,
+              blocks: [...cells.values()],
+            }),
+            resources,
+          )
+        : null,
+      mesh = buildMesh(fake, resources, { excludeWholeKinetics: withMotions }),
       red = buildMesh({ cells: removed, overlay: new Map(), palette }, resources),
       textures = {};
     for (const b of mesh.buckets) if (b.texture) textures[b.texture] = resources.texture(b.texture);
+    if (motions) Object.assign(textures, motions.textures);
     const id = crypto.randomUUID();
     constructionDraft = {
       id,
@@ -563,6 +581,7 @@ async function execute(action, data) {
       plan,
       config: data.config,
       type: data.type,
+      replacementMask: plan.stateChange ? replacementMask(plan.operations) : null,
     };
     return {
       id,
@@ -574,6 +593,8 @@ async function execute(action, data) {
       regeneration: plan.regeneration || null,
       componentUpdate: plan.componentUpdate || null,
       materialChange: plan.materialChange || null,
+      stateChange: plan.stateChange || null,
+      replacesGeometry: !!constructionDraft.replacementMask,
       arraySpacing: plan.arraySpacing || null,
       pathArray: plan.pathArray
         ? { ...plan.pathArray, placements: undefined, count: plan.pathArray.placements.length }
@@ -592,17 +613,23 @@ async function execute(action, data) {
       buckets: mesh.buckets,
       removedBuckets: red.buckets,
       textures,
+      motions,
       triangles: mesh.triangles,
     };
   }
   if (action === 'cancelConstruction') {
     const cancelled = constructionDraft?.id === data.id;
     if (cancelled) constructionDraft = null;
+    constructionDisplay.clear(data.id);
     return { cancelled };
+  }
+  if (action === 'constructionDisplay') {
+    return constructionDisplay.set(constructionDraft, data, api);
   }
   if (action === 'commitConstruction') {
     if (preview) throw Error('请先采用或取消提案预览');
     const draft = constructionDraft;
+    if (draft?.plan.stateChange?.changed === 0) throw Error('当前属性没有变化');
     if (draft?.plan.blocked) throw Error(draft.plan.blocked.message);
     if (!draft || draft.id !== data.id) throw Error('预览已更新，请重新确认');
     if (draft.revision !== api.revision || draft.workspaceId !== api.workspaceId)
@@ -619,8 +646,8 @@ async function execute(action, data) {
       site.redo = [];
     }
     if (draft.plan.design) site.design = structuredClone(draft.plan.design);
-    site.design.guides ||= [];
-    if (draft.plan.guide.length && !draft.plan.design)
+    if (draft.plan.guide.length && !draft.plan.design) {
+      site.design.guides ||= [];
       site.design.guides.push({
         id: draft.id,
         name: data.name || '辅助图形',
@@ -629,6 +656,7 @@ async function execute(action, data) {
         recipe: structuredClone(draft.config),
         revision: 0,
       });
+    }
     if (
       !draft.plan.design &&
       ['feature', 'geometry'].includes(draft.type) &&
@@ -662,6 +690,7 @@ async function execute(action, data) {
     }
     mesher.changed(site);
     createScene.changedCells(site);
+    constructionDisplay.clear(draft.id);
     constructionDraft = null;
     api.changed();
     return summary();
@@ -975,7 +1004,11 @@ async function execute(action, data) {
   if (action === 'mesh') {
     const current = displaySite(),
       resources = displayResources();
-    const result = buildMesh(current, resources, data);
+    const mask = constructionMask();
+    const result = buildMesh(current, resources, {
+      ...data,
+      hidden: [...(data.hidden || []), ...(mask ? [mask] : [])],
+    });
     const keys = [...new Set(result.buckets.map((b) => b.texture).filter(Boolean))],
       textures = Object.fromEntries(keys.map((k) => [k, resources.texture(k)]));
     return { ...result, textures };
@@ -1001,9 +1034,12 @@ async function execute(action, data) {
       ...data,
       isolateKeys: isolationContext?.contextVisible ? null : isolatedKeys,
       isolationVersion,
-      hidden: displaySite()
-        .design.objects.filter((o) => objectHidden(displaySite().design, o))
-        .map((o) => ({ min: o.min, max: o.max, cells: o.cells })),
+      hidden: [
+        ...displaySite()
+          .design.objects.filter((o) => objectHidden(displaySite().design, o))
+          .map((o) => ({ min: o.min, max: o.max, cells: o.cells })),
+        ...(constructionMask() ? [constructionMask()] : []),
+      ],
       animated: Object.entries(data.excludeWholeKinetics ? displaySite().design.animations : {})
         .filter(
           ([id, a]) =>
@@ -1115,6 +1151,11 @@ async function execute(action, data) {
     if (isolatedKeys && !isolationContext?.contextVisible)
       result.instances = result.instances.filter((d) =>
         isolatedKeys.has(coordKey(...(d.owner || d.position.map(Math.floor)))),
+      );
+    const mask = data.mode !== 'before' && constructionMask();
+    if (mask)
+      result.instances = result.instances.filter(
+        (d) => !d.owner || d.readOnly || !mask.keys.has(coordKey(...d.owner)),
       );
     return result;
   }

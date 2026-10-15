@@ -172,6 +172,7 @@ export class PlanningAPI {
       delete value.buckets;
       delete value.removedBuckets;
       delete value.textures;
+      delete value.motions;
     }
     return value;
   }

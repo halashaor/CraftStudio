@@ -60,6 +60,7 @@ export function cadShell({
   getSummary,
   scene,
   getCamera,
+  getMotionState,
   navigation,
   requestRender,
 }) {
@@ -240,6 +241,7 @@ export function cadShell({
   }
   function syncVectors() {
     $('download-selection').disabled = !selectionActive;
+    $('cad-edit-state').disabled = !selectionActive;
     for (const v of vectors) {
       const parts = v.original.value.trim().split(/[\s,]+/);
       v.inputs.forEach((n, i) => (n.value = parts[i] ?? '0'));
@@ -391,6 +393,7 @@ export function cadShell({
   }
 
   const designer = designerUI({
+    getMotionState,
     beforeOpen: () => prepareOperation('designer'),
     THREE,
     $,
@@ -413,11 +416,20 @@ export function cadShell({
     },
     getSummary,
     materialName: assets.labelName,
+    reuseState: (state) => {
+      materialPicker.clear();
+      dock('assets');
+      assets.selectState(state);
+    },
     pickMaterial: (callback, label) =>
       requestMaterial(callback, designer, $('designer-panel'), label || '排列 / 编辑材料'),
     notice,
     requestRender,
   });
+  $('cad-edit-state').onclick = () => {
+    if (selectionActive) designer.open('blockState');
+    else notice('先选择需要调整的方块或对象');
+  };
   materialPicker.observe($('designer-panel'), 'hidden');
   const designerButton = document.createElement('button');
   designerButton.id = 'cad-designer';
@@ -585,6 +597,7 @@ export function cadShell({
     direct.cancel();
     selectionActive = false;
     $('download-selection').disabled = true;
+    $('cad-edit-state').disabled = true;
     objectCandidates.clear();
     objectOnly = false;
     selectedObjects.clear();
@@ -718,6 +731,11 @@ export function cadShell({
       { label: '旋转 R', run: () => runCommand('rotate'), reason: () => selectionReason() },
       { label: '重复上次变换 Shift+R', run: repeatTransform, reason: repeatReason },
       { label: '更多变换参数', run: () => open(modify), reason: () => selectionReason() },
+      {
+        label: '调整方块朝向 / 形态',
+        run: () => designer.open('blockState'),
+        reason: () => selectionReason(),
+      },
       {
         label: '重命名 F2',
         run: () => objectNames.begin(),
@@ -1339,6 +1357,7 @@ export function cadShell({
       $('cad-selection-clear').click();
     },
     materialChanged,
+    updatePreviewMotion: (clock) => designer.updateMotion(clock),
   };
   function selectObjects(ids, operation = 'replace') {
     if (!selectionActive && ['subtract', 'intersect'].includes(operation)) {

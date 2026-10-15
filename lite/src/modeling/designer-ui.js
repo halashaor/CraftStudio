@@ -1,4 +1,7 @@
 import viewMarkup0 from './views/designer-ui-panel.html';
+import { BlockStateUI } from '../materials/block-state-ui.js';
+import { ReplacementPreview } from './replacement-preview.js';
+import { constructionMotionView } from '../rendering/construction-motion-view.js';
 import { PreviewIssuesUI } from './preview-issues-ui.js';
 import { loadTextureInfo } from '../rendering/graphics-resources.js';
 import { objectHidden } from '../components/collections.js';
@@ -25,6 +28,8 @@ export function designerUI({
   requestRender,
   materialName = (s) => s.Name,
   beforeOpen = () => true,
+  reuseState = () => {},
+  getMotionState = () => ({ time: 0 }),
 }) {
   const previewContext = new PreviewContext();
   let committing = false,
@@ -44,6 +49,26 @@ export function designerUI({
   panel.className = 'designer-panel';
   panel.innerHTML = viewMarkup0;
   $('scene').append(panel);
+  const replacement = new ReplacementPreview({
+    call,
+    render,
+    status: (value) => {
+      panel.dataset.geometryView = value;
+    },
+  });
+  const stateEditor = new BlockStateUI({
+    $,
+    host: $('block-state-editor'),
+    labelName: materialName,
+    reuse: reuseState,
+    change: (action) => {
+      if (!active || committing) return;
+      const before = captureParameters();
+      action();
+      recordParameters(before);
+      schedule();
+    },
+  });
   const issues = new PreviewIssuesUI({
     THREE,
     scene,
@@ -96,6 +121,9 @@ export function designerUI({
       overlap: $('designer-overlap').value,
       expandSource: $('component-expand-source').checked,
       parameters: featureParameters(),
+      ...($('designer-operation').value === 'blockState'
+        ? { ...stateEditor.config(), previewCreate: $('create-visible').checked }
+        : {}),
     });
   function dispose() {
     for (const node of nodes) {
@@ -152,11 +180,31 @@ export function designerUI({
     return group;
   }
   function show() {
+    const stateMode = $('designer-operation').value === 'blockState';
+    const visible =
+      $('designer-blocks').checked &&
+      (!stateMode || window.CraftStudio.displayState().mode !== 'before');
     for (const node of nodes)
-      node.visible = $(
-        node.userData.kind === 'lines' ? 'designer-lines' : 'designer-blocks',
-      ).checked;
+      node.visible = node.userData.kind === 'lines' ? $('designer-lines').checked : visible;
+    updateMotion(getMotionState());
+    if (active && stateMode && draft)
+      replacement.show(draft, visible).catch((error) => notice(error.message, true));
+    else if (active && stateMode && !visible)
+      replacement.clear().catch((error) => notice(error.message, true));
     requestRender();
+  }
+  window.addEventListener('craftstudio-view-mode', show);
+  $('create-visible').addEventListener('change', () => {
+    if (active && $('designer-operation').value === 'blockState') schedule();
+  });
+  function updateMotion(clock) {
+    let moving = false;
+    for (const node of nodes)
+      if (node.visible && node.userData.motionView) {
+        node.userData.motionView.time = clock.time;
+        moving = node.userData.motionView.update(clock) || moving;
+      }
+    return moving;
   }
   function featureParameters() {
     const recipe = getSummary()?.design.objects.find((o) => o.id === objectIds[0])?.recipe || {},
@@ -176,6 +224,22 @@ export function designerUI({
   }
   function fields() {
     const op = $('designer-operation').value;
+    issues.setAdvice(
+      ['paint', 'blockState'].includes(op)
+        ? {
+            existing: '这些方块属于原建筑或植被；修改前请在改动规则中允许编辑原建筑。',
+            terrain: '这些方块属于原地形或水面；属性或材质修改也会改变原场地，请检查改动规则。',
+            protected: '选区包含锁定的保留区。可取消，或先调整保留区后再编辑。',
+            locked: '选区中的对象或集合已锁定。先在场景集合中解锁，再继续编辑。',
+          }
+        : null,
+    );
+    panel.querySelector('.construction-header strong').textContent =
+      op === 'blockState' ? '方块属性' : '设计工具';
+    $('designer-lines').closest('label').hidden = op === 'blockState';
+    panel.dataset.workspaceCategory = op === 'blockState' ? 'edit' : 'model';
+    $('designer-blocks').parentElement.lastChild.textContent =
+      op === 'blockState' ? '显示修改后（取消勾选看修改前）' : '方块预览';
     $('designer-material').textContent =
       (op === 'paint' ? '目标素材：' : '轮廓：') + materialName(material);
     for (const el of panel.querySelectorAll('[data-ops]'))
@@ -245,6 +309,7 @@ export function designerUI({
   const historyControls = () =>
     [...panel.querySelectorAll('input[id],select[id]')].filter(
       (el) =>
+        !el.closest('#block-state-editor') &&
         !['designer-operation', 'designer-lines', 'designer-blocks', 'designer-layer'].includes(
           el.id,
         ),
@@ -266,6 +331,7 @@ export function designerUI({
       material: structuredClone(material),
       profileDirty,
       pathDirty,
+      blockState: stateEditor.snapshot(),
     };
   }
   function parameterState() {
@@ -334,6 +400,7 @@ export function designerUI({
       material = structuredClone(frame.material);
       profileDirty = frame.profileDirty;
       pathDirty = frame.pathDirty;
+      stateEditor.restore(frame.blockState);
       $('designer-material').textContent = '轮廓：' + materialName(material);
       fields();
       fieldStarts.clear();
@@ -431,7 +498,7 @@ export function designerUI({
         return;
       }
       let paintTextures = null;
-      if (c.operation === 'paint') {
+      if (['paint', 'blockState'].includes(c.operation)) {
         paintTextures = new Map();
         await Promise.all(
           Object.entries(result.textures || {}).map(async ([key, info]) => {
@@ -461,9 +528,10 @@ export function designerUI({
       }
       panel.dataset.previewRevision = String(result.revision);
       panel.dataset.previewWorkspace = result.workspaceId;
-      panel.dataset.previewState = 'ready';
+      if (c.operation !== 'blockState') panel.dataset.previewState = 'ready';
       draft = result;
       issues.show(result.conflictSummary);
+      if (result.stateChange) stateEditor.update(result.stateChange);
       if (result.materialChange) {
         const select = $('designer-paint-source'),
           previous = select.value,
@@ -483,6 +551,14 @@ export function designerUI({
         mesh(result.buckets, 0x75cdb7, paintTextures),
         mesh(result.removedBuckets, 0xf18685),
       );
+      if (result.motions) {
+        const motion = await constructionMotionView(
+          result.motions,
+          paintTextures || new Map(),
+          getMotionState(),
+        );
+        if (motion) nodes.push(motion);
+      }
       if (result.guide.length) {
         const line = new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(
@@ -507,6 +583,12 @@ export function designerUI({
             result.materialChange.skipped +
             (result.materialChange.excluded ? ' · 未匹配 ' + result.materialChange.excluded : '')
           : '') +
+        (result.stateChange
+          ? `\n当前类型 ${result.stateChange.matched} · 修改 ${result.stateChange.changed} · 未变 ${result.stateChange.unchanged} · 其他类型保留 ${result.stateChange.excluded}` +
+            (result.stateChange.nbtPreserved
+              ? `\n保留容器 / 装置数据 ${result.stateChange.nbtPreserved} 格`
+              : '')
+          : '') +
         componentReport(result.componentUpdate) +
         (result.pathArray
           ? '\n路径 ' +
@@ -528,13 +610,29 @@ export function designerUI({
           : '') +
         (result.warnings.length ? '\n' + result.warnings.join('\n') : '') +
         (result.conflictSummary.count ? `\n${result.conflictSummary.count} 格受保护，需调整` : '');
+      if (c.operation === 'blockState') {
+        await replacement.show(
+          result,
+          $('designer-blocks').checked && window.CraftStudio.displayState().mode !== 'before',
+        );
+        if (!active || own !== version || !previewContext.matches(result)) return;
+        panel.dataset.previewState = result.blocked
+          ? 'invalid'
+          : result.stateChange.changed === 0
+            ? 'state-input'
+            : 'ready';
+      } else await replacement.clear();
       $('designer-apply').disabled =
-        result.conflicts.length > 0 || result.materialChange?.changed === 0;
+        result.conflicts.length > 0 ||
+        !!result.blocked ||
+        result.materialChange?.changed === 0 ||
+        result.stateChange?.changed === 0;
       show();
     } catch (e) {
       if (own === version) {
         draft = null;
         dispose();
+        replacement.clear().catch((error) => notice(error.message, true));
         panel.dataset.previewState = 'invalid';
         $('designer-apply').disabled = true;
         $('designer-report').textContent = e.message;
@@ -544,6 +642,7 @@ export function designerUI({
   function schedule() {
     if (!active || committing || restoringParameters) return;
     issues.clear();
+    stateEditor.pending();
     const pending = pendingExpression();
     if (pending) {
       holdExpression(pending, pending.validationMessage || '请先完成参数计算式');
@@ -559,6 +658,7 @@ export function designerUI({
   function close() {
     if (committing) return;
     issues.clear();
+    replacement.clear().catch((error) => notice(error.message, true));
     if (draft?.id) call('cancelConstruction', { id: draft.id }).catch(() => {});
     draft = null;
     active = false;
@@ -653,6 +753,7 @@ export function designerUI({
     close();
     previewContext.observe(getSummary());
     active = true;
+    stateEditor.reset();
     $('designer-paint-source').value = '';
     selected = structuredClone(getSelection());
     for (const [a, i] of ['x', 'y', 'z'].map((a, i) => [a, i]))
@@ -706,6 +807,10 @@ export function designerUI({
   $('designer-close').onclick = close;
   $('designer-preview').onclick = preview;
   $('designer-operation').onchange = () => {
+    if (draft?.id)
+      call('cancelConstruction', { id: draft.id }).catch((error) => notice(error.message, true));
+    draft = null;
+    replacement.clear().catch((error) => notice(error.message, true));
     parameterSteps.clear();
     fieldStarts.clear();
     syncParameterHistory();
@@ -776,6 +881,7 @@ export function designerUI({
     committing = true;
     panel.dataset.previewState = 'applying';
     $('designer-apply').disabled = true;
+    let committed = false;
     try {
       refresh(
         await call('commitConstruction', {
@@ -784,16 +890,17 @@ export function designerUI({
           name: $('designer-operation').selectedOptions[0].textContent,
         }),
       );
-      await render();
+      committed = true;
       markDirty();
       committing = false;
       close();
+      await render();
       notice('设计操作已确认，可一次撤销');
     } catch (e) {
-      $('designer-report').textContent = e.message;
-      notice(e.message, true);
+      if (!committed) $('designer-report').textContent = e.message;
+      notice(committed ? '改动已确认，显示更新失败：' + e.message : e.message, true);
       committing = false;
-      schedule();
+      if (!committed) schedule();
     } finally {
       committing = false;
     }
@@ -930,6 +1037,8 @@ export function designerUI({
       schedule();
     },
     isActive: () => active,
+    updateMotion,
+    workspaceCategory: () => ($('designer-operation').value === 'blockState' ? 'edit' : 'model'),
     isBusy: () => committing,
   };
 }

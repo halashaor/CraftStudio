@@ -134,7 +134,7 @@ export function workspaceUI({
       close: construction.close,
       category: construction.workspaceCategory,
     },
-    { node: $('designer-panel'), close: designer.close, category: () => 'model' },
+    { node: $('designer-panel'), close: designer.close, category: designer.workspaceCategory },
     { node: $('direct-edit-bar'), close: direct.cancel, category: () => 'edit' },
     { node: $('measurement-panel'), close: measurement.close },
     { node: $('mesh-model-panel'), close: mesh.close, category: () => 'model' },
@@ -206,7 +206,10 @@ export function workspaceUI({
     }
   });
   for (const p of panels)
-    observer.observe(p.node, { attributes: true, attributeFilter: ['hidden', 'open'] });
+    observer.observe(p.node, {
+      attributes: true,
+      attributeFilter: ['hidden', 'open', 'data-workspace-category'],
+    });
   function group(title, parent, ids, open = false) {
     const nodes = [...new Set(ids.map((id) => $(id)?.closest('label') || $(id)).filter(Boolean))];
     if (!nodes.length) return;
